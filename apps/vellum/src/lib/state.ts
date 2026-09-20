@@ -101,8 +101,21 @@ export function replaceState(next: EditorState): void {
   notify({ full: true });
 }
 
+/**
+ * A snapshot for the undo stack. Reference images are cloned without their data URL, which is
+ * then put back by reference: a base64 image is megabytes, the stack holds a hundred entries,
+ * and the pixels never change - only the transform around them, which is what undo has to keep.
+ */
 export function snapshotForUndo(): EditorState {
-  return deepClone(state);
+  const urls = state.images.map((img) => img.dataUrl);
+  const snap = deepClone({
+    ...state,
+    images: state.images.map((img) => ({ ...img, dataUrl: "" })),
+  });
+  snap.images.forEach((img, i) => {
+    img.dataUrl = urls[i] ?? "";
+  });
+  return snap;
 }
 
 export function restoreSnapshot(snap: EditorState): void {

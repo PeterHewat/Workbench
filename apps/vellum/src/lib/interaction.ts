@@ -454,9 +454,46 @@ export function nudgeSelection(dx: number, dy: number): void {
   );
 }
 
+/** How far a pointer must travel before a press counts as a drag, in screen pixels. */
+function dragSlop(e: PointerEvent): number {
+  if (e.pointerType === "touch") return 10;
+  return e.pointerType === "pen" ? 6 : 4;
+}
+
+/** A press that becomes a drag if the pointer moves far enough, and stays a click if not. */
+interface PendingDrag {
+  drag: DragState;
+  x: number;
+  y: number;
+  slop: number;
+  undo: boolean;
+  grab: boolean;
+}
+
 export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   let drag: DragState | null = null;
+  let pending: PendingDrag | null = null;
   let lastDown = { t: 0, x: 0, y: 0 };
+
+  /**
+   * Arms a drag instead of starting one. Tapping a shape to select it, or a point to pick it,
+   * must not move anything and must not spend an undo step; both happen only once the pointer
+   * really travels, which matters most on a touch screen where every tap wobbles a few pixels.
+   */
+  function arm(e: PointerEvent, next: DragState, { undo = true, grab = true } = {}): void {
+    pending = { drag: next, x: e.clientX, y: e.clientY, slop: dragSlop(e), undo, grab };
+  }
+
+  /** True once the armed drag has started, or when there was none waiting. */
+  function releaseArmed(e: PointerEvent): boolean {
+    if (!pending) return true;
+    if (Math.hypot(e.clientX - pending.x, e.clientY - pending.y) < pending.slop) return false;
+    if (pending.undo) pushUndo();
+    drag = pending.drag;
+    if (pending.grab) wrap.classList.add("grabbing");
+    pending = null;
+    return true;
+  }
 
   function alignExcludes(): AlignOptions {
     if (!drag) return {};
@@ -500,6 +537,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
 
   // A second finger means pinch/pan: drop whatever one-finger drag had started.
   svg.addEventListener("pinch-start", () => {
+    pending = null;
     if (drag && drag.type !== "pan") {
       drag = null;
       wrap.classList.remove("grabbing");
@@ -592,22 +630,20 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           drag = null;
           return;
         }
-        pushUndo();
         const p = path.points[h.index];
         const other = h.kind === "out" ? p?.hIn : h.kind === "in" ? p?.hOut : null;
-        drag = {
+        arm(e, {
           type: "handle",
           ...h,
           otherStart: other ? { x: other.x, y: other.y } : null,
           last: null,
-        };
+        });
         setState({
           selection: selectOnly(
             [h.pathId],
             h.kind === "anchor" ? { pathId: h.pathId, kind: "anchor", index: h.index } : null
           ),
         });
-        wrap.classList.add("grabbing");
         return;
       }
     }
@@ -621,7 +657,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       const elementId = resizeTarget.id;
       const role = resizeHandle.getAttribute("data-handle-role") ?? "";
       if (role === "rotate") {
-        startRotate(resizeTarget, world);
+        startRotate(e, resizeTarget, world);
         return;
       }
       const ptIndex = pointIndexForRole(role);
@@ -642,8 +678,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         drag = null;
         return;
       }
-      pushUndo();
-      drag = { type: "resize", elementId, role, base: deepClone(resizeTarget) };
+      arm(e, { type: "resize", elementId, role, base: deepClone(resizeTarget) });
       setState({
         selection: selectOnly(
           [elementId],
@@ -652,7 +687,6 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
             : null
         ),
       });
-      wrap.classList.add("grabbing");
       return;
     }
 
@@ -682,13 +716,14 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           const found = findElement(id);
           if (found) bases[id] = deepClone(found);
         }
-        pushUndo();
-        drag = { type: "move-elements", start: world, ids, bases };
-        wrap.classList.add("grabbing");
+        arm(e, { type: "move-elements", start: world, ids, bases });
         return;
       }
-      drag = { type: "marquee", x1: world.x, y1: world.y, x2: world.x, y2: world.y };
-      setDrawing({ marquee: { ...drag } });
+      arm(
+        e,
+        { type: "marquee", x1: world.x, y1: world.y, x2: world.x, y2: world.y },
+        { undo: false, grab: false }
+      );
       if (!e.shiftKey) setState({ selection: selectOnly() });
       return;
     }
@@ -741,13 +776,12 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     return true;
   }
 
-  function startRotate(el: SceneElement, world: Point): void {
+  function startRotate(e: PointerEvent, el: SceneElement, world: Point): void {
     const box = elementBBox(el);
     if (!box || !canRotate(el)) return;
     const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
-    pushUndo();
-    drag = {
+    arm(e, {
       type: "rotate",
       elementId: el.id,
       base: rotationBase(deepClone(el)),
@@ -756,8 +790,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       startAngle: Math.atan2(world.y - cy, world.x - cx),
       radius: Math.max(20, Math.hypot(world.x - cx, world.y - cy)),
       active: false,
-    };
-    wrap.classList.add("grabbing");
+    });
   }
 
   function handlePenDown(world: Point): void {
@@ -815,12 +848,12 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       drag = null;
       return;
     }
-    pushUndo();
     drag = { type: "shape-drag", tool, start: world, current: world };
     updateShapePreview(tool, world, world, e.shiftKey);
   }
 
   svg.addEventListener("pointermove", (e) => {
+    if (!releaseArmed(e)) return;
     const world = pointerWorld(e);
     const st = getState();
 
@@ -1094,6 +1127,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   ): void {
     const end = constrainShapeEnd(start, rawEnd, shift);
     if (Math.hypot(end.x - start.x, end.y - start.y) < 0.5) return;
+    // The undo step belongs to the finished shape, not to the press that began it.
+    pushUndo();
     const g = shapeGeometry(tool, start, end);
     const el =
       tool === "rect"
@@ -1140,6 +1175,9 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
 
   svg.addEventListener("pointerup", (e) => {
     wrap.classList.remove("panning", "grabbing");
+    // A press that never passed the slop threshold was a click: the selection it made stands,
+    // but nothing moved and no undo step was spent.
+    pending = null;
     if (drag?.type === "pan") {
       drag = null;
       return;
