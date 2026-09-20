@@ -1,4 +1,5 @@
 import { AUTO_NAME_RE, deepClone } from "./utils.js";
+import { isCoarsePointer } from "./pointer.js";
 import type { EditorState, PathEdit, SceneElement, Selection } from "./types.js";
 
 export interface NotifyOptions {
@@ -14,8 +15,10 @@ export function selectOnly(elementIds: string[] = [], pathEdit: PathEdit | null 
 
 export function createInitialState(): EditorState {
   return {
-    artboard: { width: 1000, height: 1000 },
-    grid: { step: 10, visible: true, snap: false },
+    // 512 with a step of 16 is 32 cells across: one cell per pixel of a 32px icon, and it
+    // halves cleanly all the way down. Both are editable in the Document panel.
+    artboard: { width: 512, height: 512 },
+    grid: { step: 16, visible: true, snap: isCoarsePointer() },
     elements: [],
     images: [],
     viewport: { panX: 40, panY: 40, zoom: 1 },

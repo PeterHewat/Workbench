@@ -455,6 +455,9 @@ export function nudgeSelection(dx: number, dy: number): void {
   );
 }
 
+/** How long a finger must rest on empty canvas before the drag becomes a marquee. */
+const HOLD_MS = 450;
+
 /** How far a pointer must travel before a press counts as a drag, in screen pixels. */
 function dragSlop(e: PointerEvent): number {
   if (e.pointerType === "touch") return 10;
@@ -474,7 +477,13 @@ interface PendingDrag {
 export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   let drag: DragState | null = null;
   let pending: PendingDrag | null = null;
+  let holdTimer = 0;
   let lastDown = { t: 0, x: 0, y: 0 };
+
+  function cancelHold(): void {
+    if (holdTimer) window.clearTimeout(holdTimer);
+    holdTimer = 0;
+  }
 
   /**
    * Arms a drag instead of starting one. Tapping a shape to select it, or a point to pick it,
@@ -489,6 +498,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   function releaseArmed(e: PointerEvent): boolean {
     if (!pending) return true;
     if (Math.hypot(e.clientX - pending.x, e.clientY - pending.y) < pending.slop) return false;
+    cancelHold();
     if (pending.undo) pushUndo();
     drag = pending.drag;
     if (pending.grab) wrap.classList.add("grabbing");
@@ -539,6 +549,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   // A second finger means pinch/pan: drop whatever one-finger drag had started.
   svg.addEventListener("pinch-start", () => {
     pending = null;
+    cancelHold();
     if (drag && drag.type !== "pan") {
       drag = null;
       wrap.classList.remove("grabbing");
@@ -615,17 +626,20 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         (e.pointerType === "touch" ? 24 : 6);
     lastDown = { t: isDouble ? 0 : nowMs, x: e.clientX, y: e.clientY };
 
-    if (st.tool === "hand" || st.spacePan) {
+    if (st.spacePan) {
       startPan(e);
       return;
     }
 
     const target = e.target as Element;
     const handle = target.closest?.("[data-handle-kind]");
-    if (handle && st.tool === "select") {
+    if (handle) {
       const h = hitHandle(handle);
       const path = h ? findElement(h.pathId) : undefined;
-      if (h && path?.type === "path") {
+      // The pen keeps its own meaning for the path it is drawing: clicking the first anchor
+      // closes it, clicking elsewhere adds a point. Any other path's handles are editable.
+      const penOwns = st.tool === "pen" && h?.pathId === st.drawing?.activePathId;
+      if (h && path?.type === "path" && !penOwns) {
         if (isDouble && h.kind === "anchor") {
           commit(() => mutate(() => togglePointSmooth(path, h.index)));
           drag = null;
@@ -650,10 +664,9 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     }
 
     const resizeHandle = target.closest?.("[data-handle-role]");
-    const resizeTarget =
-      resizeHandle && st.tool === "select"
-        ? findElement(resizeHandle.getAttribute("data-element-id"))
-        : undefined;
+    const resizeTarget = resizeHandle
+      ? findElement(resizeHandle.getAttribute("data-element-id"))
+      : undefined;
     if (resizeHandle && resizeTarget) {
       const elementId = resizeTarget.id;
       const role = resizeHandle.getAttribute("data-handle-role") ?? "";
@@ -720,11 +733,30 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         arm(e, { type: "move-elements", start: world, ids, bases });
         return;
       }
-      arm(
-        e,
-        { type: "marquee", x1: world.x, y1: world.y, x2: world.x, y2: world.y },
-        { undo: false, grab: false }
-      );
+      const marquee: DragState = {
+        type: "marquee",
+        x1: world.x,
+        y1: world.y,
+        x2: world.x,
+        y2: world.y,
+      };
+      if (e.pointerType === "touch") {
+        // One finger on empty canvas pans, which is what a hand tool was for. Holding still
+        // for a moment switches to a marquee, so box-selection is reachable without one.
+        const { panX, panY } = getState().viewport;
+        arm(
+          e,
+          { type: "pan", startX: e.clientX, startY: e.clientY, panX, panY },
+          { undo: false, grab: false }
+        );
+        holdTimer = window.setTimeout(() => {
+          if (pending?.drag.type !== "pan") return;
+          pending = { ...pending, drag: marquee };
+          setDrawing({ marquee: { x1: world.x, y1: world.y, x2: world.x, y2: world.y } });
+        }, HOLD_MS);
+      } else {
+        arm(e, marquee, { undo: false, grab: false });
+      }
       if (!e.shiftKey) setState({ selection: selectOnly() });
       return;
     }
@@ -871,10 +903,10 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       return;
     }
 
-    if (!drag && st.tool === "select") {
+    if (!drag) {
       const target = e.target as Element;
       const overHandle = !!target.closest?.("[data-handle-kind], [data-handle-role]");
-      const hoverId = overHandle ? null : hitElement(e.target);
+      const hoverId = overHandle || st.tool !== "select" ? null : hitElement(e.target);
       wrap.classList.toggle("hover-target", overHandle || !!hoverId);
       if (getState().hoverId !== hoverId) setState({ hoverId });
     } else if (getState().hoverId) {
@@ -1178,7 +1210,10 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     wrap.classList.remove("panning", "grabbing");
     // A press that never passed the slop threshold was a click: the selection it made stands,
     // but nothing moved and no undo step was spent.
+    const heldMarquee = pending?.drag.type === "marquee";
     pending = null;
+    cancelHold();
+    if (heldMarquee) clearDrawing();
     if (drag?.type === "pan") {
       drag = null;
       return;

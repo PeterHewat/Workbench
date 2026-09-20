@@ -142,7 +142,7 @@ function syncPanel(state: EditorState): void {
   document.querySelectorAll<HTMLElement>(".tool-btn[data-tool]").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tool === state.tool);
   });
-  wrap.classList.toggle("mode-hand", state.tool === "hand" || state.spacePan);
+  wrap.classList.toggle("mode-hand", state.spacePan);
   wrap.classList.toggle("mode-select", state.tool === "select" && !state.spacePan);
 
   byId<HTMLButtonElement>("btn-undo").disabled = !canUndo();
@@ -1158,7 +1158,12 @@ document.addEventListener("focus-text", ((e: CustomEvent<{ id: string }>) => {
 }) as EventListener);
 
 document.querySelectorAll<HTMLElement>(".tool-btn[data-tool]").forEach((btn) => {
-  btn.addEventListener("click", () => setTool(btn.dataset.tool as EditorState["tool"]));
+  btn.addEventListener("click", () => {
+    const tool = btn.dataset.tool as EditorState["tool"];
+    // Tapping the active drawing tool puts the canvas back to selecting, which is the way out
+    // of a tool when there is no Esc key to press.
+    setTool(tool !== "select" && getState().tool === tool ? "select" : tool);
+  });
 });
 
 /* ---------- Reference image files ---------- */
@@ -1385,7 +1390,6 @@ window.addEventListener("keydown", (e) => {
   if (key === "r") setTool("rect");
   if (key === "e") setTool("ellipse");
   if (key === "t") setTool("text");
-  if (key === "h") setTool("hand");
   if (key === "g") setGridSnap(!getState().grid.snap);
   if (key === "escape") cancelOperation();
   if (key === "enter" && getState().tool === "pen") {

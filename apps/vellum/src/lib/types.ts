@@ -18,7 +18,8 @@ export type MarkerShape = "none" | "arrow" | "dot" | "square" | "diamond";
 export type LineCap = "round" | "butt" | "square";
 export type LineJoin = "round" | "miter" | "bevel";
 export type TextAnchor = "start" | "middle" | "end";
-export type ToolName = "select" | "hand" | "pen" | "rect" | "ellipse" | "text";
+/** "select" is the rest state: no drawing tool chosen, so the canvas selects and navigates. */
+export type ToolName = "select" | "pen" | "rect" | "ellipse" | "text";
 
 export interface Point {
   x: number;

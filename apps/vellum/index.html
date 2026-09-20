@@ -349,7 +349,7 @@
                       id="artboard-width"
                       min="1"
                       step="1"
-                      value="1000"
+                      value="512"
                       aria-label="Artboard width"
                     />
                     <span>×</span>
@@ -358,7 +358,7 @@
                       id="artboard-height"
                       min="1"
                       step="1"
-                      value="1000"
+                      value="512"
                       aria-label="Artboard height"
                     />
                   </div>
@@ -428,27 +428,16 @@
             <svg class="ui-icon" aria-hidden="true"><use href="#icon-redo" /></svg>
           </button>
         </div>
-        <div class="tool-group" role="group" aria-label="Selection and navigation">
+        <div class="tool-group" role="group" aria-label="Tools">
           <button
             type="button"
             class="tool-btn active"
             data-tool="select"
-            title="Select (S)"
+            title="Select (S) — also pans: Space or middle-drag, or one finger on empty canvas"
             aria-label="Select"
           >
             <svg class="ui-icon" aria-hidden="true"><use href="#icon-select" /></svg>
           </button>
-          <button
-            type="button"
-            class="tool-btn"
-            data-tool="hand"
-            title="Hand (H)"
-            aria-label="Hand"
-          >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-hand" /></svg>
-          </button>
-        </div>
-        <div class="tool-group" role="group" aria-label="Drawing tools">
           <button
             type="button"
             class="tool-btn"
@@ -504,7 +493,7 @@
             class="grid-step-input"
             min="1"
             step="1"
-            value="10"
+            value="16"
             title="Grid step"
             aria-label="Grid step"
           />
@@ -574,13 +563,16 @@
           <h3>Tools</h3>
           <ul>
             <li>
-              <b>Select (S)</b> — click a shape to select it (thin strokes have a wider invisible
-              click area, and the shape under the cursor is outlined in blue), drag to move, drag on
-              empty space for a marquee. Shift-click adds to the selection.
+              <b>Select (S)</b> — the resting state, with no drawing tool chosen: click a shape to
+              select it (thin strokes have a wider invisible click area, and the shape under the
+              cursor is outlined in blue), drag to move, drag on empty space for a marquee.
+              Shift-click adds to the selection. A shape only starts moving once the pointer has
+              really travelled, so a click that selects never nudges anything.
             </li>
             <li>
-              <b>Hand (H)</b> — pan the view. Hold <kbd>Space</kbd> for a temporary hand. Mouse
-              wheel zooms.
+              <b>Panning</b> — hold <kbd>Space</kbd> and drag, or drag with the middle mouse button.
+              On a touch screen, drag on empty canvas with one finger. The mouse wheel zooms, two
+              fingers pinch. There is no separate hand tool to switch to.
             </li>
             <li>
               <b>Pen (P)</b> — click for corner points, click-drag for curves. Double-click or
@@ -771,8 +763,18 @@
           <h3>Touch</h3>
           <ul>
             <li>
-              Two fingers pinch to zoom and pan. Double-tap finishes a pen path. Handles get a
-              larger touch halo on touch screens.
+              One finger drags on empty canvas to pan; hold still for a moment first and the drag
+              becomes a marquee selection instead. Two fingers pinch to zoom and pan. Double-tap
+              finishes a pen path.
+            </li>
+            <li>
+              Handles get a finger-sized target on a touch screen, and points that sit close
+              together keep smaller ones so neighbours stay reachable. Zoom in where it is tight.
+            </li>
+            <li>
+              Any tool can grab an existing handle: with the rectangle or ellipse tool active,
+              touching a handle of a shape already on the canvas edits that shape rather than
+              starting a new one.
             </li>
           </ul>
 
@@ -783,8 +785,12 @@
               <td>Toggle snap to grid (a marker shows where the point will land)</td>
             </tr>
             <tr>
-              <td>S P R E T H</td>
-              <td>Select, Pen, Rect, Ellipse, Text, Hand</td>
+              <td>S P R E T</td>
+              <td>Select, Pen, Rect, Ellipse, Text</td>
+            </tr>
+            <tr>
+              <td>Space (hold)</td>
+              <td>Pan the view</td>
             </tr>
             <tr>
               <td>Enter / Esc</td>
