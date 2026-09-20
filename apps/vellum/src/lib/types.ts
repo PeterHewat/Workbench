@@ -40,6 +40,13 @@ export interface BBox {
   height: number;
 }
 
+/** One colour stop of a gradient. `offset` runs 0..1 along the gradient. */
+export interface GradientStop {
+  offset: number;
+  color: string;
+  opacity: number;
+}
+
 /** Every style an element carries. Elements always hold a complete set. */
 export interface StyleProps {
   stroke: string;
@@ -51,9 +58,15 @@ export interface StyleProps {
   fillType: FillType;
   fill: string;
   fillOpacity: number;
-  fill2: string;
-  fill2Opacity: number;
-  gradAngle: number;
+  /** Two or more stops, in offset order. Used when `fillType` is a gradient. */
+  gradStops: GradientStop[];
+  /**
+   * Where the gradient runs, in fractions of the shape's bounding box, so it follows the shape
+   * when that is moved or resized. Linear: the two ends of the vector. Radial: the centre, and
+   * a point on the circle that sets the radius. Both are dragged on the canvas.
+   */
+  gradFrom: Point;
+  gradTo: Point;
   markerStart: MarkerShape;
   markerEnd: MarkerShape;
 }
@@ -245,6 +258,8 @@ export type StyleCarrier = Partial<StyleProps> & {
   id?: string;
   name?: string;
   groups?: string[];
+  /** Import only: the gradient arrived in artboard units and still has to be converted. */
+  gradUserSpace?: boolean;
 };
 
 /** The serialized document written to storage. */

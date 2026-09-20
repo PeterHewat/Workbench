@@ -1,4 +1,5 @@
 import {
+  elementBBox,
   createPath,
   createLine,
   createRect,
@@ -9,6 +10,7 @@ import {
   createText,
   MARKER_TYPES,
   isGradient,
+  gradientStops,
   geometryOf,
   styleAttrs,
 } from "./model.js";
@@ -81,26 +83,24 @@ function buildDefsLines(elements: readonly SceneElement[]): Line[] {
   const lines: Line[] = [];
   for (const el of elements) {
     if (isGradient(el)) {
-      const stops = [
-        `<stop offset="0" stop-color="${el.fill}" stop-opacity="${n3(el.fillOpacity ?? 1)}"/>`,
-        `<stop offset="1" stop-color="${el.fill2 ?? "#ffffff"}" stop-opacity="${n3(el.fill2Opacity ?? 1)}"/>`,
-      ];
+      const stops = gradientStops(el).map(
+        (stop) =>
+          `<stop offset="${n3(stop.offset)}" stop-color="${stop.color}" stop-opacity="${n3(stop.opacity)}"/>`
+      );
+      const from = el.gradFrom;
+      const to = el.gradTo;
       if (el.fillType === "radial") {
+        const r = n3(Math.hypot(to.x - from.x, to.y - from.y) || 0.5);
         lines.push({
           indent: 0,
-          text: `<radialGradient id="grad-${el.id}" cx="0.5" cy="0.5" r="0.5">`,
+          text: `<radialGradient id="grad-${el.id}" cx="${n3(from.x)}" cy="${n3(from.y)}" r="${r}">`,
         });
         stops.forEach((s) => lines.push({ indent: 1, text: s }));
         lines.push({ indent: 0, text: "</radialGradient>" });
       } else {
-        const a = ((el.gradAngle || 0) * Math.PI) / 180;
-        const x1 = n3(0.5 - Math.cos(a) / 2);
-        const y1 = n3(0.5 - Math.sin(a) / 2);
-        const x2 = n3(0.5 + Math.cos(a) / 2);
-        const y2 = n3(0.5 + Math.sin(a) / 2);
         lines.push({
           indent: 0,
-          text: `<linearGradient id="grad-${el.id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">`,
+          text: `<linearGradient id="grad-${el.id}" x1="${n3(from.x)}" y1="${n3(from.y)}" x2="${n3(to.x)}" y2="${n3(to.y)}">`,
         });
         stops.forEach((s) => lines.push({ indent: 1, text: s }));
         lines.push({ indent: 0, text: "</linearGradient>" });
@@ -479,25 +479,44 @@ function markerFromRef(svg: Element, ref: string | null): MarkerShape {
 
 function gradientStyle(svg: Element, ref: string, style: StyleCarrier): void {
   const grad = findById(svg, "linearGradient,radialGradient", ref);
-  const stops = grad ? grad.querySelectorAll("stop") : [];
+  const stops = grad ? [...grad.querySelectorAll("stop")] : [];
   if (!grad || !stops.length) {
     style.fillEnabled = false;
     return;
   }
-  const first = stops[0]!;
-  const last = stops[stops.length - 1]!;
-  style.fillType = grad.tagName.toLowerCase() === "radialgradient" ? "radial" : "linear";
-  style.fill = normalizeColor(ownProp(first, "stop-color"));
-  style.fillOpacity = parseFloat(ownProp(first, "stop-opacity") ?? "1");
-  style.fill2 = normalizeColor(ownProp(last, "stop-color"));
-  style.fill2Opacity = parseFloat(ownProp(last, "stop-opacity") ?? "1");
-  if (style.fillType !== "linear") return;
-  const num = (a: string, d: number) => {
-    const raw = String(grad.getAttribute(a) ?? d);
-    return parseFloat(raw.replace("%", "")) / (raw.includes("%") ? 100 : 1);
-  };
-  const angle = Math.atan2(num("y2", 0) - num("y1", 0), num("x2", 1) - num("x1", 0));
-  style.gradAngle = Math.round((angle * 180) / Math.PI);
+  const radial = grad.tagName.toLowerCase() === "radialgradient";
+  style.fillType = radial ? "radial" : "linear";
+  style.gradStops = stops.map((stop, i) => ({
+    offset: parseFractional(stop.getAttribute("offset"), i / Math.max(1, stops.length - 1)),
+    color: normalizeColor(ownProp(stop, "stop-color")),
+    opacity: parseFloat(ownProp(stop, "stop-opacity") ?? "1") || 0,
+  }));
+  // The first stop doubles as the solid colour, so turning the gradient off keeps something.
+  style.fill = style.gradStops[0]!.color;
+  style.fillOpacity = style.gradStops[0]!.opacity;
+
+  const num = (a: string, d: number) => parseFractional(grad.getAttribute(a), d);
+  if (radial) {
+    const cx = num("cx", 0.5);
+    const cy = num("cy", 0.5);
+    const r = num("r", 0.5);
+    style.gradFrom = { x: cx, y: cy };
+    style.gradTo = { x: cx + r, y: cy };
+  } else {
+    style.gradFrom = { x: num("x1", 0), y: num("y1", 0) };
+    style.gradTo = { x: num("x2", 1), y: num("y2", 0) };
+  }
+  // userSpaceOnUse coordinates are in artboard units; they are converted once the element
+  // exists and its bounding box is known (see importSvgFile).
+  if (grad.getAttribute("gradientUnits") === "userSpaceOnUse") style.gradUserSpace = true;
+}
+
+/** A gradient coordinate or offset: a plain number, or a percentage. */
+function parseFractional(raw: string | null, fallback: number): number {
+  if (raw == null) return fallback;
+  const value = parseFloat(raw.replace("%", ""));
+  if (Number.isNaN(value)) return fallback;
+  return raw.includes("%") ? value / 100 : value;
 }
 
 function styleFromNode(node: Element, svg: Element): StyleCarrier {
@@ -606,6 +625,20 @@ function elementFromNode(node: Element, tag: string, style: StyleCarrier): Scene
   }
 }
 
+/**
+ * Rewrites a gradient written in artboard units into the fractions of the shape's bounding box
+ * that the model stores, so the gradient keeps following the shape when it is moved or resized.
+ */
+function toBoundingBoxUnits(el: SceneElement): void {
+  const box = elementBBox(el);
+  if (!box) return;
+  const w = box.width || 1;
+  const h = box.height || 1;
+  const map = (p: Point): Point => ({ x: (p.x - box.x) / w, y: (p.y - box.y) / h });
+  el.gradFrom = map(el.gradFrom);
+  el.gradTo = map(el.gradTo);
+}
+
 export interface ImportResult {
   artboard: { width: number; height: number } | null;
   elements: SceneElement[];
@@ -650,7 +683,9 @@ export function importSvgFile(text: string, { keepIds = false } = {}): ImportRes
     // An element's own transform, and every <g transform> above it, are baked into the
     // coordinates here: the scene graph has no transform of its own.
     const own = multiply(matrix, parseTransform(node.getAttribute("transform")));
-    imported.push(isIdentity(own) ? el : transformElement(el, own));
+    const placed = isIdentity(own) ? el : transformElement(el, own);
+    if (style.gradUserSpace) toBoundingBoxUnits(placed);
+    imported.push(placed);
   });
 
   return { artboard, elements: normalizeGroups(pruneGroups(imported)) };

@@ -978,6 +978,21 @@ body {
   stroke: #2f8f46;
 }
 
+/* Where the gradient runs: two handles and the line between them. */
+.handle.grad-handle {
+  fill: #fff;
+  stroke: #b06cff;
+  stroke-width: 2;
+}
+
+.grad-guide {
+  stroke: #b06cff;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
 .handle.rotate-handle {
   fill: #fff;
   stroke: #ff4fa3;
@@ -1568,4 +1583,74 @@ body {
 
 .action-bar .action-danger:hover {
   border-color: var(--danger);
+}
+
+/* Gradient stops: one row per stop, inside the shape's row. */
+.grad-stops-row {
+  align-items: flex-start;
+}
+
+.grad-stops {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.grad-stop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.grad-stop input {
+  width: 56px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: #1a1b1e;
+  color: var(--text);
+}
+
+.grad-stop-unit {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.grad-stop-del {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.grad-stop-del:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.grad-stop-del:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.grad-stop-add {
+  align-self: flex-start;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #2e3038;
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.grad-stop-add:hover {
+  border-color: var(--accent);
 }

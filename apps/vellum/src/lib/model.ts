@@ -5,6 +5,7 @@ import type {
   CircleElement,
   ElementType,
   EllipseElement,
+  GradientStop,
   LineElement,
   PathElement,
   Point,
@@ -29,9 +30,12 @@ export const DEFAULT_STROKE: StyleProps = {
   fillType: "solid",
   fill: "#000000",
   fillOpacity: 1,
-  fill2: "#ffffff",
-  fill2Opacity: 1,
-  gradAngle: 0,
+  gradStops: [
+    { offset: 0, color: "#000000", opacity: 1 },
+    { offset: 1, color: "#ffffff", opacity: 1 },
+  ],
+  gradFrom: { x: 0, y: 0.5 },
+  gradTo: { x: 1, y: 0.5 },
   markerStart: "none",
   markerEnd: "none",
 };
@@ -42,7 +46,7 @@ const STYLE_KEYS: readonly string[] = ["name", "groups", ...Object.keys(DEFAULT_
 export function styleOf(el: SceneElement): StyleCarrier {
   const src = el as unknown as Record<string, unknown>;
   const out: Record<string, unknown> = {};
-  for (const k of STYLE_KEYS) if (src[k] !== undefined) out[k] = src[k];
+  for (const k of STYLE_KEYS) if (src[k] !== undefined) out[k] = deepClone(src[k]);
   return out as StyleCarrier;
 }
 
@@ -87,6 +91,18 @@ export function cornerRadiusY(el: RectElement): number {
 /** A circle's radius read as a pair, so circles and ellipses share one code path. */
 function radii(el: CircleElement | EllipseElement): { rx: number; ry: number } {
   return el.type === "circle" ? { rx: el.r, ry: el.r } : { rx: el.rx, ry: el.ry };
+}
+
+/** An element's stops, in offset order, always at least two so a gradient is well formed. */
+export function gradientStops(el: SceneElement): GradientStop[] {
+  const stops = (el.gradStops ?? []).filter((s) => s && Number.isFinite(s.offset));
+  if (stops.length < 2) {
+    return [
+      { offset: 0, color: el.fill || "#000000", opacity: el.fillOpacity ?? 1 },
+      { offset: 1, color: "#ffffff", opacity: 1 },
+    ];
+  }
+  return [...stops].sort((a, b) => a.offset - b.offset);
 }
 
 export function isGradient(el: SceneElement): boolean {

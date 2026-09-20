@@ -1,6 +1,7 @@
 import { selectedElements, findElement } from "./state.js";
 import {
   elementBBox,
+  isGradient,
   cornerRadius,
   cornerRadiusY,
   canRotate,
@@ -360,6 +361,36 @@ function renderPathHandles(parent: Element, path: PathElement, state: EditorStat
   });
 }
 
+/**
+ * Where a gradient runs, as two handles on the shape. Stored in fractions of the bounding box,
+ * so the gradient follows the shape; drawn in world units here. Dragging them is what replaced
+ * typing an angle, and it can express what an angle could not - an off-centre radial, a linear
+ * that only covers part of the shape.
+ */
+function renderGradientHandles(parent: Element, el: SceneElement): void {
+  const box = elementBBox(el);
+  if (!box || !isGradient(el)) return;
+  const at = (p: Point) => ({ x: box.x + p.x * box.width, y: box.y + p.y * box.height });
+  const from = at(el.gradFrom);
+  const to = at(el.gradTo);
+  add(parent, "line", {
+    class: "grad-guide",
+    x1: from.x,
+    y1: from.y,
+    x2: to.x,
+    y2: to.y,
+  });
+  for (const [point, role] of [
+    [from, "grad-from"],
+    [to, "grad-to"],
+  ] as const) {
+    addHandle(parent, point.x, point.y, "grad-handle", {
+      "data-element-id": el.id,
+      "data-handle-role": role,
+    });
+  }
+}
+
 function renderSelectionBox(box: BBox): void {
   add(els.overlay, "rect", {
     class: "selection-box",
@@ -396,8 +427,9 @@ function renderOverlay(state: EditorState): void {
       renderPrimitiveHandles(els.overlay, el, state.selection.pathEdit);
     }
   }
-  if (sel.length === 1 && sel[0]!.id !== activePathId && canRotate(sel[0]!)) {
-    renderRotateHandle(els.overlay, sel[0]!, state);
+  if (sel.length === 1 && sel[0]!.id !== activePathId) {
+    renderGradientHandles(els.overlay, sel[0]!);
+    if (canRotate(sel[0]!)) renderRotateHandle(els.overlay, sel[0]!, state);
   }
 
   const prev = state.drawing?.preview;

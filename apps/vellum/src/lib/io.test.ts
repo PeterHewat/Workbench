@@ -52,7 +52,8 @@ function sampleElements(): SceneElement[] {
     Object.assign(createRect(0, 0, 9, 9), {
       fillEnabled: true,
       fillType: "linear" as const,
-      gradAngle: 90,
+      gradFrom: { x: 0.5, y: 0 },
+      gradTo: { x: 0.5, y: 1 },
     }),
     Object.assign(createRect(0, 0, 9, 9), {
       fillEnabled: true,
@@ -466,5 +467,74 @@ describe("path data the old parser dropped", () => {
 
   test("an arc with a zero radius degenerates to a line", () => {
     expect(points("M0 0 A0 0 0 0 1 10 10")).toHaveLength(2);
+  });
+});
+
+describe("gradients", () => {
+  const gradient = (over: Partial<SceneElement>) =>
+    Object.assign(createRect(0, 0, 100, 50), { fillEnabled: true, fillType: "linear" }, over);
+
+  test("every stop is written out, in order", () => {
+    const el = gradient({
+      gradStops: [
+        { offset: 0, color: "#ff0000", opacity: 1 },
+        { offset: 0.4, color: "#00ff00", opacity: 0.5 },
+        { offset: 1, color: "#0000ff", opacity: 1 },
+      ],
+    });
+    const svg = formatExportSvg(doc([el]), true);
+    expect(svg.match(/<stop /g)).toHaveLength(3);
+    expect(svg).toContain('offset="0.4" stop-color="#00ff00" stop-opacity="0.5"');
+  });
+
+  test("the gradient's ends are written as coordinates, not an angle", () => {
+    const el = gradient({ gradFrom: { x: 0.25, y: 0 }, gradTo: { x: 0.75, y: 1 } });
+    expect(formatExportSvg(doc([el]), true)).toContain('x1="0.25" y1="0" x2="0.75" y2="1"');
+  });
+
+  test("a radial gradient's centre and radius come from the same two points", () => {
+    const el = gradient({
+      fillType: "radial",
+      gradFrom: { x: 0.5, y: 0.5 },
+      gradTo: { x: 0.9, y: 0.5 },
+    });
+    expect(formatExportSvg(doc([el]), true)).toContain('cx="0.5" cy="0.5" r="0.4"');
+  });
+
+  test("three stops survive a round trip", () => {
+    const el = gradient({
+      gradStops: [
+        { offset: 0, color: "#ff0000", opacity: 1 },
+        { offset: 0.4, color: "#00ff00", opacity: 1 },
+        { offset: 1, color: "#0000ff", opacity: 1 },
+      ],
+    });
+    const back = importSvgFile(formatExportSvg(doc([el]), true), { keepIds: true });
+    expect(back.elements[0]!.gradStops).toHaveLength(3);
+    expect(back.elements[0]!.gradStops[1]).toMatchObject({ offset: 0.4, color: "#00ff00" });
+  });
+
+  test("percentages are read as fractions", () => {
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+        '<linearGradient id="g" x1="10%" y1="0%" x2="90%" y2="0%">' +
+        '<stop offset="20%" stop-color="#ff0000"/><stop offset="100%" stop-color="#0000ff"/>' +
+        "</linearGradient></defs>" +
+        '<rect width="10" height="10" fill="url(#g)"/></svg>'
+    );
+    expect(r.elements[0]!.gradFrom).toEqual({ x: 0.1, y: 0 });
+    expect(r.elements[0]!.gradStops[0]!.offset).toBeCloseTo(0.2);
+  });
+
+  test("a userSpaceOnUse gradient is converted to the shape's own box", () => {
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+        '<linearGradient id="g" gradientUnits="userSpaceOnUse" x1="100" y1="0" x2="200" y2="0">' +
+        '<stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/>' +
+        "</linearGradient></defs>" +
+        '<rect x="100" y="0" width="100" height="50" fill="url(#g)"/></svg>'
+    );
+    expect(r.elements[0]!.gradFrom).toEqual({ x: 0, y: 0 });
+    expect(r.elements[0]!.gradTo).toEqual({ x: 1, y: 0 });
   });
 });

@@ -1076,6 +1076,18 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     base: SceneElement,
     alt: boolean
   ): void {
+    if (role === "grad-from" || role === "grad-to") {
+      const box = elementBBox(el);
+      if (!box) return;
+      // Back into fractions of the bounding box, which is how the gradient is stored.
+      const point = {
+        x: (world.x - box.x) / (box.width || 1),
+        y: (world.y - box.y) / (box.height || 1),
+      };
+      if (role === "grad-from") el.gradFrom = point;
+      else el.gradTo = point;
+      return;
+    }
     switch (el.type) {
       case "rect": {
         if (base.type !== "rect") return;
