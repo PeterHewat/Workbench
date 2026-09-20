@@ -69,6 +69,7 @@ import { deepClone, downloadText, escapeAttr, escapeXml, uid } from "./utils.js"
 import { bindTouch, setTouchFinishPathHandler } from "./touch.js";
 import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
 import { initRulers, renderRulers, setRulerOffset } from "./rulers.js";
+import { initPointerKind } from "./pointer.js";
 import { registerServiceWorker } from "@workbench/ui";
 import type { EditorState, ProjectFile, ReferenceImage, SceneElement } from "./types.js";
 
@@ -90,6 +91,7 @@ const wrap = byId("canvas-wrap");
 const imageListEl = byId("image-list");
 const primitiveListEl = byId("primitive-list");
 
+initPointerKind(() => renderAll(getState()));
 initViewport(svg, camera);
 initRender({
   artboardBg: byId<HTMLElement>("artboard-bg") as unknown as SVGRectElement,

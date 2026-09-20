@@ -10,12 +10,28 @@ import {
   type AttrMap,
 } from "./model.js";
 import { applyCameraTransform } from "./viewport.js";
+import { cornerHandleInset, isCoarsePointer } from "./pointer.js";
 import { buildDefsMarkup } from "./io.js";
-import type { BBox, EditorState, PathEdit, PathElement, Preview, SceneElement } from "./types.js";
+import type {
+  BBox,
+  EditorState,
+  PathEdit,
+  PathElement,
+  Point,
+  Preview,
+  SceneElement,
+} from "./types.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const HIT_MIN_PX = 10;
+/** Visible handle radius, in screen pixels: handles keep one size at every zoom level. */
 const HANDLE_R = 5;
+/** Pointer target radius, screen pixels. Coarse is ~44px across, the usual touch minimum. */
+const HIT_R_FINE = 11;
+const HIT_R_COARSE = 22;
+
+/** Set once per render so the helpers below can size handles in screen pixels. */
+let zoom = 1;
 
 export interface RenderTargets {
   artboardBg: SVGRectElement;
@@ -156,14 +172,57 @@ function renderDocument(state: EditorState): void {
   }
 }
 
+/**
+ * A handle is two circles: a transparent, finger-sized target carrying the data attributes the
+ * hit test reads, and the small visible dot on top of it. Keeping the two apart lets the target
+ * grow for touch without the dot turning into a blob.
+ */
 function addHandle(
   parent: Element,
   x: number,
   y: number,
   cls: string,
-  data: AttrMap = {}
+  data: AttrMap = {},
+  hitR = defaultHitR()
 ): SVGCircleElement {
-  return add(parent, "circle", { class: `handle ${cls}`, cx: x, cy: y, r: HANDLE_R, ...data });
+  // No data attributes means nothing to grab (the pen's draft anchor), so no target either.
+  if (Object.keys(data).length) {
+    add(parent, "circle", {
+      class: `handle-hit${isCoarsePointer() ? " coarse" : ""}`,
+      cx: x,
+      cy: y,
+      r: hitR / zoom,
+      ...data,
+    });
+  }
+  return add(parent, "circle", {
+    class: `handle ${cls}`,
+    cx: x,
+    cy: y,
+    r: HANDLE_R / zoom,
+    ...data,
+  });
+}
+
+function defaultHitR(): number {
+  return isCoarsePointer() ? HIT_R_COARSE : HIT_R_FINE;
+}
+
+/**
+ * The target radius for one point of a run, shrunk so neighbouring points stay reachable when
+ * they are closer together than a fingertip. Only the immediate neighbours are checked: they are
+ * the ones that crowd in practice, and this runs on every pointer move.
+ */
+function hitRForPoint(points: readonly Point[], i: number): number {
+  const p = points[i];
+  if (!p) return defaultHitR();
+  let nearest = Infinity;
+  for (const j of [i - 1, i + 1]) {
+    const q = points[j];
+    if (q) nearest = Math.min(nearest, Math.hypot(q.x - p.x, q.y - p.y) * zoom);
+  }
+  if (!Number.isFinite(nearest)) return defaultHitR();
+  return Math.max(HANDLE_R + 1, Math.min(defaultHitR(), nearest / 2));
 }
 
 function addHandleLine(parent: Element, x1: number, y1: number, x2: number, y2: number): void {
@@ -177,7 +236,7 @@ function renderRotateHandle(parent: Element, el: SceneElement, state: EditorStat
   const rot = state.drawing?.rotateHandle;
   const rotating = rot && rot.elementId === el.id ? rot : null;
   const hx = rotating ? rotating.x : cx;
-  const hy = rotating ? rotating.y : box.y - 28 / state.viewport.zoom;
+  const hy = rotating ? rotating.y : box.y - (isCoarsePointer() ? 48 : 28) / zoom;
   addHandleLine(parent, rotating ? rotating.cx : cx, rotating ? rotating.cy : box.y, hx, hy);
   addHandle(parent, hx, hy, "rotate-handle", {
     "data-element-id": el.id,
@@ -191,19 +250,23 @@ function addResizeHandle(
   y: number,
   elementId: string,
   role: string,
-  selected = false
+  selected = false,
+  hitR = defaultHitR()
 ): void {
-  addHandle(parent, x, y, `anchor${selected ? " selected" : ""}`, {
-    "data-element-id": elementId,
-    "data-handle-role": role,
-  });
+  addHandle(
+    parent,
+    x,
+    y,
+    `anchor${selected ? " selected" : ""}`,
+    { "data-element-id": elementId, "data-handle-role": role },
+    hitR
+  );
 }
 
 function renderPrimitiveHandles(
   parent: Element,
   el: SceneElement,
-  pathEdit: PathEdit | null,
-  zoom = 1
+  pathEdit: PathEdit | null
 ): void {
   switch (el.type) {
     case "rect": {
@@ -211,7 +274,7 @@ function renderPrimitiveHandles(
       addResizeHandle(parent, el.x + el.width, el.y, el.id, "tr");
       addResizeHandle(parent, el.x, el.y + el.height, el.id, "bl");
       addResizeHandle(parent, el.x + el.width, el.y + el.height, el.id, "br");
-      const off = 14 / zoom;
+      const off = cornerHandleInset() / zoom;
       addResizeHandle(
         parent,
         el.x + el.width - off - cornerRadius(el),
@@ -241,7 +304,8 @@ function renderPrimitiveHandles(
           p.y,
           el.id,
           `pt-${i}`,
-          pathEdit?.pathId === el.id && pathEdit.index === i
+          pathEdit?.pathId === el.id && pathEdit.index === i,
+          hitRForPoint(el.points, i)
         )
       );
       break;
@@ -250,23 +314,33 @@ function renderPrimitiveHandles(
 
 function renderPathHandles(parent: Element, path: PathElement, state: EditorState): void {
   const pe = state.selection.pathEdit;
+  // Curve handles first, anchors after: the anchor sits on top wherever the two overlap.
   path.points.forEach((p, i) => {
     for (const kind of ["in", "out"] as const) {
       const h = kind === "in" ? p.hIn : p.hOut;
       if (!h || (h.x === p.x && h.y === p.y)) continue;
       addHandleLine(parent, p.x, p.y, h.x, h.y);
-      addHandle(parent, h.x, h.y, `handle-${kind}`, {
-        "data-path-id": path.id,
-        "data-point-index": i,
-        "data-handle-kind": kind,
-      });
+      const reach = Math.hypot(h.x - p.x, h.y - p.y) * zoom;
+      addHandle(
+        parent,
+        h.x,
+        h.y,
+        `handle-${kind}`,
+        { "data-path-id": path.id, "data-point-index": i, "data-handle-kind": kind },
+        Math.max(HANDLE_R + 1, Math.min(defaultHitR(), reach / 2))
+      );
     }
+  });
+  path.points.forEach((p, i) => {
     const selected = pe?.pathId === path.id && pe.kind === "anchor" && pe.index === i;
-    addHandle(parent, p.x, p.y, `anchor${selected ? " selected" : ""}`, {
-      "data-path-id": path.id,
-      "data-point-index": i,
-      "data-handle-kind": "anchor",
-    });
+    addHandle(
+      parent,
+      p.x,
+      p.y,
+      `anchor${selected ? " selected" : ""}`,
+      { "data-path-id": path.id, "data-point-index": i, "data-handle-kind": "anchor" },
+      hitRForPoint(path.points, i)
+    );
   });
 }
 
@@ -282,6 +356,7 @@ function renderSelectionBox(box: BBox): void {
 
 function renderOverlay(state: EditorState): void {
   clearChildren(els.overlay);
+  zoom = state.viewport.zoom;
   if (state.finalOnly) return;
 
   const activePathId = state.drawing?.activePathId ?? null;
@@ -302,7 +377,7 @@ function renderOverlay(state: EditorState): void {
     const box = elementBBox(el);
     if (box) renderSelectionBox(box);
     if (sel.length === 1) {
-      renderPrimitiveHandles(els.overlay, el, state.selection.pathEdit, state.viewport.zoom);
+      renderPrimitiveHandles(els.overlay, el, state.selection.pathEdit);
     }
   }
   if (sel.length === 1 && sel[0]!.id !== activePathId && canRotate(sel[0]!)) {

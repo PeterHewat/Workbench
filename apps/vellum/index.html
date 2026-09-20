@@ -2,9 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- The canvas sets touch-action itself, so page zoom can stay available for the UI.
+         resizes-content keeps the layout above the on-screen keyboard while editing text. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <title>Vellum — trace images to SVG</title>
     <meta

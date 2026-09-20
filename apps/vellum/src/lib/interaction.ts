@@ -28,6 +28,7 @@ import {
   type AlignOptions,
 } from "./model.js";
 import { screenToWorld, zoomAt } from "./viewport.js";
+import { cornerHandleInset } from "./pointer.js";
 import { deepClone, dist, uid } from "./utils.js";
 import { pushUndo } from "./undo.js";
 import { importSvgFile } from "./io.js";
@@ -993,7 +994,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       case "rect": {
         if (base.type !== "rect") return;
         if (role === "corner") {
-          const off = 14 / getState().viewport.zoom;
+          const off = cornerHandleInset() / getState().viewport.zoom;
           const rx = Math.min(Math.max(el.x + el.width - off - world.x, 0), el.width / 2);
           const ry = Math.min(Math.max(world.y - el.y - off, 0), el.height / 2);
           if (alt) {
