@@ -1,6 +1,9 @@
 import { selectedElements, findElement } from "./state.js";
 import {
   elementBBox,
+  localBBox,
+  cornersOf,
+  toWorldPoint,
   isGradient,
   cornerRadius,
   cornerRadiusY,
@@ -13,15 +16,7 @@ import {
 import { applyCameraTransform } from "./viewport.js";
 import { cornerHandleInset, isCoarsePointer } from "./pointer.js";
 import { buildDefsMarkup } from "./io.js";
-import type {
-  BBox,
-  EditorState,
-  PathEdit,
-  PathElement,
-  Point,
-  Preview,
-  SceneElement,
-} from "./types.js";
+import type { EditorState, PathEdit, PathElement, Point, Preview, SceneElement } from "./types.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const HIT_MIN_PX = 10;
@@ -234,14 +229,16 @@ function addHandleLine(parent: Element, x1: number, y1: number, x2: number, y2: 
 }
 
 function renderRotateHandle(parent: Element, el: SceneElement, state: EditorState): void {
-  const box = elementBBox(el);
+  const box = localBBox(el);
   if (!box) return;
-  const cx = box.x + box.width / 2;
+  const reach = (isCoarsePointer() ? 48 : 28) / zoom;
+  const top = toWorldPoint(el, { x: box.x + box.width / 2, y: box.y });
+  const out = toWorldPoint(el, { x: box.x + box.width / 2, y: box.y - reach });
   const rot = state.drawing?.rotateHandle;
   const rotating = rot && rot.elementId === el.id ? rot : null;
-  const hx = rotating ? rotating.x : cx;
-  const hy = rotating ? rotating.y : box.y - (isCoarsePointer() ? 48 : 28) / zoom;
-  addHandleLine(parent, rotating ? rotating.cx : cx, rotating ? rotating.cy : box.y, hx, hy);
+  const hx = rotating ? rotating.x : out.x;
+  const hy = rotating ? rotating.y : out.y;
+  addHandleLine(parent, rotating ? rotating.cx : top.x, rotating ? rotating.cy : top.y, hx, hy);
   addHandle(parent, hx, hy, "rotate-handle", {
     "data-element-id": el.id,
     "data-handle-role": "rotate",
@@ -273,53 +270,45 @@ function renderPrimitiveHandles(
   el: SceneElement,
   pathEdit: PathEdit | null
 ): void {
+  // Handles are placed in the shape's own unrotated frame and then turned with it, so a rotated
+  // rect still has rect handles rather than losing them to a conversion.
+  const put = (x: number, y: number, role: string, selected = false, hitR?: number) => {
+    const p = toWorldPoint(el, { x, y });
+    addResizeHandle(parent, p.x, p.y, el.id, role, selected, hitR);
+  };
   switch (el.type) {
     case "rect": {
-      addResizeHandle(parent, el.x, el.y, el.id, "tl");
-      addResizeHandle(parent, el.x + el.width, el.y, el.id, "tr");
-      addResizeHandle(parent, el.x, el.y + el.height, el.id, "bl");
-      addResizeHandle(parent, el.x + el.width, el.y + el.height, el.id, "br");
+      put(el.x, el.y, "tl");
+      put(el.x + el.width, el.y, "tr");
+      put(el.x, el.y + el.height, "bl");
+      put(el.x + el.width, el.y + el.height, "br");
       const off = cornerHandleInset() / zoom;
-      addResizeHandle(
-        parent,
-        el.x + el.width - off - cornerRadius(el),
-        el.y + off + cornerRadiusY(el),
-        el.id,
-        "corner"
-      );
+      put(el.x + el.width - off - cornerRadius(el), el.y + off + cornerRadiusY(el), "corner");
       // Just outside the bottom-right corner: drag it and the rect stays a square.
-      addResizeHandle(
-        parent,
-        el.x + el.width + off / 2,
-        el.y + el.height + off / 2,
-        el.id,
-        "uniform"
-      );
+      put(el.x + el.width + off / 2, el.y + el.height + off / 2, "uniform");
       break;
     }
     case "circle":
-      addResizeHandle(parent, el.cx + el.r, el.cy, el.id, "radius");
+      put(el.cx + el.r, el.cy, "radius");
       break;
     case "ellipse": {
-      addResizeHandle(parent, el.cx + el.rx, el.cy, el.id, "rx");
-      addResizeHandle(parent, el.cx, el.cy + el.ry, el.id, "ry");
+      put(el.cx + el.rx, el.cy, "rx");
+      put(el.cx, el.cy + el.ry, "ry");
       // On the diagonal between them: drag it and the ellipse stays a circle.
       const d = Math.SQRT1_2;
-      addResizeHandle(parent, el.cx + el.rx * d, el.cy + el.ry * d, el.id, "uniform");
+      put(el.cx + el.rx * d, el.cy + el.ry * d, "uniform");
       break;
     }
     case "line":
-      addResizeHandle(parent, el.x1, el.y1, el.id, "p1");
-      addResizeHandle(parent, el.x2, el.y2, el.id, "p2");
+      put(el.x1, el.y1, "p1");
+      put(el.x2, el.y2, "p2");
       break;
     case "polyline":
     case "polygon":
       el.points.forEach((p, i) =>
-        addResizeHandle(
-          parent,
+        put(
           p.x,
           p.y,
-          el.id,
           `pt-${i}`,
           pathEdit?.pathId === el.id && pathEdit.index === i,
           hitRForPoint(el.points, i)
@@ -391,13 +380,25 @@ function renderGradientHandles(parent: Element, el: SceneElement): void {
   }
 }
 
-function renderSelectionBox(box: BBox): void {
-  add(els.overlay, "rect", {
+function renderSelectionBox(el: SceneElement): void {
+  const box = localBBox(el);
+  if (!box) return;
+  if (!el.rotation) {
+    add(els.overlay, "rect", {
+      class: "selection-box",
+      x: box.x,
+      y: box.y,
+      width: box.width,
+      height: box.height,
+    });
+    return;
+  }
+  // Rotated: draw the turned box itself rather than the larger upright one around it.
+  add(els.overlay, "polygon", {
     class: "selection-box",
-    x: box.x,
-    y: box.y,
-    width: box.width,
-    height: box.height,
+    points: cornersOf(el)
+      .map((p) => `${p.x},${p.y}`)
+      .join(" "),
   });
 }
 
@@ -417,12 +418,10 @@ function renderOverlay(state: EditorState): void {
     if (el.id === activePathId) continue;
     if (el.type === "path") {
       renderPathHandles(els.overlay, el, state);
-      const box = elementBBox(el);
-      if (box) renderSelectionBox(box);
+      renderSelectionBox(el);
       continue;
     }
-    const box = elementBBox(el);
-    if (box) renderSelectionBox(box);
+    renderSelectionBox(el);
     if (sel.length === 1) {
       renderPrimitiveHandles(els.overlay, el, state.selection.pathEdit);
     }

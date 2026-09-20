@@ -76,6 +76,13 @@ interface ElementBase extends StyleProps {
   name: string;
   /** The groups containing this element, outermost first. Absent when it is in none. */
   groups?: string[];
+  /**
+   * Degrees clockwise about the shape's own centre, exported as `transform="rotate()"`.
+   * Carried by the shapes that cannot express a rotation in their coordinates - rect, ellipse,
+   * circle and text. Paths and polylines have their rotation baked into their points instead,
+   * which loses nothing, and never set this.
+   */
+  rotation?: number;
 }
 
 export interface PathElement extends ElementBase {
@@ -139,7 +146,6 @@ export interface TextElement extends ElementBase {
   fontSize: number;
   fontFamily: string;
   anchor: TextAnchor;
-  rotation?: number;
 }
 
 export type SceneElement =

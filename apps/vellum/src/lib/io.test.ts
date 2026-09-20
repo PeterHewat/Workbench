@@ -538,3 +538,31 @@ describe("gradients", () => {
     expect(r.elements[0]!.gradTo).toEqual({ x: 1, y: 0 });
   });
 });
+
+describe("rotation round trip", () => {
+  test("a rotated rect stays a rect through export and import", () => {
+    const el = Object.assign(createRect(10, 20, 100, 50), { rotation: 30 });
+    const svg = formatExportSvg(doc([el]), true);
+    expect(svg).toContain("<rect ");
+    expect(svg).toContain('transform="rotate(30 60 45)"');
+    const back = importSvgFile(svg, { keepIds: true });
+    expect(back.elements[0]!.type).toBe("rect");
+    expect(Math.round(back.elements[0]!.rotation ?? 0)).toBe(30);
+  });
+
+  test("export is byte-for-byte stable across that trip", () => {
+    const el = Object.assign(createRect(10, 20, 100, 50), { rotation: 30 });
+    const first = formatExportSvg(doc([el]), true);
+    const back = importSvgFile(first, { keepIds: true });
+    expect(formatExportSvg({ artboard: doc([]).artboard, elements: back.elements }, true)).toBe(
+      first
+    );
+  });
+
+  test("a rotated ellipse keeps its type too", () => {
+    const el = Object.assign(createEllipse(50, 50, 30, 10), { rotation: 45 });
+    const back = importSvgFile(formatExportSvg(doc([el]), true), { keepIds: true });
+    expect(back.elements[0]!.type).toBe("ellipse");
+    expect(Math.round(back.elements[0]!.rotation ?? 0)).toBe(45);
+  });
+});

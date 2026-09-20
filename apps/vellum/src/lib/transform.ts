@@ -6,8 +6,8 @@
  * element or on a `<g>` around it is applied to the geometry once, at import, and then forgotten.
  */
 
-import { toPathElement } from "./model.js";
-import type { Point, SceneElement, TextElement } from "./types.js";
+import { keepsRotation, rotationCentre, toPathElement, translateElement } from "./model.js";
+import type { Point, SceneElement } from "./types.js";
 
 /** `[a, b, c, d, e, f]`, as in SVG: x' = a·x + c·y + e, y' = b·x + d·y + f. */
 export type Matrix = [number, number, number, number, number, number];
@@ -109,16 +109,40 @@ function movePoint(m: Matrix, p: Point): void {
   p.y = next.y;
 }
 
-function transformText(el: TextElement, m: Matrix): TextElement {
-  const at = applyMatrix(m, { x: el.x, y: el.y });
+/**
+ * True when the matrix is a rotation, a uniform scale and a translation, and nothing else. Such
+ * a transform turns a rect into a rect, so it can be stored as an angle instead of flattening
+ * the shape into a path.
+ */
+function isSimilarity(m: Matrix): boolean {
+  const sx = Math.hypot(m[0], m[1]);
+  const sy = Math.hypot(m[2], m[3]);
+  if (!sx || !sy) return false;
+  const orthogonal = Math.abs(m[0] * m[2] + m[1] * m[3]) < 1e-6 * sx * sy;
+  return orthogonal && Math.abs(sx - sy) < 1e-6 * sx;
+}
+
+/** Applies a similarity to a shape that carries its own angle, keeping its type. */
+function transformKeepingRotation(el: SceneElement, m: Matrix): SceneElement {
+  const scale = scaleOf(m);
   const angle = rotationOf(m);
-  return {
-    ...el,
-    x: at.x,
-    y: at.y,
-    fontSize: el.fontSize * scaleOf(m),
-    rotation: angle || el.rotation ? ((el.rotation ?? 0) + angle) % 360 : undefined,
-  };
+  const centre = rotationCentre(el);
+  const next = { ...el } as SceneElement;
+  // Scale about the centre first, then move the centre to where the matrix sends it.
+  if (Math.abs(scale - 1) > 1e-9) {
+    const scaled = transformElement(
+      { ...next, rotation: undefined },
+      scaleAbout(scale, scale, centre.x, centre.y)
+    );
+    Object.assign(next, scaled);
+  }
+  const moved = applyMatrix(m, centre);
+  const now = rotationCentre(next);
+  translateElement(next, moved.x - now.x, moved.y - now.y);
+  const total = ((((el.rotation ?? 0) + angle) % 360) + 360) % 360;
+  if (total) next.rotation = total;
+  else delete next.rotation;
+  return next;
 }
 
 /**
@@ -127,8 +151,14 @@ function transformText(el: TextElement, m: Matrix): TextElement {
  */
 export function transformElement(el: SceneElement, m: Matrix): SceneElement {
   if (isIdentity(m)) return el;
-  if (el.type === "text") return transformText(el, m);
-
+  // A shape that can carry an angle keeps its type whenever the transform is one it can express.
+  if (keepsRotation(el) && (el.rotation || !isAxisAligned(m)) && isSimilarity(m)) {
+    return transformKeepingRotation(el, m);
+  }
+  if (el.type === "text") {
+    const at = applyMatrix(m, { x: el.x, y: el.y });
+    return { ...el, x: at.x, y: at.y, fontSize: el.fontSize * scaleOf(m) };
+  }
   if (!isAxisAligned(m) && (el.type === "rect" || el.type === "ellipse" || el.type === "circle")) {
     return transformElement(toPathElement(el), m);
   }

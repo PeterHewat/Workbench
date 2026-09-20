@@ -41,8 +41,19 @@ describe("transformElement", () => {
     expect(out).toMatchObject({ type: "rect", x: 20, y: 40, width: 60, height: 80 });
   });
 
-  test("a rotated rect becomes a path, because a rect cannot express it", () => {
+  test("a rotated rect stays a rect, carrying the angle", () => {
     const out = transformElement(createRect(0, 0, 10, 10), parseTransform("rotate(30)"));
+    expect(out.type).toBe("rect");
+    expect(Math.round(out.rotation ?? 0)).toBe(30);
+  });
+
+  test("a sheared rect cannot stay one, so it becomes a path", () => {
+    const out = transformElement(createRect(0, 0, 10, 10), parseTransform("skewX(20)"));
+    expect(out.type).toBe("path");
+  });
+
+  test("a rotated then non-uniformly scaled rect also becomes a path", () => {
+    const out = transformElement(createRect(0, 0, 10, 10), parseTransform("rotate(30) scale(2 1)"));
     expect(out.type).toBe("path");
   });
 

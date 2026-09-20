@@ -16,7 +16,6 @@ import {
   joinPaths,
   nearestOnElement,
   rotateElementCopy,
-  rotationBase,
   canRotate,
   setClosed,
   simplifyPathIfStraight,
@@ -25,7 +24,12 @@ import {
   togglePointSmooth,
   toPathElement,
   translateElement,
+  toLocalPoint,
+  toWorldPoint,
+  localBBox,
+  rotationCentre,
 } from "./model.js";
+import { elementToSvgMarkup } from "./io.js";
 import type { Anchor, PathElement } from "./types.js";
 
 const anchor = (x: number, y: number, hIn: Anchor["hIn"] = null, hOut: Anchor["hOut"] = null) =>
@@ -352,13 +356,40 @@ describe("rotation", () => {
     expect(canRotate(createRect(0, 0, 1, 1))).toBe(true);
   });
 
-  test("rects become polygons and ellipses become paths", () => {
-    expect(rotationBase(createRect(0, 0, 10, 10)).type).toBe("polygon");
-    expect(rotationBase(createEllipse(0, 0, 10, 5)).type).toBe("path");
+  test("a rect stays a rect and an ellipse stays an ellipse: the angle is stored", () => {
+    const rect = rotateElementCopy(createRect(0, 0, 10, 10), Math.PI / 4, 5, 5);
+    expect(rect.type).toBe("rect");
+    expect(Math.round(rect.rotation ?? 0)).toBe(45);
+    const ellipse = rotateElementCopy(createEllipse(0, 0, 10, 5), Math.PI / 2, 0, 0);
+    expect(ellipse.type).toBe("ellipse");
+    expect(Math.round(ellipse.rotation ?? 0)).toBe(90);
+  });
+
+  test("a rotated rect exports as a rect with a rotate() transform", () => {
+    const rect = rotateElementCopy(createRect(0, 0, 10, 20), Math.PI / 6, 5, 10);
+    const markup = elementToSvgMarkup(rect);
+    expect(markup.startsWith("<rect ")).toBe(true);
+    expect(markup).toContain('transform="rotate(30 5 10)"');
+  });
+
+  test("turning a rotated rect into a path bakes the angle into its points", () => {
+    const rect = rotateElementCopy(createRect(0, 0, 10, 10), Math.PI / 2, 5, 5);
+    const path = toPathElement(rect);
+    expect(path.rotation).toBeUndefined();
+    const box = elementBBox(path)!;
+    expect(box.width).toBeCloseTo(10, 6);
+    expect(box.height).toBeCloseTo(10, 6);
+  });
+
+  test("a rotated ellipse's bounding box uses its real extent, not its corners", () => {
+    const ellipse = rotateElementCopy(createEllipse(0, 0, 20, 10), Math.PI / 2, 0, 0);
+    const box = elementBBox(ellipse)!;
+    expect(box.width).toBeCloseTo(20, 6);
+    expect(box.height).toBeCloseTo(40, 6);
   });
 
   test("a square rotated about its centre keeps its bounding box", () => {
-    const base = rotationBase(createRect(0, 0, 10, 10));
+    const base = toPathElement(createRect(0, 0, 10, 10));
     const box = elementBBox(rotateElementCopy(base, Math.PI / 2, 5, 5))!;
     expect(box.x).toBeCloseTo(0, 6);
     expect(box.y).toBeCloseTo(0, 6);
@@ -380,5 +411,42 @@ describe("duplication", () => {
     expect(copy.id).not.toBe(rect.id);
     translateElement(copy, 5, 5);
     expect(rect.x).toBe(0);
+  });
+});
+
+describe("rotated frames", () => {
+  test("a point survives the trip into a shape's own frame and back", () => {
+    const rect = Object.assign(createRect(0, 0, 100, 40), { rotation: 37 });
+    const p = { x: 12.5, y: -8 };
+    const back = toLocalPoint(rect, toWorldPoint(rect, p));
+    expect(back.x).toBeCloseTo(p.x, 9);
+    expect(back.y).toBeCloseTo(p.y, 9);
+  });
+
+  test("an unrotated shape's frame is the artboard's", () => {
+    const rect = createRect(0, 0, 10, 10);
+    expect(toWorldPoint(rect, { x: 3, y: 4 })).toEqual({ x: 3, y: 4 });
+  });
+
+  test("the local box ignores the angle; the artboard box does not", () => {
+    const rect = Object.assign(createRect(0, 0, 100, 40), { rotation: 90 });
+    expect(localBBox(rect)).toEqual({ x: 0, y: 0, width: 100, height: 40 });
+    const box = elementBBox(rect)!;
+    expect(box.width).toBeCloseTo(40, 6);
+    expect(box.height).toBeCloseTo(100, 6);
+  });
+
+  test("rotating about the shape's own centre leaves the centre alone", () => {
+    const rect = createRect(10, 10, 60, 20);
+    const turned = rotateElementCopy(rect, Math.PI / 3, 40, 20);
+    expect(rotationCentre(turned)).toEqual({ x: 40, y: 20 });
+  });
+
+  test("rotating about another point carries the shape round it", () => {
+    const rect = createRect(0, 0, 10, 10);
+    const turned = rotateElementCopy(rect, Math.PI, 0, 0);
+    const centre = rotationCentre(turned);
+    expect(centre.x).toBeCloseTo(-5, 6);
+    expect(centre.y).toBeCloseTo(-5, 6);
   });
 });

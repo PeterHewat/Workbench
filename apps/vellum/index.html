@@ -671,9 +671,11 @@
               horizontal and vertical radii separately.
             </li>
             <li>
-              <b>Rotate</b> — drag the pink handle above a selected shape. <kbd>Shift</kbd> snaps to
-              15°. Rectangles become polygons and ellipses become paths the first time they are
-              rotated; text keeps its type and has a Rotation field.
+              <b>Rotate</b> — drag the pink handle above a selected shape, or put two fingers on a
+              selected shape and twist. <kbd>Shift</kbd> snaps to 15°. Rectangles, ellipses and text
+              keep their type and carry the angle, exported as <code>transform="rotate()"</code>, so
+              a rotated rectangle is still a rectangle with a width, a height and a corner radius.
+              Paths and polylines have the rotation baked into their points, which loses nothing.
             </li>
             <li><b>Nudge</b> — arrow keys move by 1 unit, <kbd>Shift</kbd> by 10.</li>
             <li>

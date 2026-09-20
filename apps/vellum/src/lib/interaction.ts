@@ -15,6 +15,9 @@ import {
   togglePointSmooth,
   nearestOnElement,
   insertPointAt,
+  localBBox,
+  toLocalPoint,
+  toWorldPoint,
   canRotate,
   canToggleClosed,
   rotationBase,
@@ -1069,15 +1072,31 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     }
   });
 
+  /**
+   * Puts the corner that a resize is supposed to hold still back where it was. Resizing changes
+   * the shape's centre, and a stored rotation turns about that centre, so without this the
+   * anchored corner of a rotated shape slides while it is dragged.
+   */
+  function reanchor(el: SceneElement, base: SceneElement, anchorLocal: Point): void {
+    if (!el.rotation) return;
+    const want = toWorldPoint(base, anchorLocal);
+    const now = toWorldPoint(el, anchorLocal);
+    translateElement(el, want.x - now.x, want.y - now.y);
+  }
+
   function applyResize(
     el: SceneElement,
     role: string,
-    world: Point,
+    rawWorld: Point,
     base: SceneElement,
     alt: boolean
   ): void {
+    // Geometry lives in the shape's own unrotated frame, so the pointer is taken there first
+    // and the result is turned back. Without this, dragging a corner of a rotated rect would
+    // resize it along the artboard's axes rather than its own.
+    const world = el.rotation ? toLocalPoint(base, rawWorld) : rawWorld;
     if (role === "grad-from" || role === "grad-to") {
-      const box = elementBBox(el);
+      const box = localBBox(el);
       if (!box) return;
       // Back into fractions of the bounding box, which is how the gradient is stored.
       const point = {
@@ -1097,6 +1116,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           const side = Math.max(0.5, Math.max(world.x - base.x, world.y - base.y));
           el.width = side;
           el.height = side;
+          reanchor(el, base, { x: base.x, y: base.y });
           break;
         }
         if (role === "corner") {
@@ -1119,6 +1139,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         el.y = Math.min(fixedY, world.y);
         el.width = Math.abs(world.x - fixedX);
         el.height = Math.abs(world.y - fixedY);
+        reanchor(el, base, { x: fixedX, y: fixedY });
         break;
       }
       case "circle":
