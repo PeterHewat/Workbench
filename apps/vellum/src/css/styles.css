@@ -1450,3 +1450,122 @@ body {
 .text-edit.visible {
   display: block;
 }
+
+/* ---------- Narrow screens: tools at the bottom, view controls behind one button ----------
+   A phone toolbar wrapped to four rows and ate a fifth of the screen. The tools move to a bar
+   under the canvas, where thumbs are; the grid and view controls collapse into a menu; and the
+   cursor readout, which is a mouse idea, goes away. */
+
+.tool-slot {
+  display: contents;
+}
+
+.tool-bar {
+  display: none;
+}
+
+.narrow-only {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .narrow-only {
+    display: inline-flex;
+  }
+
+  .top-bar {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .cursor-readout {
+    display: none;
+  }
+
+  /* Out of the bar and into a dropdown under its button. */
+  .tool-group--view {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 100;
+    display: none;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    width: max-content;
+    max-width: 92vw;
+    margin-top: 6px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(37, 38, 43, 0.86);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+
+  #menu-view-wrap.open .tool-group--view {
+    display: flex;
+  }
+
+  #menu-view-wrap {
+    margin-left: auto;
+  }
+
+  .tool-bar {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  /* The canvas stops above the bar, so "fit artboard" still fits what you can see. */
+  .workspace {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+
+  .menu-dropdown--docked {
+    width: 100%;
+    max-width: none;
+    bottom: calc(56px + env(safe-area-inset-bottom));
+    border-right-width: 0;
+  }
+}
+
+/* The bar that follows the selection: what you would otherwise need a keyboard for. */
+.action-bar {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  gap: 4px;
+  max-width: calc(100vw - 16px);
+  padding: 4px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(37, 38, 43, 0.86);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  scrollbar-width: none;
+}
+
+.action-bar .tool-btn {
+  flex: 0 0 auto;
+}
+
+.action-bar .action-danger {
+  color: var(--danger);
+}
+
+.action-bar .action-danger:hover {
+  border-color: var(--danger);
+}

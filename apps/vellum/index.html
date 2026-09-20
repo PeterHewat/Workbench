@@ -79,6 +79,19 @@
             stroke-width="2"
           />
         </symbol>
+        <symbol id="icon-sliders" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 7h11M19 7h1M4 17h5M13 17h7" />
+            <circle cx="17" cy="7" r="2" />
+            <circle cx="11" cy="17" r="2" />
+          </g>
+        </symbol>
         <symbol id="icon-arc" viewBox="0 0 24 24">
           <path
             fill="none"
@@ -439,7 +452,8 @@
             <svg class="ui-icon" aria-hidden="true"><use href="#icon-redo" /></svg>
           </button>
         </div>
-        <div class="tool-group" role="group" aria-label="Tools">
+        <div class="tool-slot" id="tool-slot"></div>
+        <div class="tool-group" id="tool-group-tools" role="group" aria-label="Tools">
           <button
             type="button"
             class="tool-btn active"
@@ -496,83 +510,101 @@
           </button>
         </div>
 
-        <div class="tool-group" role="group" aria-label="Grid and view">
+        <div class="menu" id="menu-view-wrap">
           <button
             type="button"
-            class="tool-btn"
-            id="btn-grid"
-            title="Show / hide grid (hidden anyway at step 1)"
-            aria-label="Show grid"
-            aria-pressed="true"
+            class="menu-trigger menu-trigger--icon narrow-only"
+            id="btn-view-menu"
+            aria-haspopup="true"
+            aria-expanded="false"
+            title="Grid and view"
+            aria-label="Grid and view"
           >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-grid" /></svg>
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-sliders" /></svg>
           </button>
-          <input
-            type="number"
-            id="grid-step"
-            class="grid-step-input"
-            min="1"
-            step="1"
-            value="16"
-            title="Grid step"
-            aria-label="Grid step"
-          />
-          <button
-            type="button"
-            class="tool-btn"
-            id="btn-snap"
-            title="Snap to grid (G)"
-            aria-label="Snap to grid"
-            aria-pressed="false"
+          <div
+            class="tool-group tool-group--view"
+            id="group-view"
+            role="group"
+            aria-label="Grid and view"
           >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-magnet" /></svg>
-          </button>
-          <button
-            type="button"
-            class="tool-btn"
-            id="btn-fit-view"
-            title="Fit artboard in view"
-            aria-label="Fit view"
-          >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-fit" /></svg>
-          </button>
-          <button
-            type="button"
-            class="tool-btn tool-btn--text"
-            id="btn-zoom-out"
-            title="Zoom out"
-            aria-label="Zoom out"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            class="tool-btn tool-btn--text"
-            id="btn-reset-zoom"
-            title="Zoom to 100%"
-            aria-label="Zoom to 100%"
-          >
-            100%
-          </button>
-          <button
-            type="button"
-            class="tool-btn tool-btn--text"
-            id="btn-zoom-in"
-            title="Zoom in"
-            aria-label="Zoom in"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            class="tool-btn"
-            id="btn-final"
-            title="Final SVG only: hide the grid, guides and reference images"
-            aria-label="Final SVG only"
-            aria-pressed="false"
-          >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-eye" /></svg>
-          </button>
+            <button
+              type="button"
+              class="tool-btn"
+              id="btn-grid"
+              title="Show / hide grid (hidden anyway at step 1)"
+              aria-label="Show grid"
+              aria-pressed="true"
+            >
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-grid" /></svg>
+            </button>
+            <input
+              type="number"
+              id="grid-step"
+              class="grid-step-input"
+              min="1"
+              step="1"
+              value="16"
+              title="Grid step"
+              aria-label="Grid step"
+            />
+            <button
+              type="button"
+              class="tool-btn"
+              id="btn-snap"
+              title="Snap to grid (G)"
+              aria-label="Snap to grid"
+              aria-pressed="false"
+            >
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-magnet" /></svg>
+            </button>
+            <button
+              type="button"
+              class="tool-btn"
+              id="btn-fit-view"
+              title="Fit artboard in view"
+              aria-label="Fit view"
+            >
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-fit" /></svg>
+            </button>
+            <button
+              type="button"
+              class="tool-btn tool-btn--text"
+              id="btn-zoom-out"
+              title="Zoom out"
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              class="tool-btn tool-btn--text"
+              id="btn-reset-zoom"
+              title="Zoom to 100%"
+              aria-label="Zoom to 100%"
+            >
+              100%
+            </button>
+            <button
+              type="button"
+              class="tool-btn tool-btn--text"
+              id="btn-zoom-in"
+              title="Zoom in"
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              class="tool-btn"
+              id="btn-final"
+              title="Final SVG only: hide the grid, guides and reference images"
+              aria-label="Final SVG only"
+              aria-pressed="false"
+            >
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-eye" /></svg>
+            </button>
+          </div>
         </div>
 
         <p id="cursor-pos" class="cursor-readout mono" aria-live="polite">—</p>
@@ -878,6 +910,14 @@
           </table>
         </div>
       </aside>
+
+      <nav class="tool-bar" id="tool-bar" aria-label="Tools"></nav>
+      <div
+        class="action-bar hidden"
+        id="action-bar"
+        role="toolbar"
+        aria-label="Selected shape"
+      ></div>
 
       <main class="workspace">
         <section class="canvas-wrap" id="canvas-wrap" aria-label="Artboard">

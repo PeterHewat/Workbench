@@ -71,6 +71,7 @@ import { deepClone, downloadText, escapeAttr, escapeXml, uid } from "./utils.js"
 import { bindTouch, setTouchFinishPathHandler } from "./touch.js";
 import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
 import { initRulers, renderRulers, setRulerOffset } from "./rulers.js";
+import { initActionBar, syncActionBar } from "./actionbar.js";
 import {
   beginTextEdit,
   endTextEdit,
@@ -113,6 +114,21 @@ initRender({
 });
 
 initTextEdit(wrap, () => primitiveList.invalidate());
+initActionBar(byId("action-bar"), {
+  duplicate: () => duplicateSelection(),
+  remove: () => deleteSelection(),
+  forward: () => moveZOrder("forward"),
+  back: () => moveZOrder("back"),
+  toggleClosed: (id, closed) => {
+    setElementClosed(id, closed);
+    primitiveList.invalidate();
+  },
+  group: () => groupSelection(),
+  ungroup: () => ungroupSelection(),
+  splitPoint: () => splitAtSelectedPoint(),
+  join: () => joinSelected(),
+  editText: (id) => beginTextEdit(id),
+});
 bindInteraction(svg, wrap);
 setTouchFinishPathHandler(() => finishPath());
 bindTouch(svg);
@@ -129,6 +145,7 @@ subscribe((state) => {
   renderAll(state);
   renderRulers(state);
   syncPanel(state);
+  syncActionBar(state);
   // The in-place text field rides along with the camera and with the element it is editing.
   if (state.ui.editingTextId) positionTextEditor();
 });
@@ -1109,6 +1126,42 @@ imageListEl.addEventListener("change", (e) => {
       return { ...img, [field]: val };
     }),
   }));
+});
+
+/* ---------- Narrow layout: tools move to a bar under the canvas ---------- */
+const NARROW = "(max-width: 760px)";
+const narrowQuery = window.matchMedia(NARROW);
+const toolGroup = byId("tool-group-tools");
+
+/** The tools are one element, moved between the top bar and the bottom bar - never duplicated. */
+function placeTools(): void {
+  const home = narrowQuery.matches ? byId("tool-bar") : byId("tool-slot");
+  if (toolGroup.parentElement !== home) home.appendChild(toolGroup);
+}
+placeTools();
+narrowQuery.addEventListener("change", () => {
+  placeTools();
+  closeViewMenu();
+  layoutPanels();
+});
+
+/* The grid and view controls collapse behind one button when the bar has no room. */
+const viewWrap = byId("menu-view-wrap");
+const viewBtn = byId("btn-view-menu");
+
+function closeViewMenu(): void {
+  viewWrap.classList.remove("open");
+  viewBtn.setAttribute("aria-expanded", "false");
+}
+
+viewBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const open = !viewWrap.classList.contains("open");
+  viewWrap.classList.toggle("open", open);
+  viewBtn.setAttribute("aria-expanded", String(open));
+});
+document.addEventListener("pointerdown", (e) => {
+  if (!viewWrap.contains(e.target as Node)) closeViewMenu();
 });
 
 /* ---------- Document panel: docked left, full height, toggled by its button ---------- */
