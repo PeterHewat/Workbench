@@ -953,6 +953,8 @@ body {
 
 .acc-item--grouped {
   border-left: 3px solid var(--gc, var(--accent));
+  /* One step of indent per level of nesting, so the list reads as the tree it is. */
+  margin-left: calc((var(--depth, 1) - 1) * 10px);
 }
 
 .acc-body .field-row select {

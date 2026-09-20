@@ -37,7 +37,7 @@ export const DEFAULT_STROKE: StyleProps = {
 };
 
 /** Keys copied when an element is converted from one type to another: identity plus every style. */
-const STYLE_KEYS: readonly string[] = ["name", "groupId", ...Object.keys(DEFAULT_STROKE)];
+const STYLE_KEYS: readonly string[] = ["name", "groups", ...Object.keys(DEFAULT_STROKE)];
 
 export function styleOf(el: SceneElement): StyleCarrier {
   const src = el as unknown as Record<string, unknown>;
@@ -61,7 +61,7 @@ export interface Geometry {
 function base<T extends ElementType>(
   type: T,
   style: StyleCarrier
-): { id: string; type: T; name: string; groupId?: string } & StyleProps {
+): { id: string; type: T; name: string; groups?: string[] } & StyleProps {
   const { id, ...rest } = style;
   return {
     id: id ?? uid(type),
@@ -69,7 +69,7 @@ function base<T extends ElementType>(
     name: "",
     ...DEFAULT_STROKE,
     ...rest,
-  } as { id: string; type: T; name: string; groupId?: string } & StyleProps;
+  } as { id: string; type: T; name: string; groups?: string[] } & StyleProps;
 }
 
 /** Corner radius clamped so it can never exceed half the rect's shorter side. */

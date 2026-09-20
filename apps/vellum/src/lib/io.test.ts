@@ -103,8 +103,8 @@ describe("export document", () => {
   });
 
   test("grouped elements are wrapped in one <g> carrying the group id", () => {
-    const a = Object.assign(createRect(0, 0, 1, 1), { groupId: "group-abc" });
-    const b = Object.assign(createRect(2, 2, 1, 1), { groupId: "group-abc" });
+    const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-abc"] });
+    const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-abc"] });
     const svg = formatExportSvg(doc([a, b]), true);
     expect(svg.match(/<g id="group-abc">/g)).toHaveLength(1);
     expect(svg.match(/<\/g>/g)).toHaveLength(1);
@@ -172,11 +172,11 @@ describe("round trip", () => {
   });
 
   test("groups survive the trip", () => {
-    const a = Object.assign(createRect(0, 0, 1, 1), { groupId: "group-abc" });
-    const b = Object.assign(createRect(2, 2, 1, 1), { groupId: "group-abc" });
+    const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-abc"] });
+    const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-abc"] });
     const back = importSvgFile(formatExportSvg(doc([a, b]), true), { keepIds: true });
-    expect(back.elements[0]!.groupId).toBe("group-abc");
-    expect(back.elements[1]!.groupId).toBe("group-abc");
+    expect(back.elements[0]!.groups).toEqual(["group-abc"]);
+    expect(back.elements[1]!.groups).toEqual(["group-abc"]);
   });
 });
 
@@ -264,7 +264,7 @@ describe("import", () => {
     const r = importSvgFile(
       '<svg xmlns="http://www.w3.org/2000/svg"><g id="group-x"><rect width="5" height="5"/></g></svg>'
     );
-    expect(r.elements[0]!.groupId).toBeUndefined();
+    expect(r.elements[0]!.groups).toBeUndefined();
   });
 
   test("a <title> names the shape", () => {
@@ -336,5 +336,57 @@ describe("project file", () => {
 
   test("style defaults are not stored: each element carries its own", () => {
     expect(serializeProject(createInitialState())).not.toHaveProperty("defaults");
+  });
+});
+
+describe("groups and transforms on import", () => {
+  test("nested groups become a chain, outermost first", () => {
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg"><g id="group-out"><g id="group-in">' +
+        '<rect width="5" height="5"/><rect x="9" width="5" height="5"/>' +
+        "</g></g></svg>",
+      { keepIds: true }
+    );
+    expect(r.elements[0]!.groups).toEqual(["group-out", "group-in"]);
+  });
+
+  test("nested groups survive a round trip", () => {
+    const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-out", "group-in"] });
+    const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-out", "group-in"] });
+    const svg = formatExportSvg(doc([a, b]), true);
+    expect(svg.match(/<g id="group-out">/g)).toHaveLength(1);
+    expect(svg.match(/<g id="group-in">/g)).toHaveLength(1);
+    const back = importSvgFile(svg, { keepIds: true });
+    expect(back.elements[1]!.groups).toEqual(["group-out", "group-in"]);
+  });
+
+  test("a group transform is baked into the coordinates", () => {
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg"><g transform="translate(10 20)">' +
+        '<rect width="5" height="5"/><rect x="9" width="5" height="5"/></g></svg>'
+    );
+    expect(r.elements[0]).toMatchObject({ type: "rect", x: 10, y: 20 });
+    expect(r.elements[1]).toMatchObject({ type: "rect", x: 19, y: 20 });
+  });
+
+  test("an element's own transform is baked in too", () => {
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg"><rect width="4" height="4" transform="scale(3)"/></svg>'
+    );
+    expect(r.elements[0]).toMatchObject({ type: "rect", width: 12, height: 12 });
+  });
+
+  test("one group split across two <g> is gathered back into one", () => {
+    // Editing the SVG text by hand can leave the same group id on two separate <g> elements.
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<g id="group-a"><rect id="r1" width="1" height="1"/></g>' +
+        '<rect id="r2" width="1" height="1"/>' +
+        '<g id="group-a"><rect id="r3" width="1" height="1"/></g>' +
+        "</svg>",
+      { keepIds: true }
+    );
+    expect(r.elements.map((e) => e.name)).toEqual(["r1", "r3", "r2"]);
+    expect(formatExportSvg(doc(r.elements), true).match(/<g id="group-a">/g)).toHaveLength(1);
   });
 });

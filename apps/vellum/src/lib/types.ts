@@ -60,7 +60,8 @@ export interface StyleProps {
 interface ElementBase extends StyleProps {
   id: string;
   name: string;
-  groupId?: string;
+  /** The groups containing this element, outermost first. Absent when it is in none. */
+  groups?: string[];
 }
 
 export interface PathElement extends ElementBase {
@@ -237,12 +238,12 @@ export interface EditorState {
 export type StyleCarrier = Partial<StyleProps> & {
   id?: string;
   name?: string;
-  groupId?: string;
+  groups?: string[];
 };
 
 /** The serialized document written to storage. */
 export interface ProjectFile {
-  version: 1;
+  version: 2;
   artboard: EditorState["artboard"];
   grid: EditorState["grid"];
   images: ReferenceImage[];

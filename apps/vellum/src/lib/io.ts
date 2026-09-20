@@ -13,6 +13,15 @@ import {
   styleAttrs,
 } from "./model.js";
 import { ELEMENT_SELECTOR, escapeAttr, escapeXml, uid } from "./utils.js";
+import { groupsOf, normalizeGroups, pruneGroups } from "./groups.js";
+import {
+  IDENTITY,
+  isIdentity,
+  multiply,
+  parseTransform,
+  transformElement,
+  type Matrix,
+} from "./transform.js";
 import { replaceState, createInitialState, selectOnly } from "./state.js";
 import type {
   Anchor,
@@ -170,32 +179,42 @@ function buildSvgLines(state: Pick<EditorState, "artboard" | "elements">): Line[
     defs.forEach((d) => lines.push({ indent: 2 + d.indent, text: d.text }));
     lines.push({ indent: 1, text: "</defs>" });
   }
-  const els = state.elements;
-  const usedGroups = new Set<string>();
-  for (let i = 0; i < els.length;) {
-    const gid = els[i]!.groupId;
+  emitRange(state.elements, 0, state.elements.length, 0, 1, lines, ids);
+  lines.push({ indent: 0, text: "</svg>" });
+  return lines;
+}
+
+/**
+ * Writes one level of the document, opening a `<g>` for each run of elements that share a group
+ * at this depth and recursing into it. Members of a group are contiguous (see groups.ts), so a
+ * group is always exactly one `<g>`.
+ */
+function emitRange(
+  els: readonly SceneElement[],
+  start: number,
+  end: number,
+  depth: number,
+  indent: number,
+  lines: Line[],
+  ids: Map<string, string>
+): void {
+  let i = start;
+  while (i < end) {
+    const gid = groupsOf(els[i])[depth];
     if (gid) {
       let j = i;
-      while (j < els.length && els[j]!.groupId === gid) j++;
-      const idAttr = usedGroups.has(gid) ? "" : ` id="${gid}"`;
-      usedGroups.add(gid);
-      lines.push({ indent: 1, text: `<g${idAttr}>` });
-      for (let k = i; k < j; k++) {
-        const el = els[k]!;
-        const text = elementToSvgMarkup(el, ids.get(el.id));
-        if (text) lines.push({ indent: 2, text, elId: el.id });
-      }
-      lines.push({ indent: 1, text: "</g>" });
+      while (j < end && groupsOf(els[j])[depth] === gid) j++;
+      lines.push({ indent, text: `<g id="${gid}">` });
+      emitRange(els, i, j, depth + 1, indent + 1, lines, ids);
+      lines.push({ indent, text: "</g>" });
       i = j;
     } else {
       const el = els[i]!;
       const text = elementToSvgMarkup(el, ids.get(el.id));
-      if (text) lines.push({ indent: 1, text, elId: el.id });
+      if (text) lines.push({ indent, text, elId: el.id });
       i++;
     }
   }
-  lines.push({ indent: 0, text: "</svg>" });
-  return lines;
 }
 
 export function formatExportSvg(
@@ -209,7 +228,7 @@ export function formatExportSvg(
 
 export function serializeProject(state: EditorState): ProjectFile {
   return {
-    version: 1,
+    version: 2,
     artboard: state.artboard,
     grid: state.grid,
     images: state.images,
@@ -221,7 +240,13 @@ export function serializeProject(state: EditorState): ProjectFile {
 }
 
 export function loadProject(json: ProjectFile): void {
-  if (json.version !== 1) throw new Error("Unsupported project version");
+  // Greenfield: no migration. A document written by an older build is refused, not rewritten.
+  if (json.version !== 2) {
+    throw new Error(
+      `This document was saved by an incompatible version (v${String(json.version)}). ` +
+        "Re-import its SVG, or clear the browser storage for this app."
+    );
+  }
   const base = createInitialState();
   replaceState({
     ...base,
@@ -519,20 +544,6 @@ function elementFromNode(node: Element, tag: string, style: StyleCarrier): Scene
       el.fontSize = parseFloat(inheritedProp(node, "font-size") || "48") || 48;
       el.fontFamily = inheritedProp(node, "font-family") || "sans-serif";
       el.anchor = (inheritedProp(node, "text-anchor") as typeof el.anchor) || "start";
-      const m = (node.getAttribute("transform") ?? "").match(
-        /rotate\(\s*(-?[\d.]+)(?:[\s,]+(-?[\d.]+)[\s,]+(-?[\d.]+))?\s*\)/
-      );
-      if (m) {
-        const a = parseFloat(m[1]!);
-        const cx = m[2] != null ? parseFloat(m[2]) : 0;
-        const cy = m[3] != null ? parseFloat(m[3]) : 0;
-        const rad = (a * Math.PI) / 180;
-        const dx = el.x - cx;
-        const dy = el.y - cy;
-        el.x = cx + dx * Math.cos(rad) - dy * Math.sin(rad);
-        el.y = cy + dx * Math.sin(rad) + dy * Math.cos(rad);
-        el.rotation = ((a % 360) + 360) % 360;
-      }
       return el;
     }
     default:
@@ -572,17 +583,8 @@ export function importSvgFile(text: string, { keepIds = false } = {}): ImportRes
     const nodeId = node.getAttribute("id");
     const name = nameFromNode(node, nodeId);
     if (name) style.name = name;
-    for (let g = node.parentNode; g && g !== svg; g = g.parentNode) {
-      const gEl = g as Element;
-      if (gEl.tagName?.toLowerCase() === "g") {
-        if (!groupIds.has(gEl)) {
-          const gid = gEl.getAttribute("id") ?? "";
-          groupIds.set(gEl, keepIds && gid.startsWith("group-") ? gid : uid("group"));
-        }
-        style.groupId = groupIds.get(gEl);
-        break;
-      }
-    }
+    const { chain, matrix } = ancestry(node, svg, groupIds, keepIds);
+    if (chain.length) style.groups = chain;
     const el = elementFromNode(node, node.tagName.toLowerCase(), style);
     if (!el) return;
     if (keepIds) {
@@ -590,17 +592,39 @@ export function importSvgFile(text: string, { keepIds = false } = {}): ImportRes
       if (rid && !usedIds.has(rid)) el.id = rid;
       usedIds.add(el.id);
     }
-    imported.push(el);
+    // An element's own transform, and every <g transform> above it, are baked into the
+    // coordinates here: the scene graph has no transform of its own.
+    const own = multiply(matrix, parseTransform(node.getAttribute("transform")));
+    imported.push(isIdentity(own) ? el : transformElement(el, own));
   });
 
-  // A group with a single member isn't worth keeping.
-  const counts = new Map<string, number>();
-  imported.forEach((e) => {
-    if (e.groupId) counts.set(e.groupId, (counts.get(e.groupId) ?? 0) + 1);
-  });
-  imported.forEach((e) => {
-    if (e.groupId && (counts.get(e.groupId) ?? 0) < 2) delete e.groupId;
-  });
+  return { artboard, elements: normalizeGroups(pruneGroups(imported)) };
+}
 
-  return { artboard, elements: imported };
+/**
+ * Walks from the SVG root down to `node`: the chain of groups it belongs to (outermost first)
+ * and the transform those groups apply to it.
+ */
+function ancestry(
+  node: Element,
+  svg: Element,
+  groupIds: Map<Element, string>,
+  keepIds: boolean
+): { chain: string[]; matrix: Matrix } {
+  const groups: Element[] = [];
+  for (let g = node.parentNode; g && g !== svg; g = g.parentNode) {
+    const gEl = g as Element;
+    if (gEl.tagName?.toLowerCase() === "g") groups.unshift(gEl);
+  }
+  const chain: string[] = [];
+  let matrix: Matrix = IDENTITY;
+  for (const gEl of groups) {
+    if (!groupIds.has(gEl)) {
+      const gid = gEl.getAttribute("id") ?? "";
+      groupIds.set(gEl, keepIds && gid.startsWith("group-") ? gid : uid("group"));
+    }
+    chain.push(groupIds.get(gEl)!);
+    matrix = multiply(matrix, parseTransform(gEl.getAttribute("transform")));
+  }
+  return { chain, matrix };
 }

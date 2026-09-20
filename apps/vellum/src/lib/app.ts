@@ -70,6 +70,7 @@ import { bindTouch, setTouchFinishPathHandler } from "./touch.js";
 import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
 import { initRulers, renderRulers, setRulerOffset } from "./rulers.js";
 import { initPointerKind } from "./pointer.js";
+import { groupsOf, innerGroup, moveWithinParent, outerGroup } from "./groups.js";
 import { registerServiceWorker } from "@workbench/ui";
 import type { EditorState, ProjectFile, ReferenceImage, SceneElement } from "./types.js";
 
@@ -157,10 +158,10 @@ function syncPanel(state: EditorState): void {
 function syncGroupButtons(state: EditorState): void {
   const ids = new Set(state.selection.elementIds);
   const sel = state.elements.filter((e) => ids.has(e.id));
-  const groups = new Set(sel.map((e) => e.groupId ?? ""));
+  const groups = new Set(sel.map((e) => outerGroup(e) ?? ""));
   const allInOneGroup = groups.size === 1 && !groups.has("");
   byId<HTMLButtonElement>("btn-group").disabled = sel.length < 2 || allInOneGroup;
-  byId<HTMLButtonElement>("btn-ungroup").disabled = !sel.some((e) => e.groupId);
+  byId<HTMLButtonElement>("btn-ungroup").disabled = !sel.some((e) => groupsOf(e).length);
   byId<HTMLButtonElement>("btn-join").disabled = !(sel.length === 2 && sel.every(canJoin));
 }
 
@@ -315,7 +316,7 @@ function sameElement(a: SceneElement, b: SceneElement): boolean {
     elementToSvgMarkup(a) === elementToSvgMarkup(b) &&
     buildDefsMarkup([a]) === buildDefsMarkup([b]) &&
     sanitizeName(a.name) === sanitizeName(b.name) &&
-    (a.groupId ?? "") === (b.groupId ?? "")
+    groupsOf(a).join("/") === groupsOf(b).join("/")
   );
 }
 
@@ -485,18 +486,29 @@ function movedIndex(idx: number, length: number, dir: number, toEnd: boolean): n
   return toEnd ? (dir < 0 ? 0 : length - 1) : Math.min(Math.max(idx + dir, 0), length - 1);
 }
 
-/** Moves one entry of `state[key]` (an array of {id}) within the list. */
+/**
+ * Moves one entry within the list. An element moves among its siblings inside whatever group
+ * holds it, and a nested group counts as one sibling, so reordering can never split a group.
+ */
 function reorder(key: "elements" | "images", id: string, dir: number, toEnd: boolean): void {
-  const cur = getState()[key] as { id: string }[];
+  if (key === "elements") {
+    const before = getState().elements;
+    const next = moveWithinParent(before, id, dir < 0 ? -1 : 1, toEnd);
+    if (next.every((e, i) => e === before[i])) return;
+    pushUndo();
+    setState((s) => ({ ...s, elements: next }));
+    return;
+  }
+  const cur = getState().images;
   const from = cur.findIndex((e) => e.id === id);
   const to = movedIndex(from, cur.length, dir, toEnd);
   if (from < 0 || to === from) return;
   pushUndo();
   setState((s) => {
-    const next = [...(s[key] as { id: string }[])];
+    const next = [...s.images];
     const [item] = next.splice(from, 1);
     if (item) next.splice(to, 0, item);
-    return { ...s, [key]: next } as EditorState;
+    return { ...s, images: next };
   });
 }
 
@@ -504,7 +516,7 @@ function reorder(key: "elements" | "images", id: string, dir: number, toEnd: boo
 
 function primitiveListKeyOf(state: EditorState): string {
   const els = state.elements
-    .map((e) => `${e.id}:${e.type}:${e.groupId ?? ""}:${"closed" in e && e.closed ? 1 : 0}`)
+    .map((e) => `${e.id}:${e.type}:${groupsOf(e).join("/")}:${"closed" in e && e.closed ? 1 : 0}`)
     .join(",");
   return `${els}|${state.selection.elementIds.join(",")}|${state.ui.expandedElementId}`;
 }
@@ -648,9 +660,12 @@ function buildPrimitiveList(state: EditorState): void {
       const sw = li.querySelector<HTMLElement>(".acc-swatch");
       if (sw) sw.title = "Invisible: no stroke and no fill";
     }
-    if (el.groupId) {
+    const gid = innerGroup(el);
+    if (gid) {
       li.classList.add("acc-item--grouped");
-      li.style.setProperty("--gc", groupColor(el.groupId));
+      li.style.setProperty("--gc", groupColor(gid));
+      // One indent step per level of nesting, so the list reads as the tree it is.
+      li.style.setProperty("--depth", String(groupsOf(el).length));
     }
     wireAccRow(li, {
       onExpand: () => toggleElementExpanded(el.id),

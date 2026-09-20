@@ -29,6 +29,15 @@ import {
 } from "./model.js";
 import { screenToWorld, zoomAt } from "./viewport.js";
 import { cornerHandleInset } from "./pointer.js";
+import {
+  expandToGroups,
+  groupsOf,
+  moveSelectionZ,
+  normalizeGroups,
+  outerGroup,
+  pruneGroups,
+  type ZDirection,
+} from "./groups.js";
 import { deepClone, dist, uid } from "./utils.js";
 import { pushUndo } from "./undo.js";
 import { importSvgFile } from "./io.js";
@@ -96,13 +105,15 @@ function pointIndexForRole(role: string): number | null {
 /** Copies elements with fresh ids and fresh group ids, offset by `off`. */
 function copyElements(elements: readonly SceneElement[], off: number): SceneElement[] {
   const groupMap = new Map<string, string>();
+  const remap = (gid: string) => {
+    if (!groupMap.has(gid)) groupMap.set(gid, uid("group"));
+    return groupMap.get(gid)!;
+  };
   return elements.map((el) => {
     const c = duplicateElement(el);
     translateElement(c, off, off);
-    if (c.groupId) {
-      if (!groupMap.has(c.groupId)) groupMap.set(c.groupId, uid("group"));
-      c.groupId = groupMap.get(c.groupId);
-    }
+    const chain = groupsOf(c);
+    if (chain.length) c.groups = chain.map(remap);
     return c;
   });
 }
@@ -182,49 +193,26 @@ function elementsInMarquee(m: Marquee): string[] {
   return ids;
 }
 
-export type ZOrder = "forward" | "back" | "front" | "backmost";
+export type ZOrder = ZDirection;
 
+/** Z-order moves whole top-level blocks, so a group never gets split across the list. */
 export function moveZOrder(direction: ZOrder): void {
   const ids = new Set(getState().selection.elementIds);
   if (!ids.size) return;
   commit(() => {
-    setState((s) => {
-      const els = [...s.elements];
-      if (direction === "front" || direction === "backmost") {
-        const picked = els.filter((e) => ids.has(e.id));
-        const rest = els.filter((e) => !ids.has(e.id));
-        return {
-          ...s,
-          elements: direction === "front" ? [...rest, ...picked] : [...picked, ...rest],
-        };
-      }
-      const moveOne = (i: number, dir: number) => {
-        const j = i + dir;
-        const a = els[i];
-        const b = els[j];
-        if (!a || !b || !ids.has(a.id)) return;
-        els[i] = b;
-        els[j] = a;
-      };
-      if (direction === "forward") for (let i = els.length - 2; i >= 0; i--) moveOne(i, 1);
-      else for (let i = 1; i < els.length; i++) moveOne(i, -1);
-      return { ...s, elements: els };
-    });
+    setState((s) => ({ ...s, elements: moveSelectionZ(s.elements, ids, direction) }));
   });
 }
 
-/** Selecting one member of a group selects the whole group. */
+/** Selecting one member of a group selects the whole outermost group. */
 function expandGroups(ids: string[]): string[] {
-  const els = getState().elements;
-  const gids = new Set(
-    els.filter((e) => ids.includes(e.id) && e.groupId).map((e) => e.groupId as string)
-  );
-  if (!gids.size) return [...ids];
-  const out = new Set(ids);
-  for (const e of els) if (e.groupId && gids.has(e.groupId)) out.add(e.id);
-  return [...out];
+  return expandToGroups(getState().elements, ids);
 }
 
+/**
+ * Wraps the selection in a new group. The selection is always whole groups (selecting a member
+ * selects its group), so grouping two groups nests them rather than flattening either.
+ */
 export function groupSelection(): void {
   const st = getState();
   const ids = new Set(st.selection.elementIds);
@@ -235,27 +223,40 @@ export function groupSelection(): void {
     const lastIdx = Math.max(...s.elements.map((e, i) => (ids.has(e.id) ? i : -1)));
     const rest = s.elements.filter((e) => !ids.has(e.id));
     const before = s.elements.slice(0, lastIdx + 1).filter((e) => !ids.has(e.id)).length;
-    const grouped = s.elements.filter((e) => ids.has(e.id)).map((e) => ({ ...e, groupId: gid }));
-    return { ...s, elements: [...rest.slice(0, before), ...grouped, ...rest.slice(before)] };
+    const grouped = s.elements
+      .filter((e) => ids.has(e.id))
+      .map((e) => ({ ...e, groups: [gid, ...groupsOf(e)] }));
+    return {
+      ...s,
+      elements: normalizeGroups([...rest.slice(0, before), ...grouped, ...rest.slice(before)]),
+    };
   });
 }
 
+/** Peels off the outermost group of the selection, leaving any nested groups inside it intact. */
 export function ungroupSelection(): void {
   const st = getState();
   const gids = new Set(
     st.elements
-      .filter((e) => st.selection.elementIds.includes(e.id) && e.groupId)
-      .map((e) => e.groupId as string)
+      .filter((e) => st.selection.elementIds.includes(e.id))
+      .map(outerGroup)
+      .filter((g): g is string => !!g)
   );
   if (!gids.size) return;
   pushUndo();
   setState((s) => ({
     ...s,
-    elements: s.elements.map((e) => {
-      if (!e.groupId || !gids.has(e.groupId)) return e;
-      const { groupId: _drop, ...rest } = e;
-      return rest as SceneElement;
-    }),
+    elements: pruneGroups(
+      s.elements.map((e) => {
+        const chain = groupsOf(e);
+        if (!chain.length || !gids.has(chain[0]!)) return e;
+        const rest = chain.slice(1);
+        const next = { ...e };
+        if (rest.length) next.groups = rest;
+        else delete next.groups;
+        return next;
+      })
+    ),
   }));
 }
 
