@@ -29,7 +29,7 @@ export function createInitialState(): EditorState {
     hoverId: null,
     cursor: { x: 0, y: 0, snapX: 0, snapY: 0, snapActive: false },
     align: { x: null, y: null },
-    ui: { expandedImageId: null, expandedElementId: null },
+    ui: { expandedImageId: null, expandedElementId: null, editingTextId: null },
     spacePan: false,
   };
 }

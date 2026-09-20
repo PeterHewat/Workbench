@@ -71,6 +71,13 @@ import { deepClone, downloadText, escapeAttr, escapeXml, uid } from "./utils.js"
 import { bindTouch, setTouchFinishPathHandler } from "./touch.js";
 import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
 import { initRulers, renderRulers, setRulerOffset } from "./rulers.js";
+import {
+  beginTextEdit,
+  endTextEdit,
+  initTextEdit,
+  isTextEditing,
+  positionTextEditor,
+} from "./textedit.js";
 import { initPointerKind } from "./pointer.js";
 import { groupsOf, innerGroup, moveWithinParent, outerGroup } from "./groups.js";
 import { scaleAbout, transformElement } from "./transform.js";
@@ -105,6 +112,7 @@ initRender({
   overlay: byId<HTMLElement>("layer-overlay") as unknown as SVGGElement,
 });
 
+initTextEdit(wrap, () => primitiveList.invalidate());
 bindInteraction(svg, wrap);
 setTouchFinishPathHandler(() => finishPath());
 bindTouch(svg);
@@ -121,6 +129,8 @@ subscribe((state) => {
   renderAll(state);
   renderRulers(state);
   syncPanel(state);
+  // The in-place text field rides along with the camera and with the element it is editing.
+  if (state.ui.editingTextId) positionTextEditor();
 });
 
 function setToggle(id: string, on: boolean): void {
@@ -1173,6 +1183,7 @@ applySections();
 svg.addEventListener(
   "pointerdown",
   () => {
+    if (isTextEditing()) endTextEdit(true);
     const a = document.activeElement as HTMLElement | null;
     if (a && a !== document.body && a.matches?.("input, select, textarea")) a.blur();
     if (window.getSelection()?.toString()) window.getSelection()?.removeAllRanges();
@@ -1217,20 +1228,9 @@ byId("btn-join").addEventListener("click", () => joinSelected());
 byId("btn-group").addEventListener("click", () => groupSelection());
 byId("btn-ungroup").addEventListener("click", () => ungroupSelection());
 
-// A new (or double-clicked) text element: reveal its row and focus the text field.
+// A new (or double-clicked) text element is edited where it sits, not in the panel.
 document.addEventListener("focus-text", ((e: CustomEvent<{ id: string }>) => {
-  const id = e.detail.id;
-  setDocPanelVisible(true);
-  setSectionOpen("primitives", true);
-  setState((s) => ({ ...s, ui: { ...s.ui, expandedElementId: id } }));
-  // Deferred: the click that triggered this would otherwise move focus back to the canvas.
-  setTimeout(() => {
-    const input = primitiveListEl.querySelector<HTMLInputElement>(
-      `[data-element-id="${id}"] [data-field="text"]`
-    );
-    input?.focus();
-    input?.select();
-  }, 0);
+  beginTextEdit(e.detail.id);
 }) as EventListener);
 
 document.querySelectorAll<HTMLElement>(".tool-btn[data-tool]").forEach((btn) => {
@@ -1475,7 +1475,10 @@ window.addEventListener("keydown", (e) => {
   if (key === "e") setTool("ellipse");
   if (key === "t") setTool("text");
   if (key === "g") setGridSnap(!getState().grid.snap);
-  if (key === "escape") cancelOperation();
+  if (key === "escape") {
+    if (isTextEditing()) endTextEdit(false);
+    else cancelOperation();
+  }
   if (key === "enter" && getState().tool === "pen") {
     pushUndo();
     finishPath();

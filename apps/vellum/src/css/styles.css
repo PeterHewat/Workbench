@@ -1429,3 +1429,24 @@ body {
   background: #1a1b1e;
   color: var(--text);
 }
+
+/* Text edited where it sits on the canvas, instead of in a panel that covers the artboard. */
+.text-edit {
+  position: absolute;
+  z-index: 20;
+  display: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid var(--accent);
+  border-radius: 0;
+  background: rgba(91, 141, 239, 0.12);
+  color: var(--text);
+  line-height: 1;
+  outline: none;
+  caret-color: var(--accent);
+}
+
+.text-edit.visible {
+  display: block;
+}

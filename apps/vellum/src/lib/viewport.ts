@@ -42,6 +42,18 @@ export function screenToWorld(clientX: number, clientY: number): Point {
   return { x: (root.x - panX) / zoom, y: (root.y - panY) / zoom };
 }
 
+/** Artboard / world coordinates -> client (screen) coordinates. */
+export function worldToScreen(x: number, y: number): Point {
+  const { panX, panY, zoom } = getState().viewport;
+  const pt = svgEl.createSVGPoint();
+  pt.x = x * zoom + panX;
+  pt.y = y * zoom + panY;
+  const ctm = svgEl.getScreenCTM();
+  if (!ctm) return { x: pt.x, y: pt.y };
+  const p = pt.matrixTransform(ctm);
+  return { x: p.x, y: p.y };
+}
+
 /** Zoom around pointer; keeps the world point under the cursor fixed. */
 export function zoomAt(clientX: number, clientY: number, factor: number): Viewport {
   const root = toSvgRoot(clientX, clientY);

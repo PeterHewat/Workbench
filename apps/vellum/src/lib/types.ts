@@ -231,7 +231,12 @@ export interface EditorState {
   hoverId: string | null;
   cursor: { x: number; y: number; snapX: number; snapY: number; snapActive: boolean };
   align: { x: number | null; y: number | null };
-  ui: { expandedImageId: string | null; expandedElementId: string | null };
+  ui: {
+    expandedImageId: string | null;
+    expandedElementId: string | null;
+    /** The text element being edited in place on the canvas, if any. */
+    editingTextId: string | null;
+  };
   spacePan: boolean;
 }
 

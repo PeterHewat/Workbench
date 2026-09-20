@@ -767,7 +767,9 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     }
 
     if (st.tool === "text") {
-      const el = createText(world.x, world.y, "Text");
+      // Empty, not "Text": the in-place field opens straight away, and tapping away without
+      // typing anything leaves nothing behind rather than the word "Text".
+      const el = createText(world.x, world.y, "");
       commit(() => {
         setState((s) => ({
           ...s,

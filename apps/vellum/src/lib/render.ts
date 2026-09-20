@@ -156,6 +156,9 @@ function renderDocument(state: EditorState): void {
   }
   const minHit = HIT_MIN_PX / state.viewport.zoom;
   for (const el of state.elements) {
+    // While a text element is being edited in place, the overlay input is what shows its
+    // content, so the SVG text itself would only double up half a pixel off.
+    if (el.id === state.ui.editingTextId) continue;
     const node = renderElement(el);
     if (!node) continue;
     els.document.appendChild(node);
