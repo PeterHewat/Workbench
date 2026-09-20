@@ -1,0 +1,3 @@
+[test]
+# vellum's import/export paths use DOMParser and <canvas>, so tests need a DOM.
+preload = ["./src/test-setup.ts"]

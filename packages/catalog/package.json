@@ -1,0 +1,18 @@
+{
+  "name": "@workbench/catalog",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The list of apps: the single source of truth for the site index and the build",
+  "exports": {
+    ".": "./src/index.ts",
+    "./site": "./src/site.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  }
+}

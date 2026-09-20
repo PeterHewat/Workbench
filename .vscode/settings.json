@@ -1,0 +1,9 @@
+{
+  "npm.packageManager": "bun",
+  "npm.scriptRunner": "bun",
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "files.eol": "\n"
+}

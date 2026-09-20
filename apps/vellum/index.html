@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Vellum — trace images to SVG</title>
+    <meta
+      name="description"
+      content="Trace reference images and export clean, pure SVG. Runs entirely in your browser."
+    />
+    <meta name="color-scheme" content="dark" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="src/css/styles.css" />
+  </head>
+  <body>
+    <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="icon-defs" focusable="false">
+      <defs>
+        <symbol id="icon-select" viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            stroke="currentColor"
+            stroke-width="0.5"
+            stroke-linejoin="round"
+            d="M5 3v17l4.2-4.2 3.3 6.2 2.5-1.3-3.2-6 5.2-.1L5 3z"
+          />
+        </symbol>
+        <symbol id="icon-hand" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2" />
+            <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2" />
+            <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8" />
+            <path
+              d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+            />
+          </g>
+        </symbol>
+        <symbol id="icon-pen" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z"
+          />
+        </symbol>
+        <symbol id="icon-rect" viewBox="0 0 24 24">
+          <rect
+            x="4"
+            y="6"
+            width="16"
+            height="12"
+            rx="1"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+        </symbol>
+        <symbol id="icon-ellipse" viewBox="0 0 24 24">
+          <ellipse
+            cx="12"
+            cy="12"
+            rx="9"
+            ry="6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+        </symbol>
+        <symbol id="icon-text" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M5 6V4h14v2M12 4v16M9 20h6"
+          />
+        </symbol>
+        <symbol id="icon-document" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M6 2h9l5 5v15H6z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M15 2v5h5"
+          />
+        </symbol>
+        <symbol id="icon-undo" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3"
+          />
+        </symbol>
+        <symbol id="icon-redo" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3"
+          />
+        </symbol>
+        <symbol id="icon-grid" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M4 4h16v16H4zM4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16"
+          />
+        </symbol>
+        <symbol id="icon-fit" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"
+          />
+        </symbol>
+        <symbol id="icon-eye" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"
+          />
+          <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2" />
+        </symbol>
+        <symbol id="icon-magnet" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M6 3v9a6 6 0 0012 0V3h-4v9a2 2 0 01-4 0V3H6zM6 8h4M14 8h4"
+          />
+        </symbol>
+        <symbol id="icon-trash" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M4 6h16M9 6V4h6v2M6 6v14h12V6M10 10v8M14 10v8"
+          />
+        </symbol>
+        <symbol id="icon-import" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 3v12M7 10l5 5 5-5M5 21h14"
+          />
+        </symbol>
+        <symbol id="icon-export" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 15V3M7 8l5-5 5 5M5 21h14"
+          />
+        </symbol>
+        <symbol id="icon-copy" viewBox="0 0 24 24">
+          <rect
+            x="9"
+            y="9"
+            width="12"
+            height="12"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"
+          />
+        </symbol>
+      </defs>
+    </svg>
+
+    <div id="app">
+      <header class="top-bar" role="toolbar" aria-label="Main toolbar">
+        <div class="menu" id="menu-document-wrap">
+          <button
+            type="button"
+            class="menu-trigger menu-trigger--icon"
+            id="menu-document-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            title="Document"
+            aria-label="Document"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-document" /></svg>
+          </button>
+          <div
+            class="menu-dropdown menu-dropdown--panel menu-dropdown--docked hidden"
+            id="menu-document"
+            role="dialog"
+            aria-label="Document"
+          >
+            <div class="doc-top">
+              <section class="doc-section" data-section="documents">
+                <div class="doc-section-head">
+                  <button type="button" class="doc-toggle">
+                    <span class="chevron" aria-hidden="true">▶</span>Documents
+                  </button>
+                  <span id="doc-dirty" class="doc-dirty hidden" title="Saving…">●</span>
+                  <div class="menu-panel-toolbar-actions">
+                    <button
+                      type="button"
+                      id="btn-backup-export"
+                      class="icon-btn"
+                      title="Back up every document to a file"
+                      aria-label="Export backup"
+                    >
+                      <svg class="ui-icon" aria-hidden="true"><use href="#icon-export" /></svg>
+                    </button>
+                    <button
+                      type="button"
+                      id="btn-backup-import"
+                      class="icon-btn"
+                      title="Restore documents from a backup file"
+                      aria-label="Import backup"
+                    >
+                      <svg class="ui-icon" aria-hidden="true"><use href="#icon-import" /></svg>
+                    </button>
+                    <button
+                      type="button"
+                      id="btn-new-doc"
+                      class="icon-btn"
+                      title="New document"
+                      aria-label="New document"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                <div class="doc-section-body">
+                  <ul id="doc-list" class="doc-list"></ul>
+                </div>
+              </section>
+
+              <section class="doc-section collapsed" data-section="images">
+                <div class="doc-section-head">
+                  <button type="button" class="doc-toggle">
+                    <span class="chevron" aria-hidden="true">▶</span>Reference images
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-add-image"
+                    class="icon-btn"
+                    title="Add reference image"
+                    aria-label="Add reference image"
+                  >
+                    +
+                  </button>
+                </div>
+                <div class="doc-section-body">
+                  <input type="file" id="input-image" accept="image/*" multiple hidden />
+                  <input type="file" id="input-image-replace" accept="image/*" hidden />
+                  <ul id="image-list" class="image-list"></ul>
+                </div>
+              </section>
+            </div>
+
+            <section class="doc-section doc-grow" data-section="svg" id="doc-svg">
+              <div class="doc-section-head">
+                <button type="button" class="doc-toggle">
+                  <span class="chevron" aria-hidden="true">▶</span>SVG
+                </button>
+                <div class="menu-panel-toolbar-actions">
+                  <button
+                    type="button"
+                    class="tool-btn"
+                    id="btn-import-svg"
+                    title="Import SVG"
+                    aria-label="Import SVG"
+                  >
+                    <svg class="ui-icon" aria-hidden="true"><use href="#icon-import" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="tool-btn"
+                    id="btn-save-svg"
+                    title="Export SVG"
+                    aria-label="Export SVG"
+                  >
+                    <svg class="ui-icon" aria-hidden="true"><use href="#icon-export" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="tool-btn"
+                    id="btn-copy-svg"
+                    title="Copy SVG to clipboard"
+                    aria-label="Copy SVG to clipboard"
+                  >
+                    <svg class="ui-icon" aria-hidden="true"><use href="#icon-copy" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="doc-section-body">
+                <div class="doc-size-row">
+                  <span>Size</span>
+                  <div class="doc-size" title="Artboard size">
+                    <input
+                      type="number"
+                      id="artboard-width"
+                      min="1"
+                      step="1"
+                      value="1000"
+                      aria-label="Artboard width"
+                    />
+                    <span>×</span>
+                    <input
+                      type="number"
+                      id="artboard-height"
+                      min="1"
+                      step="1"
+                      value="1000"
+                      aria-label="Artboard height"
+                    />
+                  </div>
+                </div>
+                <div class="svg-editor">
+                  <pre id="svg-preview" class="svg-preview mono" aria-hidden="true"></pre>
+                  <textarea
+                    id="svg-input"
+                    class="svg-input mono"
+                    spellcheck="false"
+                    autocomplete="off"
+                    autocapitalize="off"
+                    aria-label="SVG source (editable)"
+                  ></textarea>
+                </div>
+                <p id="svg-error" class="svg-error hidden" role="status"></p>
+              </div>
+            </section>
+
+            <section class="doc-section doc-grow" data-section="primitives" id="doc-primitives">
+              <div class="doc-section-head">
+                <button type="button" class="doc-toggle">
+                  <span class="chevron" aria-hidden="true">▶</span>Primitives
+                </button>
+                <div class="btn-row btn-row--inline">
+                  <button type="button" id="btn-group" title="Group selected (Ctrl+G)">
+                    Group
+                  </button>
+                  <button type="button" id="btn-ungroup" title="Ungroup selected (Ctrl+Shift+G)">
+                    Ungroup
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-join"
+                    title="Join the two selected open paths at their closest ends (J)"
+                  >
+                    Join
+                  </button>
+                </div>
+              </div>
+              <div class="doc-section-body">
+                <ul id="primitive-list" class="primitive-list"></ul>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div class="tool-group" role="group" aria-label="History">
+          <button
+            type="button"
+            class="tool-btn"
+            id="btn-undo"
+            title="Undo (Ctrl+Z)"
+            aria-label="Undo"
+            disabled
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-undo" /></svg>
+          </button>
+          <button
+            type="button"
+            class="tool-btn"
+            id="btn-redo"
+            title="Redo (Ctrl+Y)"
+            aria-label="Redo"
+            disabled
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-redo" /></svg>
+          </button>
+        </div>
+        <div class="tool-group" role="group" aria-label="Selection and navigation">
+          <button
+            type="button"
+            class="tool-btn active"
+            data-tool="select"
+            title="Select (S)"
+            aria-label="Select"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-select" /></svg>
+          </button>
+          <button
+            type="button"
+            class="tool-btn"
+            data-tool="hand"
+            title="Hand (H)"
+            aria-label="Hand"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-hand" /></svg>
+          </button>
+        </div>
+        <div class="tool-group" role="group" aria-label="Drawing tools">
+          <button
+            type="button"
+            class="tool-btn"
+            data-tool="pen"
+            title="Pen (P) — click for corners, drag for curves, double-click/Enter to finish, click the start point to close"
+            aria-label="Pen"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-pen" /></svg>
+          </button>
+          <button
+            type="button"
+            class="tool-btn"
+            data-tool="rect"
+            title="Rectangle (R) — hold Shift for a square"
+            aria-label="Rectangle"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-rect" /></svg>
+          </button>
+          <button
+            type="button"
+            class="tool-btn"
+            data-tool="ellipse"
+            title="Ellipse (E) — hold Shift for a circle"
+            aria-label="Ellipse"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-ellipse" /></svg>
+          </button>
+          <button
+            type="button"
+            class="tool-btn"
+            data-tool="text"
+            title="Text (T) — click to place"
+            aria-label="Text"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-text" /></svg>
+          </button>
+        </div>
+
+        <div class="tool-group" role="group" aria-label="Grid and view">
+          <button
+            type="button"
+            class="tool-btn"
+            id="btn-grid"
+            title="Show / hide grid (hidden anyway at step 1)"
+            aria-label="Show grid"
+            aria-pressed="true"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-grid" /></svg>
+          </button>
+          <input
+            type="number"
+            id="grid-step"
+            class="grid-step-input"
+            min="1"
+            step="1"
+            value="10"
+            title="Grid step"
+            aria-label="Grid step"
+          />
+          <button
+            type="button"
+            class="tool-btn"
+            id="btn-snap"
+            title="Snap to grid (G)"
+            aria-label="Snap to grid"
+            aria-pressed="false"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-magnet" /></svg>
+          </button>
+          <button
+            type="button"
+            class="tool-btn"
+            id="btn-fit-view"
+            title="Fit artboard in view"
+            aria-label="Fit view"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-fit" /></svg>
+          </button>
+          <button
+            type="button"
+            class="tool-btn tool-btn--text"
+            id="btn-reset-zoom"
+            title="Zoom to 100%"
+            aria-label="Zoom to 100%"
+          >
+            100%
+          </button>
+          <button
+            type="button"
+            class="tool-btn"
+            id="btn-final"
+            title="Final SVG only: hide the grid, guides and reference images"
+            aria-label="Final SVG only"
+            aria-pressed="false"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-eye" /></svg>
+          </button>
+        </div>
+
+        <p id="cursor-pos" class="cursor-readout mono" aria-live="polite">—</p>
+        <button
+          type="button"
+          class="menu-trigger menu-trigger--icon help-btn"
+          id="btn-help"
+          aria-expanded="false"
+          title="Help — what everything does"
+          aria-label="Help"
+        >
+          ?
+        </button>
+      </header>
+
+      <aside
+        class="menu-dropdown menu-dropdown--docked help-panel hidden"
+        id="help-panel"
+        role="dialog"
+        aria-label="Help"
+      >
+        <div class="menu-panel-toolbar">
+          <p class="menu-panel-title">Help</p>
+        </div>
+        <div class="help-body">
+          <h3>Tools</h3>
+          <ul>
+            <li>
+              <b>Select (S)</b> — click a shape to select it (thin strokes have a wider invisible
+              click area, and the shape under the cursor is outlined in blue), drag to move, drag on
+              empty space for a marquee. Shift-click adds to the selection.
+            </li>
+            <li>
+              <b>Hand (H)</b> — pan the view. Hold <kbd>Space</kbd> for a temporary hand. Mouse
+              wheel zooms.
+            </li>
+            <li>
+              <b>Pen (P)</b> — click for corner points, click-drag for curves. Double-click or
+              <kbd>Enter</kbd> finishes; click the start point to close. A path with no curves
+              becomes a line, polyline or polygon automatically. <kbd>Esc</kbd> cancels.
+            </li>
+            <li>
+              <b>Rectangle (R) / Ellipse (E)</b> — drag, or click twice. <kbd>Shift</kbd> makes a
+              square / circle.
+            </li>
+            <li>
+              <b>Text (T)</b> — click to place, then type in the field that opens in the SVG panel.
+            </li>
+          </ul>
+
+          <h3>Editing shapes</h3>
+          <ul>
+            <li>
+              <b>Resize</b> — drag the blue handles. Rectangles also have a corner handle just
+              inside the top-right corner; drag it to round the corners, hold <kbd>Alt</kbd> to set
+              horizontal and vertical radii separately.
+            </li>
+            <li>
+              <b>Rotate</b> — drag the pink handle above a selected shape. <kbd>Shift</kbd> snaps to
+              15°. Rectangles become polygons and ellipses become paths the first time they are
+              rotated; text keeps its type and has a Rotation field.
+            </li>
+            <li><b>Nudge</b> — arrow keys move by 1 unit, <kbd>Shift</kbd> by 10.</li>
+            <li>
+              <b>Align</b> — hold <kbd>Alt</kbd> while drawing or dragging to snap to points that
+              line up horizontally or vertically with other shapes (this replaces grid snapping
+              while held).
+            </li>
+            <li>
+              <b>Z-order</b> — <kbd>Ctrl</kbd>+<kbd>[</kbd> / <kbd>]</kbd> sends backward / forward.
+              In the Primitives and Reference images lists, use the ▲ ▼ buttons on a row to move it
+              one step (Shift+click: to the top or bottom).
+            </li>
+          </ul>
+
+          <h3>Paths and curves</h3>
+          <ul>
+            <li>
+              <b>Add a point</b> — double-click on a segment of the selected shape. Curves are split
+              without changing their shape.
+            </li>
+            <li>
+              <b>Remove a point</b> — click it, press <kbd>Delete</kbd>. Its neighbours are joined.
+            </li>
+            <li>
+              <b>Smooth ↔ corner</b> — double-click an anchor. Lines, polylines and polygons turn
+              into paths first.
+            </li>
+            <li>
+              <b>Curve handles</b> — the two handles of a smooth point mirror each other. Hold
+              <kbd>Alt</kbd> while dragging one to move it independently; release Alt to mirror
+              again. A cusp is remembered until you drag a handle without Alt.
+            </li>
+            <li>
+              <b>Join</b> — select two open paths and click <b>Join</b> in the Primitives header (or
+              press <kbd>J</kbd>): they are connected at their closest ends. Or drag an end point
+              onto another path's end point.
+            </li>
+            <li>
+              <b>Close / open</b> — tick <b>Closed</b> in the shape's row, or drag an end point onto
+              the other end point.
+            </li>
+            <li>
+              <b>Split</b> — select a point and press <kbd>X</kbd>. An open path becomes two paths;
+              a closed one becomes one open path cut at that point.
+            </li>
+          </ul>
+
+          <h3>Style (Primitives list)</h3>
+          <ul>
+            <li>
+              <b>Stroke / Fill</b> — click a swatch for the color picker (hue, saturation,
+              brightness, hex and alpha). The Fill checkbox turns fill on or off.
+            </li>
+            <li>
+              <b>Fill type</b> — Solid, Linear Gradient (with Angle) or Radial Gradient; both
+              gradient colors have their own alpha.
+            </li>
+            <li>
+              <b>Width, Line cap, Line join</b> — stroke geometry. Width 0 exports as no stroke.
+            </li>
+            <li>
+              <b>Start / End</b> — arrow, dot, square or diamond markers on lines, polylines and
+              paths.
+            </li>
+            <li>
+              <b>Names</b> — every shape gets a default name (path 1, rect 2, …) that stays with it
+              when you move it; type in the row title to change it (clearing it restores a default).
+              Exported as <code>id="d8e4764a_name"</code>; only the first underscore separates the
+              generated id from your name.
+            </li>
+            <li>
+              The colored square in each row shows the stroke as its border and the fill inside.
+            </li>
+          </ul>
+
+          <h3>Groups</h3>
+          <ul>
+            <li>
+              <kbd>Ctrl</kbd>+<kbd>G</kbd> groups the selection,
+              <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> ungroups. Clicking a member selects the
+              whole group; the ◉ / ○ button in the list selects single members. Exported as
+              <code>&lt;g&gt;</code>.
+            </li>
+          </ul>
+
+          <h3>Clipboard</h3>
+          <ul>
+            <li>
+              <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd> copy, cut and paste shapes
+              (offset each time). Paste also accepts SVG markup copied from anywhere, and works
+              between browser tabs. <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicates.
+            </li>
+          </ul>
+
+          <h3>History</h3>
+          <ul>
+            <li>
+              Undo / Redo buttons in the toolbar, or <kbd>Ctrl</kbd>+<kbd>Z</kbd> /
+              <kbd>Ctrl</kbd>+<kbd>Y</kbd>.
+            </li>
+          </ul>
+
+          <h3>Document panel</h3>
+          <ul>
+            <li>
+              The <b>Document</b> button (first in the toolbar) toggles a panel docked on the left.
+              It floats over the canvas and stays open while you work. Its sections (Documents,
+              Reference images, SVG, Primitives) fold open and closed, and are remembered.
+            </li>
+            <li>
+              <b>Reference images</b> — add reference images to trace; each has visibility, opacity,
+              position, scale and rotation.
+            </li>
+            <li>
+              <b>SVG</b> — the artboard size (width × height) and the live markup, which you can
+              <b>edit directly</b>: changes apply to the drawing after a short pause (an error
+              message appears if the markup is invalid, and nothing is changed until it is valid).
+              Click or move the cursor into a shape's line and that shape is selected, exactly as if
+              you had picked it in Primitives; selected shapes are shown in blue. When a field in a
+              Primitives row has focus, the SVG attribute it edits is highlighted in yellow, even if
+              the shape is not selected. Only shapes the app knows (path, line, rect, circle,
+              ellipse, polyline, polygon, text) are kept. Icons import, export and copy the SVG
+              (coordinates are exported as integers).
+            </li>
+            <li><b>Primitives</b> — one row per shape (see Style).</li>
+            <li>
+              Documents save automatically, like Pages or Notes on macOS — there is no Save button.
+              <b>Documents</b> lists everything stored in this browser (reference images included).
+              Click a document to open it; click the name of the open document to rename it in
+              place. Hover a row for duplicate ⧉ and delete × (deleting an empty document doesn't
+              ask; others do). <b>+</b> starts a new document (named Untitled, Untitled 2, …; the
+              current one is already saved). The last document reopens when you start the app.
+              Documents live in this browser only, so back them up: the ⬇ / ⬆ buttons in the
+              <b>Documents</b> header export every document to one JSON file and restore them again
+              (restored copies are added alongside your existing ones, never overwriting them). To
+              empty a document, <kbd>Ctrl</kbd>+<kbd>A</kbd> then <kbd>Delete</kbd>.
+            </li>
+          </ul>
+
+          <h3>Toolbar: grid and view</h3>
+          <ul>
+            <li>
+              The grid button shows or hides the grid, and the small field next to it sets the grid
+              step. The magnet (or <kbd>G</kbd>) toggles snap to grid; a marker shows where the
+              point will land. Snapping applies to drawing, dragged handles and moved shapes; hold
+              <kbd>Alt</kbd> to switch to alignment snapping instead.
+            </li>
+            <li>
+              Fit view, 100% zoom, and the eye button (<b>Final SVG only</b>: hides the grid, guides
+              and reference images).
+            </li>
+          </ul>
+
+          <h3>Rulers</h3>
+          <ul>
+            <li>
+              Rulers along the top and left show artboard units and a cursor marker. When the
+              Document panel is open they start to its right.
+            </li>
+          </ul>
+
+          <h3>Touch</h3>
+          <ul>
+            <li>
+              Two fingers pinch to zoom and pan. Double-tap finishes a pen path. Handles get a
+              larger touch halo on touch screens.
+            </li>
+          </ul>
+
+          <h3>Keyboard summary</h3>
+          <table class="help-keys">
+            <tr>
+              <td>G</td>
+              <td>Toggle snap to grid (a marker shows where the point will land)</td>
+            </tr>
+            <tr>
+              <td>S P R E T H</td>
+              <td>Select, Pen, Rect, Ellipse, Text, Hand</td>
+            </tr>
+            <tr>
+              <td>Enter / Esc</td>
+              <td>Finish / cancel a path</td>
+            </tr>
+            <tr>
+              <td>Delete</td>
+              <td>Delete shape or selected point</td>
+            </tr>
+            <tr>
+              <td>X / J</td>
+              <td>Split path at selected point / join two selected paths</td>
+            </tr>
+            <tr>
+              <td>Ctrl+Z / Ctrl+Y</td>
+              <td>Undo / redo</td>
+            </tr>
+            <tr>
+              <td>Ctrl+C / X / V / D</td>
+              <td>Copy, cut, paste, duplicate</td>
+            </tr>
+            <tr>
+              <td>Ctrl+G / Ctrl+Shift+G</td>
+              <td>Group / ungroup</td>
+            </tr>
+            <tr>
+              <td>Ctrl+A</td>
+              <td>Select all shapes</td>
+            </tr>
+            <tr>
+              <td>Ctrl+S / Ctrl+Shift+S</td>
+              <td>Save now (autosave is always on) / export SVG</td>
+            </tr>
+            <tr>
+              <td>Alt</td>
+              <td>Align-snap; breaks handle symmetry while dragging a curve handle</td>
+            </tr>
+            <tr>
+              <td>Shift</td>
+              <td>Square / circle, 15° rotation steps, add to selection</td>
+            </tr>
+          </table>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <section class="canvas-wrap" id="canvas-wrap" aria-label="Artboard">
+          <svg id="viewport-svg" class="viewport-svg" tabindex="0" aria-label="Drawing surface">
+            <g id="camera">
+              <rect id="artboard-bg" class="artboard-bg" x="0" y="0" />
+              <g id="layer-images"></g>
+              <g id="layer-grid"></g>
+              <g id="layer-document"></g>
+              <g id="layer-overlay"></g>
+            </g>
+          </svg>
+          <canvas id="ruler-top" class="ruler ruler-top"></canvas>
+          <canvas id="ruler-left" class="ruler ruler-left"></canvas>
+          <div id="ruler-corner" class="ruler-corner"></div>
+        </section>
+      </main>
+    </div>
+
+    <input type="file" id="input-import-svg" accept=".svg,image/svg+xml" hidden />
+    <input type="file" id="input-backup" accept=".json,application/json" hidden />
+
+    <script type="module" src="/src/lib/app.ts"></script>
+  </body>
+</html>

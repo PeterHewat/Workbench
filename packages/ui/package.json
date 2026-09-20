@@ -1,0 +1,23 @@
+{
+  "name": "@workbench/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared browser helpers every Workbench app can use",
+  "exports": {
+    ".": "./src/index.ts",
+    "./vite": "./src/vite-service-worker.ts"
+  },
+  "files": [
+    "src",
+    "sw.js"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vite": "^8.3.0"
+  }
+}

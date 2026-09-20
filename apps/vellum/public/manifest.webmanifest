@@ -1,0 +1,13 @@
+{
+  "name": "Vellum",
+  "short_name": "Vellum",
+  "description": "Trace reference images and export clean, pure SVG.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#1b1c20",
+  "theme_color": "#1b1c20",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

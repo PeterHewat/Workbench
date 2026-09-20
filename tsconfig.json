@@ -1,0 +1,10 @@
+{
+  "extends": "./packages/tsconfig/base.json",
+  "files": [],
+  "references": [
+    { "path": "packages/catalog" },
+    { "path": "packages/ui" },
+    { "path": "apps/vellum" },
+    { "path": "apps/home" }
+  ]
+}

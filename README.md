@@ -1,0 +1,68 @@
+# Workbench
+
+Small, self-contained browser tools. Everything runs client-side — nothing is uploaded, and
+each tool keeps working offline once you have opened it.
+
+**[peterhewat.github.io/Workbench](https://peterhewat.github.io/Workbench/)**
+
+| Tool                     | What it does                                       |
+| ------------------------ | -------------------------------------------------- |
+| [Vellum](./apps/vellum/) | Trace reference images and export clean, pure SVG. |
+
+## Running it
+
+Requires [Bun](https://bun.sh).
+
+```bash
+bun install
+bun run dev
+```
+
+That serves Vellum. For another app, `bun run --filter @workbench/<slug> dev`.
+
+To build and preview the whole site, including the index page:
+
+```bash
+WORKBENCH_BASE=/ bun run build && bunx serve dist
+```
+
+## Adding a tool
+
+```bash
+bun run new-app color-forge "Color Forge"
+```
+
+That scaffolds `apps/color-forge` and prints the entry to add to
+[`packages/catalog`](./packages/catalog/src/index.ts). The catalog is the only list — the index
+page, the build and the deploy all read from it.
+
+## How it is put together
+
+```text
+apps/          one folder per tool, plus `home` (the index page)
+packages/
+  catalog/     which apps exist, and where the site is deployed
+  ui/          shared browser helpers and the offline service worker
+  tsconfig/    shared TypeScript config
+tools/         build and scaffold scripts
+docs/          decisions, reference and plans
+```
+
+Each app is TypeScript built by Vite into plain static files, with **no runtime framework and no
+runtime dependencies**. Vite is a build tool here, not a foundation: the output is HTML, CSS and
+ES modules that will still work off any file server in ten years.
+
+## Commands
+
+| Command           | What it does                      |
+| ----------------- | --------------------------------- |
+| `bun run dev`     | Serve an app with hot reload      |
+| `bun run check`   | Lint, typecheck and format check  |
+| `bun run test`    | Run the test suites               |
+| `bun run build`   | Build the whole site into `dist/` |
+| `bun run verify`  | `check` + `test` + `build`        |
+| `bun run new-app` | Scaffold a new app                |
+
+## License
+
+MIT — see [LICENSE](./LICENSE).

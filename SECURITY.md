@@ -1,0 +1,17 @@
+# Security Policy
+
+These are static, client-side tools. There is no server, no account and no data collection:
+everything a tool stores stays in your own browser.
+
+## Reporting
+
+Report a vulnerability privately through
+[GitHub Security Advisories](https://github.com/PeterHewat/Workbench/security/advisories/new).
+Please do not open a public issue for an undisclosed vulnerability.
+
+## Scope
+
+In scope: anything that could run attacker-controlled code in a visitor's browser, or read data
+out of it — for example a file an app imports (SVG, JSON) being parsed unsafely.
+
+Out of scope: the absence of a backend, rate limiting or authentication. There is none by design.

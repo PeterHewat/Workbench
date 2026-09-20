@@ -1,0 +1,26 @@
+name: Setup Bun
+description: Install Bun and workspace dependencies, with the Bun install cache restored.
+
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@v2
+      id: setup-bun
+      with:
+        bun-version-file: .bun-version
+
+    - name: Cache Bun install directory
+      uses: actions/cache@v4
+      id: bun-cache
+      with:
+        path: ~/.bun/install/cache
+        key: bun-install-${{ runner.os }}-${{ steps.setup-bun.outputs.bun-revision }}-${{ hashFiles('bun.lock', '.bun-version') }}
+        restore-keys: |
+          bun-install-${{ runner.os }}-${{ steps.setup-bun.outputs.bun-revision }}-
+          bun-install-${{ runner.os }}-
+
+    - name: Install dependencies
+      shell: bash
+      env:
+        HUSKY: "0"
+      run: bun install --frozen-lockfile
