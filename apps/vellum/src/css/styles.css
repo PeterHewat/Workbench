@@ -1654,3 +1654,7 @@ body {
 .grad-stop-add:hover {
   border-color: var(--accent);
 }
+
+.geom-field--wide {
+  grid-column: 1 / -1;
+}

@@ -56,6 +56,10 @@ To preview the built site locally, build with the base at the root:
 WORKBENCH_BASE=/ bun run build && bunx serve dist
 ```
 
+On Windows, run that from PowerShell (`$env:WORKBENCH_BASE = '/'; bun run build`) or prefix it
+with `MSYS_NO_PATHCONV=1`. Git Bash rewrites the bare `/` into a Windows path and the build bakes
+that in as the base, which fails quietly: the page loads and every asset 404s.
+
 ## Shell
 
 Do not leave background servers running. Bounded commands (`check`, `verify`, `build`) should use a timeout with buffer. Interactive auth CLIs: ask the user to run them.

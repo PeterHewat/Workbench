@@ -67,6 +67,7 @@ import {
   elementBBox,
   translateElement,
   gradientStops,
+  keepsRotation,
 } from "./model.js";
 import { deepClone, downloadText, escapeAttr, escapeXml, uid } from "./utils.js";
 import { bindTouch, setTouchFinishPathHandler } from "./touch.js";
@@ -590,7 +591,11 @@ function geometryRowsHtml(el: SceneElement): string {
     el.type === "text"
       ? ""
       : field("geomW", "W", box.width, 0) + field("geomH", "H", box.height, 0);
-  return `<div class="geom-grid">${position}${size}</div>`;
+  // Only the shapes that store an angle get a field for it; on a path it is baked into points.
+  const angle = keepsRotation(el)
+    ? `<label class="geom-field geom-field--wide"><span>∠</span><input type="number" data-field="rotation" step="5" value="${Math.round(el.rotation ?? 0)}" aria-label="Rotation (degrees)" /></label>`
+    : "";
+  return `<div class="geom-grid">${position}${size}${angle}</div>`;
 }
 
 function primitiveBodyHtml(el: SceneElement): string {
@@ -604,8 +609,7 @@ function primitiveBodyHtml(el: SceneElement): string {
         ["start", "left"],
         ["middle", "center"],
         ["end", "right"],
-      ])}</div>`,
-      `<div class="field-row"><span>Rotation°</span><input type="number" data-field="rotation" step="5" value="${Math.round(el.rotation ?? 0)}" /></div>`
+      ])}</div>`
     );
   }
   rows.push(
@@ -791,7 +795,6 @@ function updatePrimitiveListValues(state: EditorState): void {
       setField(li, "fontSize", el.fontSize ?? 48);
       setField(li, "fontFamily", el.fontFamily ?? "sans-serif");
       setField(li, "anchor", el.anchor ?? "start");
-      setField(li, "rotation", Math.round(el.rotation ?? 0));
     }
     const box = elementBBox(el);
     if (box) {
@@ -800,6 +803,7 @@ function updatePrimitiveListValues(state: EditorState): void {
       setField(li, "geomY", round(box.y));
       setField(li, "geomW", round(box.width));
       setField(li, "geomH", round(box.height));
+      setField(li, "rotation", Math.round(el.rotation ?? 0));
     }
     setField(li, "strokeWidth", el.strokeWidth);
     setField(li, "linecap", el.linecap);

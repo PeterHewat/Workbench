@@ -26,6 +26,10 @@ To build and preview the whole site, including the index page:
 WORKBENCH_BASE=/ bun run build && bunx serve dist
 ```
 
+On Windows, run that from PowerShell (`$env:WORKBENCH_BASE = '/'; bun run build`) or prefix it
+with `MSYS_NO_PATHCONV=1`. Git Bash rewrites the bare `/` into a Windows path and the build bakes
+that in as the base, which fails quietly: the page loads and every asset 404s.
+
 ## Adding a tool
 
 ```bash
