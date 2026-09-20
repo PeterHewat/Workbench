@@ -1473,6 +1473,7 @@ window.addEventListener("keydown", (e) => {
   if (key === "p") setTool("pen");
   if (key === "r") setTool("rect");
   if (key === "e") setTool("ellipse");
+  if (key === "a" && !e.ctrlKey && !e.metaKey) setTool("arc");
   if (key === "t") setTool("text");
   if (key === "g") setGridSnap(!getState().grid.snap);
   if (key === "escape") {

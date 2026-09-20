@@ -25,10 +25,12 @@ import {
   splitAt,
   joinPaths,
   canJoin,
+  geometryOf,
   type AlignOptions,
 } from "./model.js";
 import { screenToWorld, zoomAt } from "./viewport.js";
 import { cornerHandleInset } from "./pointer.js";
+import { createArcPath } from "./arc.js";
 import {
   expandToGroups,
   groupsOf,
@@ -55,6 +57,9 @@ const CLOSE_TOL = 12;
 const ALIGN_TOL_PX = 6;
 const CLIP_TAG = "vector-tracer/elements";
 
+/** The tools that are drawn by dragging a shape out on the canvas. */
+type ShapeTool = "rect" | "ellipse" | "arc";
+
 type DragState =
   | { type: "pan"; startX: number; startY: number; panX: number; panY: number }
   | ({ type: "marquee" } & Marquee)
@@ -79,7 +84,13 @@ type DragState =
       radius: number;
       active: boolean;
     }
-  | { type: "shape-drag"; tool: "rect" | "ellipse"; start: Point; current: Point };
+  | { type: "shape-drag"; tool: ShapeTool; start: Point; current: Point };
+
+/** The `d` of a path, for previewing one before it is committed to the document. */
+function pathPreviewD(path: SceneElement): string {
+  const g = geometryOf(path);
+  return typeof g?.attrs.d === "string" ? g.attrs.d : "";
+}
 
 function setDrawing(drawing: Drawing): void {
   setState({ drawing });
@@ -116,6 +127,11 @@ function copyElements(elements: readonly SceneElement[], off: number): SceneElem
     if (chain.length) c.groups = chain.map(remap);
     return c;
   });
+}
+
+/** How much of a turn a dragged arc covers: a quarter, or a half with Shift held. */
+function arcSweep(shift: boolean): number {
+  return shift ? 180 : 90;
 }
 
 /** Geometry of a rect/ellipse dragged from `start` to `end`, as SVG attributes. */
@@ -784,7 +800,9 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       return;
     }
 
-    if (st.tool === "rect" || st.tool === "ellipse") handleShapeDown(st.tool, world, e);
+    if (st.tool === "rect" || st.tool === "ellipse" || st.tool === "arc") {
+      handleShapeDown(st.tool, world, e);
+    }
   });
 
   /** Double-click on a shape: edit text, or insert a vertex on the segment under the cursor. */
@@ -875,7 +893,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     }
   }
 
-  function handleShapeDown(tool: "rect" | "ellipse", world: Point, e: PointerEvent): void {
+  function handleShapeDown(tool: ShapeTool, world: Point, e: PointerEvent): void {
     const st = getState();
     if (st.drawing?.shapeStart) {
       finalizeShape(tool, st.drawing.shapeStart, world, e.shiftKey);
@@ -1045,7 +1063,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       const path = findElement(st.drawing.activePathId);
       if (path?.type === "path" && path.points.length) updatePenPreview(path, world);
     } else if (!drag && st.drawing?.shapeStart) {
-      if (st.tool === "rect" || st.tool === "ellipse") {
+      if (st.tool === "rect" || st.tool === "ellipse" || st.tool === "arc") {
         updateShapePreview(st.tool, st.drawing.shapeStart, world, e.shiftKey);
       }
     }
@@ -1159,11 +1177,20 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   }
 
   function updateShapePreview(
-    tool: "rect" | "ellipse",
+    tool: ShapeTool,
     start: Point,
     rawCurrent: Point,
     shift: boolean
   ): void {
+    if (tool === "arc") {
+      const arc = createArcPath(start, rawCurrent, arcSweep(shift), true);
+      const d = arc ? pathPreviewD(arc) : "";
+      setDrawing({
+        shapeStart: start,
+        preview: d ? { type: "shape", tag: "path", nodeAttrs: { d } } : null,
+      });
+      return;
+    }
     const current = constrainShapeEnd(start, rawCurrent, shift);
     setDrawing({
       shapeStart: start,
@@ -1171,21 +1198,20 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     });
   }
 
-  function finalizeShape(
-    tool: "rect" | "ellipse",
-    start: Point,
-    rawEnd: Point,
-    shift: boolean
-  ): void {
-    const end = constrainShapeEnd(start, rawEnd, shift);
+  function finalizeShape(tool: ShapeTool, start: Point, rawEnd: Point, shift: boolean): void {
+    const end = tool === "arc" ? rawEnd : constrainShapeEnd(start, rawEnd, shift);
     if (Math.hypot(end.x - start.x, end.y - start.y) < 0.5) return;
+    const arc = tool === "arc" ? createArcPath(start, end, arcSweep(shift), true) : null;
+    if (tool === "arc" && !arc) return;
     // The undo step belongs to the finished shape, not to the press that began it.
     pushUndo();
-    const g = shapeGeometry(tool, start, end);
+    const g = tool === "arc" ? {} : shapeGeometry(tool, start, end);
     const el =
-      tool === "rect"
-        ? createRect(g.x!, g.y!, g.width!, g.height!)
-        : createEllipse(g.cx!, g.cy!, g.rx!, g.ry!);
+      tool === "arc"
+        ? arc!
+        : tool === "rect"
+          ? createRect(g.x!, g.y!, g.width!, g.height!)
+          : createEllipse(g.cx!, g.cy!, g.rx!, g.ry!);
     setState((s) => ({
       ...s,
       elements: [...s.elements, el],

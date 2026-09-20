@@ -409,3 +409,62 @@ describe("uniform shapes", () => {
     );
   });
 });
+
+describe("path data the old parser dropped", () => {
+  const points = (d: string) => {
+    const r = importSvgFile(
+      `<svg xmlns="http://www.w3.org/2000/svg"><path d="${d}" stroke="#000"/></svg>`
+    );
+    const el = r.elements[0]!;
+    return el.type === "path" ? el.points : [];
+  };
+
+  test("a command repeats implicitly", () => {
+    expect(points("M0 0 L10 0 20 0 30 0").map((p) => p.x)).toEqual([0, 10, 20, 30]);
+  });
+
+  test("a repeated moveto continues as a lineto", () => {
+    expect(points("M0 0 10 0 20 0").map((p) => p.x)).toEqual([0, 10, 20]);
+  });
+
+  test("a run of cubics keeps every segment", () => {
+    expect(points("M0 0 C1 1 2 2 3 3 4 4 5 5 6 6")).toHaveLength(3);
+  });
+
+  test("a quadratic becomes the cubic that draws the same curve", () => {
+    const pts = points("M0 0 Q30 0 30 30");
+    expect(pts).toHaveLength(2);
+    // c1 = p0 + 2/3 (q - p0), c2 = p3 + 2/3 (q - p3).
+    expect(pts[0]!.hOut).toEqual({ x: 20, y: 0 });
+    expect(pts[1]!.hIn).toEqual({ x: 30, y: 10 });
+  });
+
+  test("the smooth shorthands reflect the previous control point", () => {
+    const cubic = points("M0 0 C0 10 10 10 10 0 S20 -10 20 0");
+    expect(cubic).toHaveLength(3);
+    expect(cubic[1]!.hOut).toEqual({ x: 10, y: -10 });
+    expect(points("M0 0 Q10 10 20 0 T40 0")).toHaveLength(3);
+  });
+
+  test("relative commands are resolved against the current point", () => {
+    expect(points("M10 10 l10 0 l0 10").map((p) => [p.x, p.y])).toEqual([
+      [10, 10],
+      [20, 10],
+      [20, 20],
+    ]);
+  });
+
+  test("an arc is approximated and lands exactly on its endpoint", () => {
+    const pts = points("M0 50 A50 50 0 0 1 100 50");
+    expect(pts.length).toBeGreaterThan(2);
+    const end = pts[pts.length - 1]!;
+    expect([Math.round(end.x), Math.round(end.y)]).toEqual([100, 50]);
+    // Halfway round a half circle of radius 50 centred at (50,50): the top of the arc.
+    const mid = pts[Math.floor(pts.length / 2)]!;
+    expect(Math.round(mid.y)).toBe(0);
+  });
+
+  test("an arc with a zero radius degenerates to a line", () => {
+    expect(points("M0 0 A0 0 0 0 1 10 10")).toHaveLength(2);
+  });
+});

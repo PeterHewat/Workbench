@@ -19,7 +19,7 @@ export type LineCap = "round" | "butt" | "square";
 export type LineJoin = "round" | "miter" | "bevel";
 export type TextAnchor = "start" | "middle" | "end";
 /** "select" is the rest state: no drawing tool chosen, so the canvas selects and navigates. */
-export type ToolName = "select" | "pen" | "rect" | "ellipse" | "text";
+export type ToolName = "select" | "pen" | "rect" | "ellipse" | "arc" | "text";
 
 export interface Point {
   x: number;
@@ -187,8 +187,8 @@ export interface RubberPreview {
 
 export interface ShapePreview {
   type: "shape";
-  tag: "rect" | "ellipse";
-  nodeAttrs: Record<string, number>;
+  tag: "rect" | "ellipse" | "path";
+  nodeAttrs: Record<string, number | string>;
   stroke?: string;
   strokeWidth?: number;
 }

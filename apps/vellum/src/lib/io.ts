@@ -14,6 +14,7 @@ import {
 } from "./model.js";
 import { ELEMENT_SELECTOR, escapeAttr, escapeXml, uid } from "./utils.js";
 import { groupsOf, normalizeGroups, pruneGroups } from "./groups.js";
+import { arcToCubics } from "./arc.js";
 import {
   IDENTITY,
   isIdentity,
@@ -264,69 +265,128 @@ export function loadProject(json: ProjectFile): void {
 
 /* ---------- Import ---------- */
 
+/**
+ * Parses a path's `d` into anchors with cubic handles, which is the only curve the model has.
+ *
+ * Everything else is converted: quadratics (Q/T) have an exact cubic equivalent, arcs (A) are
+ * approximated by up to four cubics per quarter turn, and the shorthands (S/T) reflect the
+ * previous control point. Commands also repeat implicitly - `L 1 1 2 2` is two line segments,
+ * and a repeated `M` continues as `L` - which is how most tools write their output.
+ */
 function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
-  const tokens = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) ?? [];
+  const tokens = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? [];
   const points: Anchor[] = [];
   let i = 0;
   let cx = 0;
   let cy = 0;
   let subStart: Point | null = null;
+  let command = "";
+  let relative = false;
+  // The control point the smooth shorthands reflect, and which curve kind set it.
+  let lastControl: Point | null = null;
+  let lastCurve: "cubic" | "quad" | "" = "";
 
   const readNum = () => parseFloat(tokens[i++] ?? "0");
   const last = (): Anchor | undefined => points[points.length - 1];
-  const corner = (x: number, y: number) =>
+  const isCommand = (t: string | undefined) => !!t && /^[a-zA-Z]$/.test(t);
+
+  const corner = (x: number, y: number) => {
     points.push({ x, y, smooth: false, hIn: null, hOut: null });
+    lastControl = null;
+    lastCurve = "";
+  };
+
+  /** Appends a cubic segment from the current point to (x, y). */
+  const cubic = (c1: Point, c2: Point, x: number, y: number, kind: "cubic" | "quad") => {
+    const from = last();
+    if (from) {
+      from.hOut = { x: c1.x, y: c1.y };
+      from.smooth = true;
+    }
+    points.push({ x, y, smooth: true, hIn: { x: c2.x, y: c2.y }, hOut: { x, y } });
+    lastControl = c2;
+    lastCurve = kind;
+  };
+
+  /** A quadratic control point becomes the two cubic ones that draw the same curve. */
+  const quadToCubic = (q: Point, x: number, y: number) => {
+    const from = last() ?? { x: cx, y: cy };
+    cubic(
+      { x: from.x + (2 / 3) * (q.x - from.x), y: from.y + (2 / 3) * (q.y - from.y) },
+      { x: x + (2 / 3) * (q.x - x), y: y + (2 / 3) * (q.y - y) },
+      x,
+      y,
+      "quad"
+    );
+  };
+
+  /** The reflection of the previous control point, or the current point when there is none. */
+  const reflected = (kind: "cubic" | "quad"): Point => {
+    const from = last();
+    if (!from) return { x: cx, y: cy };
+    if (!lastControl || lastCurve !== kind) return { x: from.x, y: from.y };
+    return { x: 2 * from.x - lastControl.x, y: 2 * from.y - lastControl.y };
+  };
 
   while (i < tokens.length) {
-    const cmd = tokens[i++]!;
-    const rel = cmd === cmd.toLowerCase();
-    const c = cmd.toUpperCase();
+    if (isCommand(tokens[i])) {
+      command = tokens[i++]!;
+      relative = command === command.toLowerCase();
+      // A repeated moveto draws lines, per the SVG grammar.
+    } else if (!command) {
+      i++;
+      continue;
+    } else if (command === "M" || command === "m") {
+      command = relative ? "l" : "L";
+    }
+
+    const c = command.toUpperCase();
+    const ox = relative ? cx : 0;
+    const oy = relative ? cy : 0;
 
     if (c === "M") {
-      cx = readNum();
-      cy = readNum();
-      const p = last();
-      if (rel && p) {
-        cx += p.x;
-        cy += p.y;
-      }
+      cx = readNum() + ox;
+      cy = readNum() + oy;
       subStart = { x: cx, y: cy };
       corner(cx, cy);
     } else if (c === "L") {
-      cx = readNum();
-      cy = readNum();
-      const p = last();
-      if (rel && p) {
-        cx += p.x;
-        cy += p.y;
-      }
+      cx = readNum() + ox;
+      cy = readNum() + oy;
       corner(cx, cy);
-    } else if (c === "C") {
-      const x1 = readNum();
-      const y1 = readNum();
-      const x2 = readNum();
-      const y2 = readNum();
-      cx = readNum();
-      cy = readNum();
-      const p = last();
-      // Relative control points are offsets from the current point, absolute ones are not.
-      const ox = rel && p ? p.x : 0;
-      const oy = rel && p ? p.y : 0;
-      if (rel) {
-        cx += ox;
-        cy += oy;
+    } else if (c === "H") {
+      cx = readNum() + ox;
+      corner(cx, cy);
+    } else if (c === "V") {
+      cy = readNum() + oy;
+      corner(cx, cy);
+    } else if (c === "C" || c === "S") {
+      const c1 = c === "C" ? { x: readNum() + ox, y: readNum() + oy } : reflected("cubic");
+      const c2 = { x: readNum() + ox, y: readNum() + oy };
+      const x = readNum() + ox;
+      const y = readNum() + oy;
+      cubic(c1, c2, x, y, "cubic");
+      cx = x;
+      cy = y;
+    } else if (c === "Q" || c === "T") {
+      const q = c === "Q" ? { x: readNum() + ox, y: readNum() + oy } : reflected("quad");
+      const x = readNum() + ox;
+      const y = readNum() + oy;
+      quadToCubic(q, x, y);
+      cx = x;
+      cy = y;
+    } else if (c === "A") {
+      const rx = readNum();
+      const ry = readNum();
+      const rot = readNum();
+      const largeArc = readNum() !== 0;
+      const sweep = readNum() !== 0;
+      const x = readNum() + ox;
+      const y = readNum() + oy;
+      for (const seg of arcToCubics({ x: cx, y: cy }, rx, ry, rot, largeArc, sweep, { x, y })) {
+        cubic(seg.c1, seg.c2, seg.to.x, seg.to.y, "cubic");
       }
-      if (p) {
-        p.hOut = { x: x1 + ox, y: y1 + oy };
-        p.smooth = true;
-      }
-      points.push({
-        x: cx,
-        y: cy,
-        smooth: true,
-        hIn: { x: x2 + ox, y: y2 + oy },
-        hOut: { x: cx, y: cy },
-      });
+      cx = x;
+      cy = y;
     } else if (c === "Z") {
       if (subStart && points.length > 2) {
         const first = points[0]!;
@@ -334,16 +394,11 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
       }
       cx = subStart?.x ?? cx;
       cy = subStart?.y ?? cy;
-    } else if (c === "H") {
-      cx = readNum();
-      const p = last();
-      if (rel && p) cx += p.x;
-      corner(cx, cy);
-    } else if (c === "V") {
-      cy = readNum();
-      const p = last();
-      if (rel && p) cy += p.y;
-      corner(cx, cy);
+      lastControl = null;
+      lastCurve = "";
+    } else {
+      // An unrecognised command: skip its numbers rather than reading them as coordinates.
+      while (i < tokens.length && !isCommand(tokens[i])) i++;
     }
   }
   return { points, closed: /z/i.test(d) };
