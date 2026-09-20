@@ -972,6 +972,12 @@ body {
   stroke-width: 3;
 }
 
+/* Keeps the shape square or circular while dragged - the modifier-free square/circle. */
+.handle.uniform-handle {
+  fill: #7ee787;
+  stroke: #2f8f46;
+}
+
 .handle.rotate-handle {
   fill: #fff;
   stroke: #ff4fa3;
@@ -1391,4 +1397,35 @@ body {
   .grid-step-input {
     height: 44px;
   }
+}
+
+/* Position and size: four small numbers in a grid rather than four full-width rows. */
+.geom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.geom-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.geom-field span {
+  flex: 0 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.geom-field input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: #1a1b1e;
+  color: var(--text);
 }

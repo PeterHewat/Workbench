@@ -98,6 +98,11 @@ export function parseTransform(value: string | null | undefined): Matrix {
   return out;
 }
 
+/** A matrix that scales about a fixed point, which is what resizing by a typed number needs. */
+export function scaleAbout(sx: number, sy: number, ox: number, oy: number): Matrix {
+  return [sx, 0, 0, sy, ox * (1 - sx), oy * (1 - sy)];
+}
+
 function movePoint(m: Matrix, p: Point): void {
   const next = applyMatrix(m, p);
   p.x = next.x;

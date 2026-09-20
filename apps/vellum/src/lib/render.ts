@@ -253,11 +253,12 @@ function addResizeHandle(
   selected = false,
   hitR = defaultHitR()
 ): void {
+  const kind = role === "uniform" ? "anchor uniform-handle" : "anchor";
   addHandle(
     parent,
     x,
     y,
-    `anchor${selected ? " selected" : ""}`,
+    `${kind}${selected ? " selected" : ""}`,
     { "data-element-id": elementId, "data-handle-role": role },
     hitR
   );
@@ -282,15 +283,27 @@ function renderPrimitiveHandles(
         el.id,
         "corner"
       );
+      // Just outside the bottom-right corner: drag it and the rect stays a square.
+      addResizeHandle(
+        parent,
+        el.x + el.width + off / 2,
+        el.y + el.height + off / 2,
+        el.id,
+        "uniform"
+      );
       break;
     }
     case "circle":
       addResizeHandle(parent, el.cx + el.r, el.cy, el.id, "radius");
       break;
-    case "ellipse":
+    case "ellipse": {
       addResizeHandle(parent, el.cx + el.rx, el.cy, el.id, "rx");
       addResizeHandle(parent, el.cx, el.cy + el.ry, el.id, "ry");
+      // On the diagonal between them: drag it and the ellipse stays a circle.
+      const d = Math.SQRT1_2;
+      addResizeHandle(parent, el.cx + el.rx * d, el.cy + el.ry * d, el.id, "uniform");
       break;
+    }
     case "line":
       addResizeHandle(parent, el.x1, el.y1, el.id, "p1");
       addResizeHandle(parent, el.x2, el.y2, el.id, "p2");

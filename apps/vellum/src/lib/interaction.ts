@@ -1059,6 +1059,14 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     switch (el.type) {
       case "rect": {
         if (base.type !== "rect") return;
+        if (role === "uniform") {
+          // The top-left corner stays put and the rect stays square, so this is the square
+          // handle a keyboard modifier used to be needed for.
+          const side = Math.max(0.5, Math.max(world.x - base.x, world.y - base.y));
+          el.width = side;
+          el.height = side;
+          break;
+        }
         if (role === "corner") {
           const off = cornerHandleInset() / getState().viewport.zoom;
           const rx = Math.min(Math.max(el.x + el.width - off - world.x, 0), el.width / 2);
@@ -1084,10 +1092,19 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       case "circle":
         el.r = Math.max(0.5, dist({ x: el.cx, y: el.cy }, world));
         break;
-      case "ellipse":
+      case "ellipse": {
+        if (role === "uniform") {
+          // Both radii follow the diagonal together: a circle without holding anything down.
+          const d = Math.SQRT1_2;
+          const r = Math.max(0.5, (Math.abs(world.x - el.cx) + Math.abs(world.y - el.cy)) / 2 / d);
+          el.rx = r;
+          el.ry = r;
+          break;
+        }
         if (role === "rx") el.rx = Math.max(0.5, Math.abs(world.x - el.cx));
         else el.ry = Math.max(0.5, Math.abs(world.y - el.cy));
         break;
+      }
       case "line":
         if (role === "p1") {
           el.x1 = world.x;

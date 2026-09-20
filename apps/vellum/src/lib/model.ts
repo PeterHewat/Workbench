@@ -401,11 +401,14 @@ export function geometryOf(el: SceneElement, fmt: Formatter = (n) => n): Geometr
     }
     case "circle":
       return { tag: "circle", attrs: { cx: fmt(el.cx), cy: fmt(el.cy), r: fmt(el.r) } };
-    case "ellipse":
-      return {
-        tag: "ellipse",
-        attrs: { cx: fmt(el.cx), cy: fmt(el.cy), rx: fmt(el.rx), ry: fmt(el.ry) },
-      };
+    case "ellipse": {
+      const rx = fmt(el.rx);
+      const ry = fmt(el.ry);
+      // An ellipse whose radii have come out equal is a circle, and says so in the markup.
+      // There is no circle tool; the diagonal handle on an ellipse is how you draw one.
+      if (rx === ry) return { tag: "circle", attrs: { cx: fmt(el.cx), cy: fmt(el.cy), r: rx } };
+      return { tag: "ellipse", attrs: { cx: fmt(el.cx), cy: fmt(el.cy), rx, ry } };
+    }
     case "polyline":
     case "polygon":
       return {

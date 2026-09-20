@@ -8,7 +8,7 @@ import {
   createInitialState,
   selectOnly,
 } from "./state.js";
-import { initViewport, fitArtboardInView } from "./viewport.js";
+import { initViewport, fitArtboardInView, zoomAt } from "./viewport.js";
 import { initRender, renderAll } from "./render.js";
 import {
   bindInteraction,
@@ -64,6 +64,8 @@ import {
   canToggleClosed,
   isClosedShape,
   canJoin,
+  elementBBox,
+  translateElement,
 } from "./model.js";
 import { deepClone, downloadText, escapeAttr, escapeXml, uid } from "./utils.js";
 import { bindTouch, setTouchFinishPathHandler } from "./touch.js";
@@ -71,6 +73,7 @@ import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./color
 import { initRulers, renderRulers, setRulerOffset } from "./rulers.js";
 import { initPointerKind } from "./pointer.js";
 import { groupsOf, innerGroup, moveWithinParent, outerGroup } from "./groups.js";
+import { scaleAbout, transformElement } from "./transform.js";
 import { registerServiceWorker } from "@workbench/ui";
 import type { EditorState, ProjectFile, ReferenceImage, SceneElement } from "./types.js";
 
@@ -543,8 +546,29 @@ function selectHtml(field: string, value: string, options: readonly Option[]): s
   return `<select data-field="${field}">${opts}</select>`;
 }
 
+/**
+ * Position and size, as numbers to type. Every shape reports the same four, measured from its
+ * bounding box, so one set of fields works for a rect, an ellipse and a traced path alike -
+ * and typing a number is the one way to be exact that a fingertip cannot manage.
+ */
+function geometryRowsHtml(el: SceneElement): string {
+  const box = elementBBox(el);
+  if (!box) return "";
+  const field = (key: string, label: string, value: number, min?: number) =>
+    `<label class="geom-field"><span>${label}</span><input type="number" data-field="${key}" step="1"${
+      min == null ? "" : ` min="${min}"`
+    } value="${Math.round(value * 100) / 100}" aria-label="${label}" /></label>`;
+  const position = field("geomX", "X", box.x) + field("geomY", "Y", box.y);
+  // Text has no width of its own - its size is the font size, which has its own field.
+  const size =
+    el.type === "text"
+      ? ""
+      : field("geomW", "W", box.width, 0) + field("geomH", "H", box.height, 0);
+  return `<div class="geom-grid">${position}${size}</div>`;
+}
+
 function primitiveBodyHtml(el: SceneElement): string {
-  const rows: string[] = [];
+  const rows: string[] = [geometryRowsHtml(el)];
   if (el.type === "text") {
     rows.push(
       `<div class="field-row"><span>Text</span><input type="text" data-field="text" value="${escapeAttr(el.text || "")}" /></div>`,
@@ -703,6 +727,14 @@ function updatePrimitiveListValues(state: EditorState): void {
       setField(li, "anchor", el.anchor ?? "start");
       setField(li, "rotation", Math.round(el.rotation ?? 0));
     }
+    const box = elementBBox(el);
+    if (box) {
+      const round = (n: number) => Math.round(n * 100) / 100;
+      setField(li, "geomX", round(box.x));
+      setField(li, "geomY", round(box.y));
+      setField(li, "geomW", round(box.width));
+      setField(li, "geomH", round(box.height));
+    }
     setField(li, "strokeWidth", el.strokeWidth);
     setField(li, "linecap", el.linecap);
     setField(li, "linejoin", el.linejoin);
@@ -752,6 +784,47 @@ function deletePrimitive(id: string): void {
       expandedElementId: s.ui.expandedElementId === id ? null : s.ui.expandedElementId,
     },
   }));
+}
+
+const GEOMETRY_FIELDS = ["geomX", "geomY", "geomW", "geomH"];
+
+/**
+ * Moves or scales a shape to put one edge of its bounding box at a typed value. Scaling runs
+ * through the same matrix code that bakes imported transforms, so every shape type behaves.
+ */
+function applyGeometryField(id: string, field: string, value: number): void {
+  const el = findElement(id);
+  const box = el ? elementBBox(el) : null;
+  if (!el || !box) return;
+  if (field === "geomX" || field === "geomY") {
+    const dx = field === "geomX" ? value - box.x : 0;
+    const dy = field === "geomY" ? value - box.y : 0;
+    if (!dx && !dy) return;
+    pushUndo();
+    mutate(() => {
+      const target = findElement(id);
+      if (target) translateElement(target, dx, dy);
+    });
+    return;
+  }
+  const horizontal = field === "geomW";
+  const from = horizontal ? box.width : box.height;
+  // A shape with no extent in that direction (a horizontal line, say) cannot be scaled into one.
+  if (from <= 0 || value <= 0 || value === from) return;
+  const factor = value / from;
+  pushUndo();
+  setState((s) => ({
+    ...s,
+    elements: s.elements.map((x) =>
+      x.id === id
+        ? transformElement(
+            x,
+            horizontal ? scaleAbout(factor, 1, box.x, box.y) : scaleAbout(1, factor, box.x, box.y)
+          )
+        : x
+    ),
+  }));
+  primitiveList.invalidate();
 }
 
 function applyToElement(id: string, fn: (el: SceneElement) => void): void {
@@ -842,6 +915,9 @@ primitiveListEl.addEventListener("change", (e) => {
       el.fillType = input.value as SceneElement["fillType"];
       if (input.value !== "solid") el.fillEnabled = true;
     });
+  } else if (GEOMETRY_FIELDS.includes(field)) {
+    const v = parseFloat(input.value);
+    if (!Number.isNaN(v)) applyGeometryField(id, field, v);
   } else if (field in NUMERIC_FIELDS) {
     const v = parseFloat(input.value);
     if (Number.isNaN(v)) return;
@@ -1279,6 +1355,14 @@ byId("btn-snap").addEventListener("click", () => setGridSnap(!getState().grid.sn
 byId("btn-final").addEventListener("click", () => {
   setState((s) => ({ ...s, finalOnly: !s.finalOnly }));
 });
+
+/** Zoom buttons work on the middle of the canvas, the way the wheel works on the cursor. */
+function zoomByStep(factor: number): void {
+  const rect = svg.getBoundingClientRect();
+  setState({ viewport: zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor) });
+}
+byId("btn-zoom-in").addEventListener("click", () => zoomByStep(1.25));
+byId("btn-zoom-out").addEventListener("click", () => zoomByStep(1 / 1.25));
 
 byId("btn-fit-view").addEventListener("click", () => {
   setState({ viewport: fitArtboardInView() });

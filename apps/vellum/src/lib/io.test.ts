@@ -390,3 +390,22 @@ describe("groups and transforms on import", () => {
     expect(formatExportSvg(doc(r.elements), true).match(/<g id="group-a">/g)).toHaveLength(1);
   });
 });
+
+describe("uniform shapes", () => {
+  test("an ellipse with equal radii exports as a circle and comes back as one", () => {
+    const e = createEllipse(50, 50, 20, 20);
+    const svg = formatExportSvg(doc([e]), true);
+    expect(svg).toContain("<circle id=");
+    expect(svg).toContain('r="20"');
+    const back = importSvgFile(svg);
+    expect(back.elements[0]!.type).toBe("circle");
+  });
+
+  test("export stays byte-for-byte stable across that round trip", () => {
+    const first = formatExportSvg(doc([createEllipse(50, 50, 20, 20)]), true);
+    const back = importSvgFile(first, { keepIds: true });
+    expect(formatExportSvg({ artboard: doc([]).artboard, elements: back.elements }, true)).toBe(
+      first
+    );
+  });
+});
