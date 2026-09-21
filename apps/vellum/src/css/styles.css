@@ -534,6 +534,13 @@ body {
   pointer-events: none;
 }
 
+/* Hover is the same outline the selection draws, quieter: solid rather than marching dashes,
+   so a hovered shape and a selected one are never confused for each other. */
+.hover-box {
+  stroke-dasharray: none;
+  stroke-opacity: 0.55;
+}
+
 .marquee {
   fill: rgba(91, 141, 239, 0.15);
   stroke: var(--accent);

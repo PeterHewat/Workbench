@@ -16,7 +16,16 @@ import {
 import { applyCameraTransform } from "./viewport.js";
 import { cornerHandleInset, isCoarsePointer } from "./pointer.js";
 import { buildDefsMarkup } from "./io.js";
-import type { EditorState, PathEdit, PathElement, Point, Preview, SceneElement } from "./types.js";
+import { expandToGroups } from "./groups.js";
+import type {
+  BBox,
+  EditorState,
+  PathEdit,
+  PathElement,
+  Point,
+  Preview,
+  SceneElement,
+} from "./types.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const HIT_MIN_PX = 10;
@@ -127,7 +136,7 @@ function renderElement(el: SceneElement): SVGElement | null {
   return node;
 }
 
-/** An unfilled copy of a shape's outline: the wide click target, or the blue hover highlight. */
+/** An unfilled copy of a shape's outline, used as the wide click target on a thin stroke. */
 function outlineNode(el: SceneElement, attrs: AttrMap): SVGElement | null {
   const g = geometryOf(el);
   if (!g) return null;
@@ -396,12 +405,12 @@ function renderGradientHandles(parent: Element, el: SceneElement): void {
   }
 }
 
-function renderSelectionBox(el: SceneElement): void {
+function renderSelectionBox(el: SceneElement, cls = "selection-box"): void {
   const box = localBBox(el);
   if (!box) return;
   if (!el.rotation) {
     add(els.overlay, "rect", {
-      class: "selection-box",
+      class: cls,
       x: box.x,
       y: box.y,
       width: box.width,
@@ -411,11 +420,57 @@ function renderSelectionBox(el: SceneElement): void {
   }
   // Rotated: draw the turned box itself rather than the larger upright one around it.
   add(els.overlay, "polygon", {
-    class: "selection-box",
+    class: cls,
     points: cornersOf(el)
       .map((p) => `${p.x},${p.y}`)
       .join(" "),
   });
+}
+
+/**
+ * What a click would pick, outlined before you click it.
+ *
+ * Hover used to redraw the shape in blue, which borrowed the one channel the shape owns - its
+ * stroke - so it said nothing on a shape with no stroke, and nothing at all on a blue one. The
+ * selection outline is honest about the target instead, and for a grouped shape it outlines the
+ * whole group, because that is what the click will select.
+ */
+function renderHover(state: EditorState): void {
+  const hoverId = state.hoverId;
+  if (!hoverId || state.drawing?.rotateHandle) return;
+  const ids = expandToGroups(state.elements, [hoverId]);
+  if (ids.some((id) => state.selection.elementIds.includes(id))) return;
+  if (ids.length === 1) {
+    const el = findElement(hoverId);
+    if (el) renderSelectionBox(el, "selection-box hover-box");
+    return;
+  }
+  let box: BBox | null = null;
+  for (const el of state.elements) {
+    if (!ids.includes(el.id)) continue;
+    const b = elementBBox(el);
+    if (!b) continue;
+    box = box ? union(box, b) : b;
+  }
+  if (!box) return;
+  add(els.overlay, "rect", {
+    class: "selection-box hover-box",
+    x: box.x,
+    y: box.y,
+    width: box.width,
+    height: box.height,
+  });
+}
+
+function union(a: BBox, b: BBox): BBox {
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  return {
+    x,
+    y,
+    width: Math.max(a.x + a.width, b.x + b.width) - x,
+    height: Math.max(a.y + a.height, b.y + b.height) - y,
+  };
 }
 
 function renderOverlay(state: EditorState): void {
@@ -477,21 +532,7 @@ function renderOverlay(state: EditorState): void {
     });
   }
 
-  const hovered =
-    state.hoverId && !state.selection.elementIds.includes(state.hoverId)
-      ? findElement(state.hoverId)
-      : null;
-  if (hovered && !state.drawing?.rotateHandle) {
-    const outline = outlineNode(hovered, {
-      stroke: "#5b8def",
-      "stroke-width": 2,
-      "stroke-opacity": 0.85,
-      class: "hover-outline",
-      "pointer-events": "none",
-      "vector-effect": "non-scaling-stroke",
-    });
-    if (outline) els.overlay.appendChild(outline);
-  }
+  renderHover(state);
 
   const cur = state.cursor;
   if (cur.snapActive && !state.drawing?.rotateHandle) {
