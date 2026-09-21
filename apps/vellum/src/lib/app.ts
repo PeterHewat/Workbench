@@ -46,7 +46,6 @@ import {
   deleteDocument,
   renameDocument,
   duplicateDocument,
-  exportAllDocuments,
   type DocumentMeta,
 } from "./storage.js";
 import {
@@ -680,7 +679,7 @@ function primitiveBodyHtml(el: SceneElement): string {
   );
   if (el.type !== "line") {
     rows.push(
-      `<div class="field-row"><label class="fill-toggle"><input type="checkbox" data-field="fillEnabled"${el.fillEnabled ? " checked" : ""} /> Fill</label>${swatchHtml("fill", el.fill ?? "#000000", el.fillOpacity ?? 1, "Fill color and opacity")}</div>`,
+      `<div class="field-row"><label class="fill-toggle"><span>Fill</span><input type="checkbox" data-field="fillEnabled"${el.fillEnabled ? " checked" : ""} /></label>${swatchHtml("fill", el.fill ?? "#000000", el.fillOpacity ?? 1, "Fill color and opacity")}</div>`,
       `<div class="field-row"><span>Fill type</span>${selectHtml(
         "fillType",
         el.fillType || "solid",
@@ -695,7 +694,7 @@ function primitiveBodyHtml(el: SceneElement): string {
   }
   if (canToggleClosed(el)) {
     rows.push(
-      `<div class="field-row"><label class="fill-toggle"><input type="checkbox" data-field="closed"${isClosedShape(el) ? " checked" : ""} /> Closed</label></div>`
+      `<div class="field-row"><label class="fill-toggle"><span>Closed</span><input type="checkbox" data-field="closed"${isClosedShape(el) ? " checked" : ""} /></label></div>`
     );
   }
   rows.push(
@@ -1888,6 +1887,9 @@ async function refreshDocList(): Promise<void> {
         <button type="button" class="acc-icon-btn doc-act" data-doc-dup title="Duplicate" aria-label="Duplicate document">
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-copy" /></svg>
         </button>
+        <button type="button" class="acc-icon-btn doc-act" data-doc-save title="Save this document to a file" aria-label="Export document">
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-export" /></svg>
+        </button>
         <button type="button" class="acc-icon-btn acc-trash doc-del" data-doc-delete title="Delete" aria-label="Delete document">
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-trash" /></svg>
         </button>
@@ -2083,89 +2085,89 @@ docListEl.addEventListener("click", async (e) => {
   const id = li?.dataset.docId;
   if (!id) return;
   if (target.closest("[data-doc-dup]")) await duplicateDoc(id);
+  else if (target.closest("[data-doc-save]")) await exportDoc(id);
   else if (target.closest("[data-doc-delete]")) await deleteDoc(id);
   else if (target.closest("[data-doc-open]") && id !== currentDoc.id) await openDocument(id);
 });
 
 /* ---------- Backup: the whole library in and out as one file ---------- */
 
-const BACKUP_TAG = "vellum/library";
+/**
+ * A document travels as a file of its own, not as a copy of the whole library. Exporting one
+ * means picking it; importing one adds it beside what you already have. A library file could
+ * only ever be restored wholesale, which is the wrong unit for moving a single drawing between
+ * two browsers - the thing people actually do.
+ */
+const DOC_TAG = "vellum/document";
 
-interface BackupFile {
-  tag: typeof BACKUP_TAG;
+interface DocumentFile {
+  tag: typeof DOC_TAG;
   version: 1;
   exported: string;
-  documents: { id: string; name: string; updated: number; data: ProjectFile }[];
+  name: string;
+  data: ProjectFile;
 }
 
-byId("btn-backup-export").addEventListener("click", async () => {
-  await flushSave();
-  let documents;
+/** A file name that survives every operating system, from the document's name. */
+function docFileName(name: string): string {
+  const base = name.replace(/[^\w. -]+/g, "").trim() || "document";
+  return `${base}.vellum.json`;
+}
+
+async function exportDoc(id: string): Promise<void> {
+  if (id === currentDoc.id) await flushSave();
+  let data: ProjectFile | null;
   try {
-    documents = await exportAllDocuments();
+    data = await loadDocument(id);
   } catch (err) {
     storageError(err);
     return;
   }
-  if (!documents.length) {
-    window.alert("There are no saved documents to back up yet.");
-    return;
-  }
-  const backup: BackupFile = {
-    tag: BACKUP_TAG,
+  if (!data) return;
+  const name = docsCache.find((d) => d.id === id)?.name ?? "Untitled";
+  const file: DocumentFile = {
+    tag: DOC_TAG,
     version: 1,
     exported: new Date().toISOString(),
-    documents,
+    name,
+    data,
   };
-  const stamp = new Date().toISOString().slice(0, 10);
-  downloadText(`vellum-backup-${stamp}.json`, JSON.stringify(backup), "application/json");
+  downloadText(docFileName(name), JSON.stringify(file), "application/json");
+}
+
+byId("btn-doc-import").addEventListener("click", () => {
+  byId<HTMLInputElement>("input-doc-file").click();
 });
 
-byId("btn-backup-import").addEventListener("click", () => {
-  byId<HTMLInputElement>("input-backup").click();
-});
-
-byId("input-backup").addEventListener("change", async (e) => {
+byId("input-doc-file").addEventListener("change", async (e) => {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
   input.value = "";
   if (!file) return;
-  let backup: BackupFile;
+  let parsed: DocumentFile;
   try {
-    backup = JSON.parse(await file.text()) as BackupFile;
+    parsed = JSON.parse(await file.text()) as DocumentFile;
   } catch {
     window.alert("That file is not valid JSON.");
     return;
   }
-  if (backup?.tag !== BACKUP_TAG || !Array.isArray(backup.documents)) {
-    window.alert("That is not a Vellum backup file.");
-    return;
-  }
-  const n = backup.documents.length;
-  if (
-    !window.confirm(
-      `Restore ${n} document${n === 1 ? "" : "s"}? They are added alongside your existing ones.`
-    )
-  ) {
+  if (parsed?.tag !== DOC_TAG || !parsed.data) {
+    window.alert("That is not a Vellum document file.");
     return;
   }
   await flushSave();
+  const id = uid("doc");
   try {
     docsCache = await listDocuments();
-    for (const doc of backup.documents) {
-      // Restored documents always get fresh ids, so a restore never overwrites current work.
-      await saveDocument({
-        id: uid("doc"),
-        name: uniqueName(doc.name || "Untitled"),
-        data: doc.data,
-      });
-      docsCache = await listDocuments();
-    }
+    // An imported document always gets a fresh id and a free name: it is added, never merged.
+    await saveDocument({ id, name: uniqueName(parsed.name || "Untitled"), data: parsed.data });
+    docsCache = await listDocuments();
   } catch (err) {
     storageError(err);
     return;
   }
   setSectionOpen("documents", true);
+  await openDocument(id);
   await refreshDocList();
 });
 

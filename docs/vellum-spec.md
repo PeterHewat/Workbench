@@ -488,6 +488,11 @@ name-in-id export, Help panel (`?` button).
   clamped height, because a text editor that grows without bound pushes everything past the edge.
 - **Document rows** carry no date: the list is ordered by recency, and a second line per row cost
   more than it told.
+- **Documents move one at a time:** a row's export writes that document (reference images
+  included) as `Name.vellum.json` with the tag `vellum/document`; the header's import reads one
+  back, always with a fresh id and a free name, so it is added beside what is there and never
+  overwrites it. There is no whole-library file: it could only ever be restored wholesale, which
+  is the wrong unit for moving one drawing between two browsers.
 - **Deleting documents:** empty documents (no shapes, no reference images) are deleted without a confirmation; others ask first.
 - **Document panel layout:** the SVG section is a fixed one third of the window height when open (no splitter; it takes no space when collapsed) and Primitives fills the rest. Creating a document (`+`) expands the Documents section and focuses the new name; adding a reference image expands Reference images. Docked left, full height, translucent frosted overlay on the canvas (canvas does not move). A splitter between the SVG text and the Primitives list resizes them (remembered). Undo/Redo buttons in the toolbar. Rulers are always on and start to the right of the SVG panel when it is open. Primitive names export as `id="<generated-id>_<name>"` (generated ids are 8 hex chars starting with a letter, e.g. `d8e4764a_my_shape`; spaces in names become `_`; other invalid characters are dropped; only the first `_` separates the parts) and are read back from that, or from a `<title>`, on import.
 - **Markers/gradients** are emitted into a `<defs>` block with ids derived from the element id.

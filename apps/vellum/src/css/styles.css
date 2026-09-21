@@ -960,10 +960,13 @@ body {
   font-size: 12px;
 }
 
+/* Label first, box second, like every other row: the label starts where the labels start, and
+   the control sits where the controls sit. */
 .fill-toggle {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   font-size: 12px;
   color: var(--muted);
@@ -1264,7 +1267,8 @@ body {
    calm; without hover there is nothing to reveal them, so they simply stay at full strength. */
 .doc-list li .doc-act,
 .doc-list li .doc-del {
-  display: inline-block;
+  /* No display here: .acc-icon-btn is the flex box that centres the icon, and overriding it
+     with inline-block pinned every icon to the left edge of its button. */
   opacity: 1;
   transition: opacity 0.12s ease;
 }
@@ -1377,12 +1381,19 @@ body {
   grid-column: 1 / -1;
 }
 
-/* One label column for the whole body, whether the label is a word or a checkbox and a word,
+/* One label column for the whole body, whether the label is a word or a word and a checkbox,
    so every control in a column starts at the same x. */
-.acc-body .field-row > span,
-.acc-body .field-row > .fill-toggle {
+.acc-body .field-row > span {
   flex: 0 0 auto;
   min-width: 58px;
+}
+
+/* A checkbox row keeps its box inside the label column, at the right of its word, so what
+   follows it still lines up with the controls above and below. */
+.acc-body .field-row > .fill-toggle {
+  flex: 0 0 58px;
+  width: 58px;
+  gap: 4px;
 }
 
 .acc-swatch {

@@ -352,19 +352,10 @@
                   <div class="menu-panel-toolbar-actions">
                     <button
                       type="button"
-                      id="btn-backup-export"
+                      id="btn-doc-import"
                       class="icon-btn"
-                      title="Back up every document to a file"
-                      aria-label="Export backup"
-                    >
-                      <svg class="ui-icon" aria-hidden="true"><use href="#icon-export" /></svg>
-                    </button>
-                    <button
-                      type="button"
-                      id="btn-backup-import"
-                      class="icon-btn"
-                      title="Restore documents from a backup file"
-                      aria-label="Import backup"
+                      title="Open a Vellum document file, added alongside your others"
+                      aria-label="Import a document"
                     >
                       <svg class="ui-icon" aria-hidden="true"><use href="#icon-import" /></svg>
                     </button>
@@ -1001,14 +992,17 @@
               <span data-help="mouse">Click</span><span data-help="touch">Tap</span> a document to
               open it; <span data-help="mouse">click</span><span data-help="touch">tap</span> the
               name of the open document to rename it in place. Every row reads like the other lists:
-              a dot showing which one is open, then duplicate and delete (deleting an empty document
-              doesn't ask; others do). <b>+</b> starts a new document (named Untitled, Untitled 2,
-              …; the current one is already saved). The last document reopens when you start the
-              app. Documents live in this browser only, so back them up: the ⬇ / ⬆ buttons in the
-              <b>Documents</b> header export every document to one JSON file and restore them again
-              (restored copies are added alongside your existing ones, never overwriting them).<span
-                data-help="mouse"
-              >
+              a dot showing which one is open, then duplicate, save to a file, and delete (deleting
+              an empty document doesn't ask; others do). <b>+</b> starts a new document (named
+              Untitled, Untitled 2, …; the current one is already saved). The last document reopens
+              when you start the app.
+            </li>
+            <li>
+              Documents live in this browser only, so move them out as files: the ⬇ on a row saves
+              that document (reference images included) as <code>Name.vellum.json</code>, and the ⬆
+              in the <b>Documents</b> header opens one back. A file holds one document, so an import
+              is always added beside what you already have and never overwrites it — backing up a
+              whole library means saving each one.<span data-help="mouse">
                 To empty a document, <kbd>Ctrl</kbd>+<kbd>A</kbd> then <kbd>Delete</kbd>.</span
               >
             </li>
@@ -1179,7 +1173,7 @@
     </div>
 
     <input type="file" id="input-import-svg" accept=".svg,image/svg+xml" hidden />
-    <input type="file" id="input-backup" accept=".json,application/json" hidden />
+    <input type="file" id="input-doc-file" accept=".json,application/json" hidden />
 
     <script type="module" src="/src/lib/app.ts"></script>
   </body>

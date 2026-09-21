@@ -105,16 +105,3 @@ export async function duplicateDocument(id: string, newId: string, name: string)
   tx.objectStore(DATA).put({ id: newId, data: rec.data });
   await done(tx);
 }
-
-/** Every stored document with its contents — used for the whole-library backup export. */
-export async function exportAllDocuments(): Promise<
-  { id: string; name: string; updated: number; data: ProjectFile }[]
-> {
-  const metas = await listDocuments();
-  const out = [];
-  for (const meta of metas) {
-    const data = await loadDocument(meta.id);
-    if (data) out.push({ ...meta, data });
-  }
-  return out;
-}
