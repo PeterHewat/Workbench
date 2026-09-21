@@ -133,6 +133,17 @@
             stroke-width="2"
           />
         </symbol>
+        <symbol id="icon-help" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M8.6 8.8a3.5 3.5 0 1 1 4.7 3.3c-.9.4-1.3 1-1.3 1.9v.6"
+          />
+          <circle cx="12" cy="18.4" r="1.5" fill="currentColor" />
+        </symbol>
         <symbol id="icon-split" viewBox="0 0 24 24">
           <path
             fill="none"
@@ -166,19 +177,6 @@
           <g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
             <rect x="2" y="2" width="8" height="8" rx="1" />
             <rect x="14" y="14" width="8" height="8" rx="1" />
-          </g>
-        </symbol>
-        <symbol id="icon-sliders" viewBox="0 0 24 24">
-          <g
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M4 7h11M19 7h1M4 17h5M13 17h7" />
-            <circle cx="17" cy="7" r="2" />
-            <circle cx="11" cy="17" r="2" />
           </g>
         </symbol>
         <symbol id="icon-text" viewBox="0 0 24 24">
@@ -604,101 +602,66 @@
           >
             <svg class="ui-icon" aria-hidden="true"><use href="#icon-text" /></svg>
           </button>
-        </div>
-
-        <div class="menu" id="menu-view-wrap">
           <button
             type="button"
-            class="menu-trigger menu-trigger--icon narrow-only"
-            id="btn-view-menu"
-            aria-haspopup="true"
-            aria-expanded="false"
-            title="Grid and view"
-            aria-label="Grid and view"
+            class="tool-btn"
+            id="btn-snap"
+            title="Snap to grid (G)"
+            aria-label="Snap to grid"
+            aria-pressed="false"
           >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-sliders" /></svg>
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-magnet" /></svg>
           </button>
-          <div
-            class="tool-group tool-group--view"
-            id="group-view"
-            role="group"
-            aria-label="Grid and view"
+        </div>
+
+        <div class="tool-group" id="group-view" role="group" aria-label="View">
+          <button
+            type="button"
+            class="tool-btn"
+            id="btn-fit-view"
+            title="Fit artboard in view"
+            aria-label="Fit view"
           >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-fit" /></svg>
+          </button>
+          <!-- One control, not three: it reads the zoom out loud and sets it from a list. -->
+          <div class="zoom-wrap" id="zoom-wrap">
             <button
               type="button"
-              class="tool-btn"
-              id="btn-snap"
-              title="Snap to grid (G)"
-              aria-label="Snap to grid"
-              aria-pressed="false"
-              data-label="Snap to grid"
+              class="tool-btn tool-btn--text zoom-level"
+              id="btn-zoom-level"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              title="Zoom — pick a level, or pinch and scroll to set your own"
+              aria-label="Zoom level"
             >
-              <svg class="ui-icon" aria-hidden="true"><use href="#icon-magnet" /></svg>
+              100%
             </button>
-            <button
-              type="button"
-              class="tool-btn"
-              id="btn-fit-view"
-              title="Fit artboard in view"
-              aria-label="Fit view"
-              data-label="Fit artboard in view"
-            >
-              <svg class="ui-icon" aria-hidden="true"><use href="#icon-fit" /></svg>
-            </button>
-            <div class="tool-group zoom-group" role="group" aria-label="Zoom">
-              <button
-                type="button"
-                class="tool-btn tool-btn--text"
-                id="btn-zoom-out"
-                title="Zoom out"
-                aria-label="Zoom out"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                class="tool-btn tool-btn--text"
-                id="btn-reset-zoom"
-                title="Zoom to 100%"
-                aria-label="Zoom to 100%"
-              >
-                100%
-              </button>
-              <button
-                type="button"
-                class="tool-btn tool-btn--text"
-                id="btn-zoom-in"
-                title="Zoom in"
-                aria-label="Zoom in"
-              >
-                +
-              </button>
-            </div>
-            <button
-              type="button"
-              class="tool-btn"
-              id="btn-final"
-              title="Final SVG: hide the grid, guides and reference images"
-              aria-label="Final SVG"
-              aria-pressed="false"
-              data-label="Final SVG"
-            >
-              <svg class="ui-icon" aria-hidden="true"><use href="#icon-eye" /></svg>
-            </button>
+            <ul class="zoom-menu hidden" id="zoom-menu" role="listbox" aria-label="Zoom level"></ul>
           </div>
+          <button
+            type="button"
+            class="tool-btn"
+            id="btn-final"
+            title="Final SVG: hide the grid, guides and reference images"
+            aria-label="Final SVG"
+            aria-pressed="false"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-eye" /></svg>
+          </button>
         </div>
 
         <!-- Help sits outside the view menu, last in the bar: on a phone the one button you
              reach for when you are lost should not itself be behind a menu. -->
         <button
           type="button"
-          class="tool-btn tool-btn--text help-btn"
+          class="tool-btn help-btn"
           id="btn-help"
           aria-expanded="false"
           title="Help — what everything does"
           aria-label="Help"
         >
-          ?
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-help" /></svg>
         </button>
 
         <p id="cursor-pos" class="cursor-readout mono" aria-live="polite">—</p>
@@ -1028,14 +991,20 @@
               marker shows where the point will land. Snapping applies to drawing, dragged handles
               and moved shapes<span data-help="mouse"
                 >; hold <kbd>Alt</kbd> to switch to alignment snapping instead</span
-              >. Whether the grid is shown, and how far apart its lines are, belong to the document,
-              so they live in the <b>SVG</b> section of the Document panel beside the artboard size.
+              >. It sits with the drawing tools, because that is what it is for. Whether the grid is
+              shown, and how far apart its lines are, belong to the document, so they live in the
+              <b>SVG</b> section of the Document panel beside the artboard size.
             </li>
             <li>
-              Fit view, zoom out / 100% / zoom in and the eye button (<b>Final SVG</b>: hides the
-              grid, guides and reference images). On a narrow screen these fold behind one button
-              near the right of the bar. <b>?</b> stays out of that menu, last in the bar: the one
-              button you reach for when you are lost should not itself be behind a menu.
+              <b>Zoom</b> is one control: it reads the current level and opens a list to set it, and
+              it follows the view however you changed it — a <span data-help="mouse">wheel</span
+              ><span data-help="touch">pinch</span> shows up here too. Beside it, fit the artboard
+              in view, and the eye (<b>Final SVG</b>: hides the grid, guides and reference images).
+            </li>
+            <li data-help="touch">
+              Nothing in the bar is behind a menu: Document, undo, redo, fit, zoom, Final SVG and
+              Help all fit across the top, and the tools and the magnet sit at the bottom where your
+              thumb is.
             </li>
             <li>
               Reloading the page puts you back where you were: the zoom and pan, and whichever

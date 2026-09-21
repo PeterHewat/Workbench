@@ -196,6 +196,13 @@ function syncPanel(state: EditorState): void {
   setToggle("btn-grid", state.grid.visible);
   setToggle("btn-final", state.finalOnly);
   setToggle("btn-snap", state.grid.snap);
+  const percent = `${Math.round(state.viewport.zoom * 100)}%`;
+  if (zoomBtn.textContent !== percent) zoomBtn.textContent = percent;
+  zoomMenu.querySelectorAll<HTMLElement>("[data-zoom]").forEach((btn) => {
+    const on = Math.abs(Number(btn.dataset.zoom) - state.viewport.zoom) < 1e-6;
+    btn.classList.toggle("active", on);
+    btn.parentElement?.setAttribute("aria-selected", String(on));
+  });
 
   const c = state.cursor;
   const x = c.snapActive ? c.snapX : c.x;
@@ -1327,7 +1334,11 @@ const NARROW = "(max-width: 760px)";
 const narrowQuery = window.matchMedia(NARROW);
 const toolGroup = byId("tool-group-tools");
 
-/** The tools are one element, moved between the top bar and the bottom bar - never duplicated. */
+/**
+ * The tools are one element, moved between the top bar and the bottom bar - never duplicated.
+ * Snap rides with them: it is a drawing aid, so on a phone it belongs under the thumb rather
+ * than up among the view controls.
+ */
 function placeTools(): void {
   const home = narrowQuery.matches ? byId("tool-bar") : byId("tool-slot");
   if (toolGroup.parentElement !== home) home.appendChild(toolGroup);
@@ -1335,27 +1346,47 @@ function placeTools(): void {
 placeTools();
 narrowQuery.addEventListener("change", () => {
   placeTools();
-  closeViewMenu();
   layoutPanels();
 });
 
-/* The grid and view controls collapse behind one button when the bar has no room. */
-const viewWrap = byId("menu-view-wrap");
-const viewBtn = byId("btn-view-menu");
+/**
+ * Zoom is one control: it says what the zoom is, and opens a list to set it.
+ *
+ * Three buttons - minus, 100%, plus - took three slots to do what one does, and on a phone that
+ * was most of the reason the view controls had to hide behind a menu at all. The label follows
+ * the viewport however it changed, so a pinch or a wheel is read back here too.
+ */
+const ZOOM_LEVELS = [0.25, 0.5, 0.75, 1, 1.5, 2, 4, 8];
+const zoomWrap = byId("zoom-wrap");
+const zoomBtn = byId("btn-zoom-level");
+const zoomMenu = byId("zoom-menu");
 
-function closeViewMenu(): void {
-  viewWrap.classList.remove("open");
-  viewBtn.setAttribute("aria-expanded", "false");
+zoomMenu.innerHTML = ZOOM_LEVELS.map(
+  (z) =>
+    `<li role="option" aria-selected="false"><button type="button" data-zoom="${z}">${Math.round(z * 100)}%</button></li>`
+).join("");
+
+function closeZoomMenu(): void {
+  zoomMenu.classList.add("hidden");
+  zoomBtn.setAttribute("aria-expanded", "false");
 }
 
-viewBtn.addEventListener("click", (e) => {
+zoomBtn.addEventListener("click", (e) => {
   e.stopPropagation();
-  const open = !viewWrap.classList.contains("open");
-  viewWrap.classList.toggle("open", open);
-  viewBtn.setAttribute("aria-expanded", String(open));
+  const open = zoomMenu.classList.contains("hidden");
+  zoomMenu.classList.toggle("hidden", !open);
+  zoomBtn.setAttribute("aria-expanded", String(open));
 });
+
+zoomMenu.addEventListener("click", (e) => {
+  const target = (e.target as HTMLElement).closest<HTMLElement>("[data-zoom]");
+  if (!target) return;
+  zoomTo(Number(target.dataset.zoom));
+  closeZoomMenu();
+});
+
 document.addEventListener("pointerdown", (e) => {
-  if (!viewWrap.contains(e.target as Node)) closeViewMenu();
+  if (!zoomWrap.contains(e.target as Node)) closeZoomMenu();
 });
 
 /* ---------- Document panel: docked left, full height, toggled by its button ---------- */
@@ -1390,8 +1421,6 @@ docBtn.addEventListener("click", () => setDocPanelVisible(docPanel.classList.con
 window.addEventListener("resize", layoutPanels);
 
 helpBtn.addEventListener("click", () => {
-  // The view menu has no business staying open over the panel it just opened.
-  closeViewMenu();
   setHelpVisible(helpPanel.classList.contains("hidden"));
 });
 
@@ -1681,27 +1710,15 @@ function fitToView(): ReturnType<typeof fitArtboardInView> {
   });
 }
 
-/** Zoom buttons work on the middle of the canvas, the way the wheel works on the cursor. */
-function zoomByStep(factor: number): void {
+/** Picking a level zooms about the middle of the canvas, the way the wheel works on the cursor. */
+function zoomTo(level: number): void {
   const rect = svg.getBoundingClientRect();
+  const factor = level / getState().viewport.zoom;
   setState({ viewport: zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor) });
 }
-byId("btn-zoom-in").addEventListener("click", () => zoomByStep(1.25));
-byId("btn-zoom-out").addEventListener("click", () => zoomByStep(1 / 1.25));
 
 byId("btn-fit-view").addEventListener("click", () => {
   setState({ viewport: fitToView() });
-});
-byId("btn-reset-zoom").addEventListener("click", () => {
-  const rect = svg.getBoundingClientRect();
-  setState((s) => ({
-    ...s,
-    viewport: {
-      panX: (rect.width - s.artboard.width) / 2,
-      panY: (rect.height - s.artboard.height) / 2,
-      zoom: 1,
-    },
-  }));
 });
 
 byId("btn-save-svg").addEventListener("click", () => {

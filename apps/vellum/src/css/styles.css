@@ -145,6 +145,14 @@ body {
   display: block;
 }
 
+/* A toolbar button is a target with a picture in it, and the picture is the whole point: at
+   18px in a 34-44px button the glyph read as a smudge rather than as what it means. */
+.tool-btn .ui-icon,
+.menu-trigger--icon .ui-icon {
+  width: 22px;
+  height: 22px;
+}
+
 .tool-btn {
   border: 1px solid var(--border);
   background: #2e3038;
@@ -1216,6 +1224,61 @@ body {
   font-weight: 600;
 }
 
+/* One control for zoom: it reads the current level and opens a list to set it. */
+.zoom-wrap {
+  position: relative;
+  display: flex;
+}
+
+.zoom-level {
+  min-width: 48px;
+  font-variant-numeric: tabular-nums;
+}
+
+.zoom-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 84px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  transform: translateX(-50%);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(37, 38, 43, 0.92);
+  /* Prefixed first: the minifier keeps only the last of the pair. */
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.zoom-menu button {
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.zoom-menu button:hover {
+  background: #3a3d45;
+}
+
+.zoom-menu button.active {
+  background: var(--accent-dim);
+}
+
 .grid-step-input {
   width: 48px;
   height: 32px;
@@ -1546,15 +1609,7 @@ body {
   display: none;
 }
 
-.narrow-only {
-  display: none;
-}
-
 @media (max-width: 760px) {
-  .narrow-only {
-    display: inline-flex;
-  }
-
   /* Both bars float over the canvas instead of taking a strip of it: on a phone the artboard
      is the scarce thing. The top one starts below the ruler, which it must not cover, and the
      bar itself is transparent and click-through - only the buttons take the pointer, so the
@@ -1586,7 +1641,7 @@ body {
   .top-bar .menu-trigger--icon,
   .top-bar > .help-btn,
   .tool-bar {
-    padding: 4px;
+    padding: 3px;
     border: 1px solid var(--border);
     border-radius: 12px;
     background: rgba(37, 38, 43, 0.86);
@@ -1598,12 +1653,11 @@ body {
   }
 
   /* A single-button pill matches a grouped one: the group's padding makes it taller, so the
-     lone buttons take that size rather than sitting 8px shorter beside it. */
+     lone buttons take that size rather than sitting 6px shorter beside it. */
   .top-bar .menu-trigger--icon,
   .top-bar > .help-btn {
-    width: auto;
-    min-width: 52px;
-    min-height: 52px;
+    min-width: 46px;
+    min-height: 46px;
     margin-left: 0;
   }
 
@@ -1611,61 +1665,50 @@ body {
     display: none;
   }
 
-  /* Out of the bar and into a labelled menu under its button: a column of rows reads and
-     hits far better on a phone than a wrapped grid of unlabelled icons. */
-  .tool-group--view {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    z-index: 100;
-    display: none;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 2px;
-    width: max-content;
-    min-width: 220px;
-    max-width: 92vw;
-    margin-top: 6px;
-    padding: 6px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: rgba(37, 38, 43, 0.86);
-    -webkit-backdrop-filter: blur(16px) saturate(140%);
-    backdrop-filter: blur(16px) saturate(140%);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  }
-
-  .tool-group--view > .tool-btn {
-    justify-content: flex-start;
-    gap: 10px;
-    width: 100%;
-    padding: 0 12px;
-    border-color: transparent;
-    background: transparent;
-    font-size: 13px;
-    font-weight: 400;
-  }
-
-  .tool-group--view > .tool-btn[data-label]::after {
-    content: attr(data-label);
-  }
-
-  .tool-group--view > .tool-btn.active {
-    background: var(--accent-dim);
-  }
-
-  /* Zoom is one control in three parts, so it keeps its own row. */
-  .tool-group--view .zoom-group {
-    justify-content: flex-start;
-    padding: 2px 8px;
-  }
-
-  #menu-view-wrap.open .tool-group--view {
-    display: flex;
-  }
-
-  #menu-view-wrap {
+  /* Seven controls on one line at 360px, so none of them is behind a menu. They shrink to fit
+     rather than being sized to the narrowest phone and left small on every other one. */
+  #group-view {
     margin-left: auto;
+  }
+
+  .top-bar .tool-btn,
+  .top-bar .menu-trigger--icon,
+  .tool-bar .tool-btn {
+    flex: 0 1 40px;
+    box-sizing: border-box;
+    width: 40px;
+    min-width: 32px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+  }
+
+  .top-bar .zoom-level {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 46px;
+    padding: 0 4px;
+  }
+
+  .top-bar,
+  .tool-bar {
+    gap: 4px;
+  }
+
+  .top-bar > .tool-group,
+  .tool-group {
+    gap: 4px;
+  }
+
+  /* The pill background comes later in the file than the pressed rule, so it has to restate it
+     or a toggled button and an open panel would read as unpressed on a phone only. */
+  .top-bar .menu-trigger[aria-expanded="true"],
+  .top-bar .tool-btn[aria-expanded="true"],
+  .top-bar .tool-btn.active[aria-pressed="true"],
+  .tool-bar .tool-btn.active[aria-pressed="true"],
+  .tool-bar .tool-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
   }
 
   .tool-bar {

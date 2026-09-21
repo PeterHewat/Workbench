@@ -441,8 +441,11 @@ name-in-id export, Help panel (`?` button).
 - **Document background** with alpha; transparent is the default and exports nothing (§12.1).
 - **Phone layout:** both toolbars float over the canvas instead of taking a strip of it, clear of
   the rulers, transparent between the buttons so the canvas still pans there. Fit-artboard reads
-  the strips they cover so it fits what is actually free. Help sits outside the view menu, last in
-  the bar.
+  the strips they cover so it fits what is actually free. There is no overflow menu: Document,
+  undo, redo, fit, zoom, Final SVG and Help fit across the top at 360px, and the drawing tools and
+  the snap magnet sit in the bottom bar. Buttons are the same size in both bars.
+- **Zoom is one control**, not three: a button reading the current level that opens a list of
+  presets, and that follows the viewport however it changed (wheel, pinch, fit).
 - **Help** opens on the pointer it detects and can be switched between mouse/keyboard and touch,
   because a laptop with a touch screen is both. It also carries an About section: what the app is,
   where documents live, and where the name comes from.

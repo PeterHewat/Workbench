@@ -74,7 +74,14 @@ type DragState =
       last: Point | null;
     }
   | { type: "pen-handle"; pathId: string; index: number }
-  | { type: "resize"; elementId: string; role: string; base: SceneElement }
+  | {
+      type: "resize";
+      elementId: string;
+      role: string;
+      base: SceneElement;
+      /** Handle centre minus pointer at the press: see `grabOffset`. */
+      grab: Point;
+    }
   | {
       type: "rotate";
       elementId: string;
@@ -556,6 +563,22 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     return {};
   }
 
+  /**
+   * Where the handle is relative to where you pressed.
+   *
+   * A handle's target is far wider than the dot - 22px across on a mouse, 44 on a finger - and a
+   * resize used to read the bare pointer position, so pressing anywhere but the exact centre
+   * jumped the shape by the difference. On the corner-radius handle it did not jump, it stalled:
+   * the radius clamps at zero, so a press on the outer half of the target had to be dragged all
+   * the way back before anything moved at all.
+   */
+  function grabOffset(handle: Element, world: Point): Point {
+    const cx = Number(handle.getAttribute("cx"));
+    const cy = Number(handle.getAttribute("cy"));
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return { x: 0, y: 0 };
+    return { x: cx - world.x, y: cy - world.y };
+  }
+
   /** Symmetric by default (partner mirrors); with Alt the partner keeps its position. */
   function applyHandleDrag(p: Anchor, world: Point, alt: boolean): void {
     if (drag?.type !== "handle") return;
@@ -732,7 +755,13 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         drag = null;
         return;
       }
-      arm(e, { type: "resize", elementId, role, base: deepClone(resizeTarget) });
+      arm(e, {
+        type: "resize",
+        elementId,
+        role,
+        base: deepClone(resizeTarget),
+        grab: grabOffset(resizeHandle, world),
+      });
       setState({
         selection: selectOnly(
           [elementId],
@@ -1057,7 +1086,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     if (drag?.type === "resize") {
       const d = drag;
       const el = findElement(d.elementId);
-      if (el) mutate(() => applyResize(el, d.role, world, d.base, e.altKey));
+      const at = { x: world.x + d.grab.x, y: world.y + d.grab.y };
+      if (el) mutate(() => applyResize(el, d.role, at, d.base, e.altKey));
       return;
     }
 
