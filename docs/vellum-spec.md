@@ -138,14 +138,14 @@ Future: per-vertex fill rules, pattern fills.
 
 ### 7.2 Supported SVG primitives (target completeness)
 
-| Tool    | SVG element                                    | v1      | Notes                                                                                                                                                          |
-| ------- | ---------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pen     | `<path>`, or `<line>`/`<polyline>`/`<polygon>` | **Yes** | One tool for all freeform shapes — see §7.4.                                                                                                                   |
-| Rect    | `<rect>`                                       | **Yes** | Corner radius `rx`/`ry` optional later. Hold Shift for a square.                                                                                               |
-| Ellipse | `<ellipse>`                                    | **Yes** | Hold Shift for a circle (no separate Circle tool).                                                                                                             |
-| Circle  | `<circle>`                                     | n/a     | No dedicated tool. An ellipse has a diagonal handle that keeps both radii equal, and an ellipse whose radii are equal exports as `<circle>`.                   |
-| Arc     | `<path>` cubic segments                        | **Yes** | Drag from one end to the other; a quarter turn, or a half circle with Shift. Stored as an ordinary two-point curve, so it is reshaped by dragging its handles. |
-| Text    | `<text>`                                       | **Yes** | Click to place; edit content/size/font/alignment in the row.                                                                                                   |
+| Tool    | SVG element                                    | v1      | Notes                                                                                                                                                                                                                                                                                                                                    |
+| ------- | ---------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pen     | `<path>`, or `<line>`/`<polyline>`/`<polygon>` | **Yes** | One tool for all freeform shapes — see §7.4.                                                                                                                                                                                                                                                                                             |
+| Rect    | `<rect>`                                       | **Yes** | Corner radius `rx`/`ry` optional later. Hold Shift for a square.                                                                                                                                                                                                                                                                         |
+| Ellipse | `<ellipse>`                                    | **Yes** | Hold Shift for a circle (no separate Circle tool).                                                                                                                                                                                                                                                                                       |
+| Circle  | `<circle>`                                     | n/a     | No dedicated tool. An ellipse has a diagonal handle that keeps both radii equal, and an ellipse whose radii are equal exports as `<circle>`.                                                                                                                                                                                             |
+| Arc     | `<path>` cubic segments                        | **Yes** | Drag from one end to the other; a quarter turn, or a half circle with Shift. What it adds over the pen is an _exact circular_ arc - a dragged pen curve can look circular without being so. Stored as an ordinary two-point curve and reshaped by dragging its handles, so it is a starting point rather than a second kind of geometry. |
+| Text    | `<text>`                                       | **Yes** | Click to place; edit content/size/font/alignment in the row.                                                                                                                                                                                                                                                                             |
 
 Each primitive is a **first-class object** in the scene graph with stable `id` (for project file and selection).
 
@@ -523,9 +523,12 @@ keyboard shortcuts is unusable without a keyboard. The rules that follow from th
   gives a marquee. There is no hand tool.
 - **Nothing needs a modifier held.** A square and a circle have their own diagonal handles, an
   angle can be typed, and grid snap is on by default.
-- **Nothing needs a keyboard.** The contextual bar beside the selection carries delete,
-  duplicate, z-order, close/open, group/ungroup, split and join; text is edited in place on the
-  canvas rather than in a panel over it.
+- **Nothing needs a keyboard.** The bar beside the selection carries delete, duplicate, z-order,
+  close/open, group/ungroup, split and join - and, while the pen has a path open, take back the
+  last point / close and finish / finish, which is how a path ends without a double-tap. It shows
+  on every pointer: a mouse has the shortcuts, but knowing them is not the same as having them to
+  hand. Text is edited in place on the canvas rather than in a panel over it.
 - **The chrome gets out of the way.** On a narrow screen the tools move to a bar under the canvas,
-  the grid and view controls collapse behind one button, and the cursor readout is hidden - one
-  57px row instead of four.
+  the view controls collapse into one labelled menu, and the cursor readout is hidden - one 57px
+  row of four buttons instead of four rows. Anything that belongs to the document rather than to
+  the moment (the grid's visibility and step) lives in the Document panel, not the toolbar.
