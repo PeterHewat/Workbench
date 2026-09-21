@@ -28,12 +28,6 @@ export function outerGroup(el: SceneElement | undefined): string | null {
   return groupsOf(el)[0] ?? null;
 }
 
-/** The innermost group, which is what the Primitives list marks with a colour. */
-export function innerGroup(el: SceneElement | undefined): string | null {
-  const chain = groupsOf(el);
-  return chain.length ? chain[chain.length - 1]! : null;
-}
-
 function samePrefix(a: readonly string[], b: readonly string[], depth: number): boolean {
   for (let i = 0; i < depth; i++) if (a[i] !== b[i]) return false;
   return true;

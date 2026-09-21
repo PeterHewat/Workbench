@@ -3,7 +3,7 @@ import type { EditorState } from "./types.js";
 const SIZE = 20;
 const STEPS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
 
-export interface RulerTargets {
+interface RulerTargets {
   topCanvas: HTMLCanvasElement;
   leftCanvas: HTMLCanvasElement;
   cornerEl: HTMLElement;

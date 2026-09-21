@@ -240,10 +240,8 @@ function elementsInMarquee(m: Marquee): string[] {
   return ids;
 }
 
-export type ZOrder = ZDirection;
-
 /** Z-order moves whole top-level blocks, so a group never gets split across the list. */
-export function moveZOrder(direction: ZOrder): void {
+export function moveZOrder(direction: ZDirection): void {
   const ids = new Set(getState().selection.elementIds);
   if (!ids.size) return;
   commit(() => {

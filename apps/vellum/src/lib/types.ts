@@ -144,9 +144,6 @@ export interface PolygonElement extends ElementBase {
   points: Point[];
 }
 
-/** Either open or closed run of plain vertices. */
-export type PolyElement = PolylineElement | PolygonElement;
-
 export interface TextElement extends ElementBase {
   type: "text";
   x: number;
@@ -168,7 +165,7 @@ export type SceneElement =
   | TextElement;
 
 /** Elements whose geometry is a list of points that can be edited individually. */
-export type PointsElement = PathElement | PolyElement;
+export type PointsElement = PathElement | PolylineElement | PolygonElement;
 
 export interface ReferenceImage {
   id: string;
@@ -203,7 +200,7 @@ export interface Viewport {
   zoom: number;
 }
 
-export interface RubberPreview {
+interface RubberPreview {
   type: "rubber";
   x1: number;
   y1: number;
@@ -213,7 +210,7 @@ export interface RubberPreview {
   strokeWidth: number;
 }
 
-export interface ShapePreview {
+interface ShapePreview {
   type: "shape";
   tag: "rect" | "ellipse" | "path";
   nodeAttrs: Record<string, number | string>;

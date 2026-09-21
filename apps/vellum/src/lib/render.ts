@@ -14,7 +14,14 @@ import {
   type AttrMap,
 } from "./model.js";
 import { applyCameraTransform } from "./viewport.js";
-import { cornerHandleInset, isCoarsePointer } from "./pointer.js";
+import {
+  cornerHandleInset,
+  HIT_R_COARSE,
+  HIT_R_FINE,
+  isCoarsePointer,
+  ROTATE_REACH_COARSE,
+  ROTATE_REACH_FINE,
+} from "./pointer.js";
 import { buildDefsMarkup } from "./io.js";
 import { expandToGroups } from "./groups.js";
 import type {
@@ -31,9 +38,11 @@ const NS = "http://www.w3.org/2000/svg";
 const HIT_MIN_PX = 10;
 /** Visible handle radius, in screen pixels: handles keep one size at every zoom level. */
 const HANDLE_R = 5;
-/** Pointer target radius, screen pixels. Coarse is ~44px across, the usual touch minimum. */
-const HIT_R_FINE = 11;
-const HIT_R_COARSE = 22;
+
+/** How far the rotate handle sits above the shape, in screen pixels. */
+function rotateOffset(): number {
+  return isCoarsePointer() ? ROTATE_REACH_COARSE : ROTATE_REACH_FINE;
+}
 
 /** Set once per render so the helpers below can size handles in screen pixels. */
 let zoom = 1;
@@ -244,13 +253,13 @@ function addHandleLine(parent: Element, x1: number, y1: number, x2: number, y2: 
  * as on a finger.
  */
 export function rotateHandleReach(): number {
-  return (isCoarsePointer() ? 48 : 28) + HANDLE_R;
+  return rotateOffset() + HANDLE_R;
 }
 
 function renderRotateHandle(parent: Element, el: SceneElement, state: EditorState): void {
   const box = localBBox(el);
   if (!box) return;
-  const reach = (isCoarsePointer() ? 48 : 28) / zoom;
+  const reach = rotateOffset() / zoom;
   const top = toWorldPoint(el, { x: box.x + box.width / 2, y: box.y });
   const out = toWorldPoint(el, { x: box.x + box.width / 2, y: box.y - reach });
   const rot = state.drawing?.rotateHandle;

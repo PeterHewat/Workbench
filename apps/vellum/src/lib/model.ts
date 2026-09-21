@@ -607,7 +607,7 @@ export function collectAlignPoints(
   return pts;
 }
 
-export interface AlignResult extends Point {
+interface AlignResult extends Point {
   guideX: number | null;
   guideY: number | null;
 }

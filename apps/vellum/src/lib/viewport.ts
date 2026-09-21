@@ -65,7 +65,7 @@ export function zoomAt(clientX: number, clientY: number, factor: number): Viewpo
 }
 
 /** Strips of the canvas covered by something floating over it, in screen pixels. */
-export interface ViewInsets {
+interface ViewInsets {
   top?: number;
   bottom?: number;
 }

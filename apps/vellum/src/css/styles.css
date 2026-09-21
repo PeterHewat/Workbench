@@ -1382,13 +1382,6 @@ body {
   font-style: normal;
 }
 
-.doc-item {
-  flex: 1;
-  min-width: 0;
-  padding: 3px 4px;
-  cursor: pointer;
-}
-
 .doc-title-input {
   display: block;
   width: 100%;
@@ -1411,13 +1404,6 @@ body {
 .doc-title-input:not([readonly]):focus {
   border-color: var(--border);
   background: #1a1b1e;
-}
-
-.doc-item small {
-  display: block;
-  padding: 0 7px;
-  color: var(--muted);
-  font-size: 10.5px;
 }
 
 /* The SVG source is the one box that keeps a scroller of its own: it is a text editor, and a
@@ -1475,6 +1461,14 @@ body {
   flex: 0 0 58px;
   width: 58px;
   gap: 4px;
+  justify-content: flex-start;
+}
+
+/* The word inside inherits the 72px label basis from .field-row span, which overflows the
+   58px toggle and shoves the box under the input. Let it be as wide as the word. */
+.acc-body .field-row > .fill-toggle > span {
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .acc-swatch {
