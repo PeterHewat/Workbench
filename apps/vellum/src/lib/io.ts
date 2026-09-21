@@ -668,6 +668,9 @@ export interface ImportResult {
 
 /** `keepIds` restores generated ids from the markup (used when editing the SVG text in place). */
 export function importSvgFile(text: string, { keepIds = false } = {}): ImportResult {
+  // A DOCTYPE is the only way to declare entities, so refusing it rules out entity-expansion
+  // bombs; SVG written by editors does not need one.
+  if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error("SVG with a DOCTYPE is not supported");
   const doc = new DOMParser().parseFromString(text, "image/svg+xml");
   const err = doc.querySelector("parsererror");
   if (err) {
@@ -746,7 +749,7 @@ function ancestry(
   for (const gEl of groups) {
     if (!groupIds.has(gEl)) {
       const gid = gEl.getAttribute("id") ?? "";
-      groupIds.set(gEl, keepIds && gid.startsWith("group-") ? gid : uid("group"));
+      groupIds.set(gEl, keepIds && /^group-[A-Za-z0-9_-]+$/.test(gid) ? gid : uid("group"));
     }
     chain.push(groupIds.get(gEl)!);
     matrix = multiply(matrix, parseTransform(gEl.getAttribute("transform")));
