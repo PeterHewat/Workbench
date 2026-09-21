@@ -26,11 +26,16 @@ export function hasHover(): boolean {
 }
 
 /**
- * How far inside a rect's top-right corner its radius handle sits, in screen pixels. Touch needs
- * the extra distance so the radius handle and the corner handle do not share the same target.
+ * How far a rect's extra handles - the corner radius one inside the top-right corner, the square
+ * one outside the bottom-right - sit from the corner they work from, per axis, in screen pixels.
+ *
+ * Derived from the pointer's own target radius (see HIT_R_* in render.ts) rather than picked by
+ * eye, so two handles can never share a target: they sit on the diagonal, which puts their
+ * centres `inset * sqrt(2)` apart, which is both radii plus a little air.
  */
 export function cornerHandleInset(): number {
-  return isCoarsePointer() ? 40 : 14;
+  const targetR = isCoarsePointer() ? 22 : 11;
+  return Math.round((targetR * 2 + 4) / Math.SQRT2);
 }
 
 export function initPointerKind(onChange: () => void): void {

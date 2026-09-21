@@ -1,4 +1,4 @@
-# Image Vector Tracer — Product Specification
+# Vellum — Product Specification
 
 ## 1. Purpose
 
@@ -499,7 +499,7 @@ name-in-id export, Help panel (`?` button).
 - **Rect corners:** the handle just inside the top-right corner sets the radius; hold Alt for independent horizontal/vertical radii (stored as `rx`/`ry`, `ry` absent means "same as rx").
 - **Join:** with two open paths selected, J / the Join button connects their closest ends (merging coincident ends, otherwise adding a straight segment). The joined shape is named "<first> <second>" when both have custom names, keeps whichever custom name exists otherwise, and gets a fresh default name when both are defaults (lines become a polyline). Dropping an end point onto another open path's end joins them too.
 - **Keyboard focus:** shortcuts are ignored only while typing in a text/number field, select or textarea; focused checkboxes/buttons don't block them, and clicking the canvas blurs the field.
-- **Clipboard:** copy writes JSON (`{tag:"vector-tracer/elements", elements}`) to the system clipboard; paste accepts that or SVG markup. Each paste offsets by the grid step (min 10).
+- **Clipboard:** copy writes JSON (`{tag:"vellum/elements", elements}`) to the system clipboard; paste accepts that or SVG markup. Each paste offsets by the grid step (min 10).
 
 ---
 

@@ -77,7 +77,10 @@ body {
   border-color: var(--accent);
 }
 
-.menu-trigger[aria-expanded="true"] {
+/* Anything that opens a panel reads as pressed while that panel is up, whether it is a menu
+   trigger or a plain toolbar button such as Help. */
+.menu-trigger[aria-expanded="true"],
+.tool-btn[aria-expanded="true"] {
   background: var(--accent-dim);
   border-color: var(--accent);
 }

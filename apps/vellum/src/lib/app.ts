@@ -46,6 +46,7 @@ import {
   deleteDocument,
   renameDocument,
   duplicateDocument,
+  formerStorageFound,
   type DocumentMeta,
 } from "./storage.js";
 import {
@@ -1402,7 +1403,7 @@ document.querySelectorAll<HTMLElement>("[data-help-mode]").forEach((btn) => {
 setHelpMode(isCoarsePointer() ? "touch" : "mouse");
 
 /* Collapsible sections (remembered). */
-const SECTIONS_KEY = "vector-tracer.sections";
+const SECTIONS_KEY = "vellum.sections";
 const sectionOpen: Record<string, boolean> = {
   documents: true,
   images: false,
@@ -1814,7 +1815,7 @@ renderAll(getState());
 setState({ viewport: fitToView() });
 
 /* ---------- Documents: autosaved to browser storage, macOS-style ---------- */
-const LAST_DOC_KEY = "vector-tracer.lastDoc";
+const LAST_DOC_KEY = "vellum.lastDoc";
 const docDirtyEl = byId("doc-dirty");
 const docListEl = byId("doc-list");
 let docsCache: DocumentMeta[] = [];
@@ -1887,7 +1888,7 @@ async function refreshDocList(): Promise<void> {
         <button type="button" class="acc-icon-btn doc-act" data-doc-dup title="Duplicate" aria-label="Duplicate document">
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-copy" /></svg>
         </button>
-        <button type="button" class="acc-icon-btn doc-act" data-doc-save title="Save this document to a file" aria-label="Export document">
+        <button type="button" class="acc-icon-btn doc-act" data-doc-save title="Export document" aria-label="Export document">
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-export" /></svg>
         </button>
         <button type="button" class="acc-icon-btn acc-trash doc-del" data-doc-delete title="Delete" aria-label="Delete document">
@@ -2192,8 +2193,32 @@ window.addEventListener("beforeunload", (e) => {
   }
 });
 
+const RENAME_NOTICE_KEY = "vellum.renameNotice";
+
+/** Said once: documents from before the rename are still on this machine, under the old name. */
+async function noticeFormerStorage(): Promise<void> {
+  if (docsCache.length) return;
+  try {
+    if (localStorage.getItem(RENAME_NOTICE_KEY)) return;
+  } catch {
+    return;
+  }
+  if (!(await formerStorageFound())) return;
+  try {
+    localStorage.setItem(RENAME_NOTICE_KEY, "1");
+  } catch {
+    /* said once per session rather than once ever */
+  }
+  window.alert(
+    "This app used to be called vector-tracer, and it stored documents under that name. " +
+      "They are still in this browser but are not read here. To bring one across, open the " +
+      "older version, export the document to a file, and import it with the ↑ button."
+  );
+}
+
 void (async () => {
   await refreshDocList();
+  await noticeFormerStorage();
   let last: string | null = null;
   try {
     last = localStorage.getItem(LAST_DOC_KEY);

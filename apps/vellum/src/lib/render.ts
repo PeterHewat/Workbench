@@ -309,14 +309,16 @@ function renderPrimitiveHandles(
       put(el.x + el.width, el.y + el.height, "br");
       const off = cornerHandleInset() / zoom;
       // Each of the two extra handles is tethered to the corner it works from, so which is
-      // which is visible rather than something to remember.
-      const radiusX = el.x + el.width - off - cornerRadius(el);
-      const radiusY = el.y + off + cornerRadiusY(el);
+      // which is visible rather than something to remember. The radius handle is held inside
+      // the rect: a large radius on a small rect would otherwise carry it off the shape.
+      const radiusX = Math.max(el.x + el.width / 2, el.x + el.width - off - cornerRadius(el));
+      const radiusY = Math.min(el.y + el.height / 2, el.y + off + cornerRadiusY(el));
       tether(radiusX, radiusY, el.x + el.width, el.y);
       put(radiusX, radiusY, "corner");
-      // Just outside the bottom-right corner: drag it and the rect stays a square.
-      const squareX = el.x + el.width + off / 2;
-      const squareY = el.y + el.height + off / 2;
+      // Just outside the bottom-right corner, the same distance out as the radius handle is in:
+      // drag it and the rect stays a square.
+      const squareX = el.x + el.width + off;
+      const squareY = el.y + el.height + off;
       tether(squareX, squareY, el.x + el.width, el.y + el.height);
       put(squareX, squareY, "uniform");
       break;

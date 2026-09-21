@@ -56,7 +56,7 @@ import type {
 
 const CLOSE_TOL = 12;
 const ALIGN_TOL_PX = 6;
-const CLIP_TAG = "vector-tracer/elements";
+const CLIP_TAG = "vellum/elements";
 
 /** The tools that are drawn by dragging a shape out on the canvas. */
 type ShapeTool = "rect" | "ellipse";
