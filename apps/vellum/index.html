@@ -73,6 +73,8 @@
             d="M4 13l5 5L20 6"
           />
         </symbol>
+        <!-- Each shows the state the button puts the path into, and the difference is the whole
+             base rather than a detail: at 22px a dashed edge and a solid one are the same icon. -->
         <symbol id="icon-close-path" viewBox="0 0 24 24">
           <path
             fill="none"
@@ -80,10 +82,8 @@
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            d="M6 19V7l7-3 5 6v9z"
+            d="M5 19 12 5l7 14z"
           />
-          <circle cx="6" cy="19" r="2.2" fill="currentColor" />
-          <circle cx="6" cy="7" r="2.2" fill="currentColor" />
         </symbol>
         <symbol id="icon-open-path" viewBox="0 0 24 24">
           <path
@@ -92,10 +92,10 @@
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            d="M6 19V7l7-3 5 6v9"
+            d="M5 19 12 5l7 14"
           />
-          <circle cx="6" cy="19" r="2.2" fill="currentColor" />
-          <circle cx="18" cy="19" r="2.2" fill="currentColor" />
+          <circle cx="5" cy="19" r="2.6" fill="currentColor" />
+          <circle cx="19" cy="19" r="2.6" fill="currentColor" />
         </symbol>
         <symbol id="icon-split" viewBox="0 0 24 24">
           <path
@@ -903,8 +903,14 @@
             <li>
               Select a shape and a small bar appears next to it with what applies: delete,
               duplicate, send backward / bring forward (dimmed when there is nowhere to go), close
-              or open a path, split at a selected point, join two paths, group and ungroup, and edit
-              text. It is the same set the keyboard shortcuts reach, within reach of a thumb.
+              or open a path, join two paths, group and ungroup, and edit text. It is the same set
+              the keyboard shortcuts reach, within reach of a thumb.
+            </li>
+            <li>
+              Select one <em>point</em> of a path and the bar narrows to that point: split the path
+              here, close or open it, delete this point. The whole-shape actions step aside, because
+              beside a highlighted point they would act on something other than what is highlighted
+              — delete most of all.
             </li>
             <li>
               While the pen has a path open the bar shows that instead: take back the last point,

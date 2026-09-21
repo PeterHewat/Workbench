@@ -101,10 +101,54 @@ function drawingActions(state: EditorState): Action[] {
   ];
 }
 
+/** Closing or opening the path, when there is a path and closing it would show. */
+function closeAction(el: SceneElement): Action | null {
+  if (!worthClosing(el)) return null;
+  const closed = isClosedShape(el);
+  return {
+    // The key carries the state: the bar is rebuilt when the signature changes, and a key that
+    // read the same either way left the button showing the action it had just performed.
+    key: closed ? "open" : "close",
+    label: closed ? "Open the path" : "Close the path",
+    icon: closed ? "icon-open-path" : "icon-close-path",
+    run: () => handlers.toggleClosed(el.id, !closed),
+  };
+}
+
+/**
+ * What the bar offers when one point of a path is selected.
+ *
+ * Everything else the bar can do - duplicate, z-order, group - acts on the whole shape, which
+ * reads as a lie next to a highlighted point, and delete is the one button whose meaning really
+ * does change with the selection. So the bar narrows to the point, and says so.
+ */
+function pointActions(el: SceneElement): Action[] {
+  const out: Action[] = [];
+  out.push({
+    key: "split",
+    label: "Split the path at this point",
+    icon: "icon-split",
+    run: handlers.splitPoint,
+  });
+  const close = closeAction(el);
+  if (close) out.push(close);
+  out.push({
+    key: "delete-point",
+    label: "Delete this point",
+    icon: "icon-trash",
+    danger: true,
+    run: handlers.remove,
+  });
+  return out;
+}
+
 function selectionActions(state: EditorState): Action[] {
   const sel = selectedElements();
   const out: Action[] = [];
   const single = sel.length === 1 ? sel[0]! : null;
+
+  const edited = state.selection.pathEdit ? findElement(state.selection.pathEdit.pathId) : null;
+  if (edited) return pointActions(edited);
 
   if (single?.type === "text") {
     out.push({
@@ -114,23 +158,8 @@ function selectionActions(state: EditorState): Action[] {
       run: () => handlers.editText(single.id),
     });
   }
-  if (single && worthClosing(single)) {
-    const closed = isClosedShape(single);
-    out.push({
-      key: "closed",
-      label: closed ? "Open the path" : "Close the path",
-      icon: closed ? "icon-open-path" : "icon-close-path",
-      run: () => handlers.toggleClosed(single.id, !closed),
-    });
-  }
-  if (state.selection.pathEdit) {
-    out.push({
-      key: "split",
-      label: "Split at the selected point",
-      icon: "icon-split",
-      run: handlers.splitPoint,
-    });
-  }
+  const close = single ? closeAction(single) : null;
+  if (close) out.push(close);
   if (sel.length === 2 && sel.every(canJoin)) {
     out.push({ key: "join", label: "Join the two paths", icon: "icon-join", run: handlers.join });
   }
