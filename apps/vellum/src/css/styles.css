@@ -1494,6 +1494,11 @@ body {
   .doc-size-row {
     --ctl-h: 40px;
   }
+
+  .help-mode-btn {
+    min-height: 36px;
+    padding: 0 10px;
+  }
 }
 
 /* Position and size: four small numbers in a grid rather than four full-width rows. */
