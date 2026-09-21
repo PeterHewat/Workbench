@@ -23,7 +23,7 @@ import {
 } from "./model.js";
 import { canMoveSelectionZ, groupsOf, outerGroup } from "./groups.js";
 import { worldToScreen } from "./viewport.js";
-import { rotateHandleReach } from "./render.js";
+import { HANDLE_EXTENT, outerHandlePoints } from "./render.js";
 import type { EditorState, SceneElement } from "./types.js";
 
 export interface ActionBarHandlers {
@@ -219,7 +219,6 @@ interface AnchorRect {
   right: number;
   top: number;
   bottom: number;
-  rotatable: boolean;
 }
 
 /** The screen rectangle the bar sits beside: the selection, or the path being drawn. */
@@ -230,6 +229,7 @@ function anchorRect(state: EditorState): AnchorRect | null {
   let right = -Infinity;
   let top = Infinity;
   let bottom = -Infinity;
+  const { zoom } = state.viewport;
   for (const el of shapes) {
     // The local box turned into place - the same outline the selection draws - so the bar sits
     // against what you can see rather than against a larger upright box around it.
@@ -249,10 +249,19 @@ function anchorRect(state: EditorState): AnchorRect | null {
       top = Math.min(top, p.y);
       bottom = Math.max(bottom, p.y);
     }
+    // Handles standing outside the outline count as part of the selection, on whichever side
+    // the rotation put them, so the bar never lands on top of one.
+    const rotatable = !drawing && shapes.length === 1 && canRotate(el);
+    for (const world of outerHandlePoints(el, zoom, rotatable)) {
+      const p = worldToScreen(world.x, world.y);
+      left = Math.min(left, p.x - HANDLE_EXTENT);
+      right = Math.max(right, p.x + HANDLE_EXTENT);
+      top = Math.min(top, p.y - HANDLE_EXTENT);
+      bottom = Math.max(bottom, p.y + HANDLE_EXTENT);
+    }
   }
   if (!Number.isFinite(left)) return null;
-  const rotatable = !drawing && shapes.length === 1 && canRotate(shapes[0]!);
-  return { left, right, top, bottom, rotatable };
+  return { left, right, top, bottom };
 }
 
 /**
@@ -278,9 +287,7 @@ function position(state: EditorState): void {
     window.innerWidth - size.width - 8
   );
   const band = freeBand();
-  // Above, the rotate handle hangs off the top of the shape and has to be cleared. Below there
-  // is nothing in the way, so the bar sits close rather than a handle's height adrift.
-  const above = at.top - size.height - GAP - (at.rotatable ? rotateHandleReach() : 0);
+  const above = at.top - size.height - GAP;
   const y = above >= band.top ? above : at.bottom + GAP;
   bar.style.left = `${Math.max(8, x)}px`;
   bar.style.top = `${Math.max(band.top, Math.min(y, band.bottom - size.height))}px`;

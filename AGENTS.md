@@ -62,4 +62,7 @@ that in as the base, which fails quietly: the page loads and every asset 404s.
 
 ## Shell
 
+- **Scripted edits and one-off scripts: write them in TypeScript and run with `bun`**, not Python, sed or awk. Bun is already required by this repo and behaves the same on Windows, macOS and Linux. Do not assume `python`/`python3` exists or means a real interpreter: on Windows, `python3` is often a Microsoft Store stub that fails. For a handful of edits, the Edit tool is fine.
+- If a tool or command fails for an environmental reason, note the cause and switch to a portable route — do not retry variants of the same command.
+
 Do not leave background servers running. Bounded commands (`check`, `verify`, `build`) should use a timeout with buffer. Interactive auth CLIs: ask the user to run them.

@@ -1160,9 +1160,13 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       case "rect": {
         if (base.type !== "rect") return;
         if (role === "uniform") {
-          // The top-left corner stays put and the rect stays square, so this is the square
-          // handle a keyboard modifier used to be needed for.
-          const side = Math.max(0.5, Math.max(world.x - base.x, world.y - base.y));
+          // The top-left corner stays put and the rect stays square. The handle rides on the
+          // diagonal a fixed distance outside the bottom-right corner, so the side is the
+          // pointer's distance along that diagonal less the offset. Taking the larger of the two
+          // axes instead made the rect jump, most visibly once it was rotated.
+          const off = cornerHandleInset() / getState().viewport.zoom;
+          const along = (world.x - base.x + (world.y - base.y)) / 2;
+          const side = Math.max(0.5, along - off);
           el.width = side;
           el.height = side;
           reanchor(el, base, { x: base.x, y: base.y });

@@ -30,6 +30,7 @@ import type {
   PathEdit,
   PathElement,
   Point,
+  RectElement,
   Preview,
   SceneElement,
 } from "./types.js";
@@ -247,21 +248,53 @@ function addHandleLine(parent: Element, x1: number, y1: number, x2: number, y2: 
   add(parent, "line", { class: "handle-line", x1, y1, x2, y2 });
 }
 
-/**
- * How far above a shape the rotate handle hangs, in screen pixels, dot included. Anything that
- * wants to sit above the selection has to clear it, and the distance is not the same on a mouse
- * as on a finger.
- */
-export function rotateHandleReach(): number {
-  return rotateOffset() + HANDLE_R;
+/** Where the rotate handle sits, and the top-centre of the shape it hangs from, in world units. */
+function rotateHandlePlacement(
+  el: SceneElement,
+  zoomLevel: number
+): { top: Point; out: Point } | null {
+  const box = localBBox(el);
+  if (!box) return null;
+  const reach = rotateOffset() / zoomLevel;
+  const cx = box.x + box.width / 2;
+  return {
+    top: toWorldPoint(el, { x: cx, y: box.y }),
+    out: toWorldPoint(el, { x: cx, y: box.y - reach }),
+  };
 }
 
+/** Where a rect's square handle sits, in the rect's own frame: outside its bottom-right corner. */
+function squareHandleLocal(el: RectElement, zoomLevel: number): Point {
+  const off = cornerHandleInset() / zoomLevel;
+  return { x: el.x + el.width + off, y: el.y + el.height + off };
+}
+
+/**
+ * The handles that stand outside a shape's own outline (the rotate handle, a rect's square
+ * handle), in world units and wherever the rotation has put them. Whatever floats beside the
+ * selection has to keep clear of these, on whichever side they end up.
+ */
+export function outerHandlePoints(
+  el: SceneElement,
+  zoomLevel: number,
+  rotatable: boolean
+): Point[] {
+  const points: Point[] = [];
+  if (rotatable) {
+    const place = rotateHandlePlacement(el, zoomLevel);
+    if (place) points.push(place.out);
+  }
+  if (el.type === "rect") points.push(toWorldPoint(el, squareHandleLocal(el, zoomLevel)));
+  return points;
+}
+
+/** How far a handle's dot reaches from its centre, in screen pixels. */
+export const HANDLE_EXTENT = HANDLE_R;
+
 function renderRotateHandle(parent: Element, el: SceneElement, state: EditorState): void {
-  const box = localBBox(el);
-  if (!box) return;
-  const reach = rotateOffset() / zoom;
-  const top = toWorldPoint(el, { x: box.x + box.width / 2, y: box.y });
-  const out = toWorldPoint(el, { x: box.x + box.width / 2, y: box.y - reach });
+  const place = rotateHandlePlacement(el, zoom);
+  if (!place) return;
+  const { top, out } = place;
   const rot = state.drawing?.rotateHandle;
   const rotating = rot && rot.elementId === el.id ? rot : null;
   const hx = rotating ? rotating.x : out.x;
@@ -327,10 +360,9 @@ function renderPrimitiveHandles(
       put(radiusX, radiusY, "corner");
       // Just outside the bottom-right corner, the same distance out as the radius handle is in:
       // drag it and the rect stays a square.
-      const squareX = el.x + el.width + off;
-      const squareY = el.y + el.height + off;
-      tether(squareX, squareY, el.x + el.width, el.y + el.height);
-      put(squareX, squareY, "uniform");
+      const square = squareHandleLocal(el, zoom);
+      tether(square.x, square.y, el.x + el.width, el.y + el.height);
+      put(square.x, square.y, "uniform");
       break;
     }
     case "circle":
