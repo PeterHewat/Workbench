@@ -52,6 +52,9 @@ export function readSessionView(): SessionView {
   }
 }
 
+/** Read once, at load, before the first render would overwrite what it holds with a fitted view. */
+export const savedView = readSessionView();
+
 export function writeSessionView(patch: Partial<SessionView>): void {
   try {
     sessionStorage.setItem(KEY, JSON.stringify({ ...readSessionView(), ...patch }));
