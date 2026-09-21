@@ -455,12 +455,7 @@ body {
 }
 
 .acc-body {
-  display: none;
   padding: 8px 10px 10px;
-}
-
-.acc-item.expanded .acc-body {
-  display: block;
 }
 
 .acc-body .field-row input {
@@ -754,10 +749,14 @@ body {
   font-size: 11.5px;
 }
 
+/* Size and Grid share one row. Everything in it - inputs and the grid toggle alike - takes the
+   same height, or the button makes its half of the row taller than the other. */
 .doc-size-row {
+  --ctl-h: 28px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 14px;
   margin-bottom: 8px;
   color: var(--muted);
   font-size: 12px;
@@ -765,6 +764,12 @@ body {
 
 .doc-size-row .doc-size {
   margin-left: 0;
+}
+
+.doc-size-row .doc-size input {
+  width: 58px;
+  height: var(--ctl-h);
+  box-sizing: border-box;
 }
 
 #doc-primitives .doc-section-body {
@@ -1137,6 +1142,7 @@ body {
 .grid-step-input {
   width: 48px;
   height: 32px;
+  box-sizing: border-box;
   padding: 0 4px;
   text-align: center;
   border-radius: 4px;
@@ -1297,7 +1303,8 @@ body {
   flex: 0 0 33.333vh;
 }
 
-/* One control width for every input, dropdown, swatch and file chip in the row bodies. */
+/* One control height for every input, dropdown, swatch and file chip in the row bodies, and a
+   width that gives way so two of these rows fit side by side. */
 .acc-body {
   --field-w: 150px;
 }
@@ -1306,11 +1313,36 @@ body {
   .field-row
   :is(input:not([type="checkbox"]):not([type="radio"]), select, .color-swatch, .file-chip) {
   box-sizing: border-box;
-  flex: 0 0 var(--field-w);
-  width: var(--field-w);
-  max-width: none;
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  max-width: var(--field-w);
   height: 26px;
   margin: 0;
+}
+
+/* A shape has a dozen fields, most of them a label and one small control: side by side they take
+   half the scrolling. auto-fit drops back to one column when the panel is too narrow to bear it,
+   which is what a phone gets. */
+.acc-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  align-content: start;
+  gap: 0 14px;
+}
+
+.acc-item:not(.expanded) .acc-body {
+  display: none;
+}
+
+.acc-body > .geom-grid,
+.acc-body > .field-row--wide {
+  grid-column: 1 / -1;
+}
+
+.acc-body .field-row > span {
+  flex: 0 0 auto;
+  min-width: 58px;
 }
 
 .acc-swatch {
@@ -1401,8 +1433,8 @@ body {
     min-height: 40px;
   }
 
-  .grid-step-input {
-    height: 44px;
+  .doc-size-row {
+    --ctl-h: 40px;
   }
 }
 
@@ -1689,10 +1721,12 @@ body {
   border-color: var(--border);
 }
 
-/* The grid row in the Document panel puts its toggle beside the step, like the size row. */
+/* The grid toggle sits inside the shared row, so it matches the inputs beside it. */
 .doc-size-row .doc-size .tool-btn {
-  min-width: 32px;
-  min-height: 32px;
+  width: var(--ctl-h);
+  min-width: var(--ctl-h);
+  height: var(--ctl-h);
+  min-height: var(--ctl-h);
 }
 
 /* Ties a handle to the corner it works from: the corner-radius and square handles sit away

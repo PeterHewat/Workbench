@@ -619,7 +619,7 @@ function primitiveBodyHtml(el: SceneElement): string {
   const rows: string[] = [geometryRowsHtml(el)];
   if (el.type === "text") {
     rows.push(
-      `<div class="field-row"><span>Text</span><input type="text" data-field="text" value="${escapeAttr(el.text || "")}" /></div>`,
+      `<div class="field-row field-row--wide"><span>Text</span><input type="text" data-field="text" value="${escapeAttr(el.text || "")}" /></div>`,
       `<div class="field-row"><span>Size</span><input type="number" data-field="fontSize" min="1" step="1" value="${el.fontSize || 48}" /></div>`,
       `<div class="field-row"><span>Font</span>${selectHtml("fontFamily", el.fontFamily || "sans-serif", ["sans-serif", "serif", "monospace", "cursive"])}</div>`,
       `<div class="field-row"><span>Align</span>${selectHtml("anchor", el.anchor || "start", [
@@ -692,7 +692,7 @@ function gradientStopsHtml(el: SceneElement): string {
         </div>`
     )
     .join("");
-  return `<div class="field-row grad-only grad-stops-row"><span>Stops</span>
+  return `<div class="field-row field-row--wide grad-only grad-stops-row"><span>Stops</span>
       <div class="grad-stops">${rows}
         <button type="button" class="grad-stop-add" data-stop-add title="Add a stop">+ Stop</button>
       </div>
@@ -1151,7 +1151,7 @@ function imageListKeyOf(state: EditorState): string {
 
 function imageBodyHtml(img: ReferenceImage): string {
   return `<div class="acc-body">
-      <label class="field-row">
+      <label class="field-row field-row--wide">
         <span>File</span>
         <button type="button" class="file-chip" data-action="replace-file" title="Click to replace the source image">${escapeXml(img.fileName || img.name)}</button>
       </label>
