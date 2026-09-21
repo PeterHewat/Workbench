@@ -87,10 +87,11 @@ import { initPointerKind, isCoarsePointer } from "./pointer.js";
 import { readSessionView, writeSessionView } from "./session.js";
 import {
   canMoveWithinParent,
+  childBlocks,
   groupsOf,
-  innerGroup,
   moveWithinParent,
   outerGroup,
+  type Block,
 } from "./groups.js";
 import { scaleAbout, transformElement } from "./transform.js";
 import { registerServiceWorker } from "@workbench/ui";
@@ -777,6 +778,12 @@ function headerSwatchStyle(el: SceneElement): string {
   return `border-color:${border};background:${inside}`;
 }
 
+/**
+ * The list is a tree, because the document is one. A group is a single bracket drawn down the
+ * left of the rows inside it, and a group within a group is a bracket within a bracket - not a
+ * list of its own, and not a coloured stripe repeated on every row, which said "these rows are
+ * the same kind of thing" rather than "these rows are one thing".
+ */
 function buildPrimitiveList(state: EditorState): void {
   primitiveListEl.innerHTML = "";
   if (!state.elements.length) {
@@ -786,47 +793,62 @@ function buildPrimitiveList(state: EditorState): void {
     primitiveListEl.appendChild(li);
     return;
   }
-  const selected = new Set(state.selection.elementIds);
-  state.elements.forEach((el, index) => {
-    const isSelected = selected.has(el.id);
-    const li = document.createElement("li");
-    li.className = `acc-item${state.ui.expandedElementId === el.id ? " expanded" : ""}`;
-    li.dataset.elementId = el.id;
-    li.innerHTML = `
-      ${accHeaderHtml({
-        on: isSelected,
-        dotTitle: isSelected ? "Deselect" : "Select",
-        name: el.name || "",
-        placeholder: el.type,
-        extra: `<span class="acc-swatch" style="${headerSwatchStyle(el)}"></span>`,
-        canUp: canMoveWithinParent(state.elements, el.id, -1),
-        canDown: canMoveWithinParent(state.elements, el.id, 1),
-        index,
-        count: state.elements.length,
-      })}
-      <div class="acc-body">${primitiveBodyHtml(el)}</div>
-    `;
-    li.dataset.filltype = el.fillType || "solid";
-    li.classList.toggle("acc-item--invisible", isInvisible(el));
-    if (isInvisible(el)) {
-      const sw = li.querySelector<HTMLElement>(".acc-swatch");
-      if (sw) sw.title = "Invisible: no stroke and no fill";
+  appendBlocks(primitiveListEl, state, { start: 0, end: state.elements.length }, 0);
+}
+
+/** One level of the tree: each block is either a nested group or a single row. */
+function appendBlocks(parent: HTMLElement, state: EditorState, range: Block, depth: number): void {
+  for (const block of childBlocks(state.elements, range, depth)) {
+    const gid = groupsOf(state.elements[block.start])[depth];
+    if (gid == null) {
+      parent.appendChild(primitiveRow(state, block.start));
+      continue;
     }
-    const gid = innerGroup(el);
-    if (gid) {
-      li.classList.add("acc-item--grouped");
-      li.style.setProperty("--gc", groupColor(gid));
-      // One indent step per level of nesting, so the list reads as the tree it is.
-      li.style.setProperty("--depth", String(groupsOf(el).length));
-    }
-    wireAccRow(li, {
-      onExpand: () => toggleElementExpanded(el.id),
-      onDot: () => toggleElementSelected(el.id),
-      onDelete: () => deletePrimitive(el.id),
-      onMove: (dir, toEnd) => reorder("elements", el.id, dir, toEnd),
-    });
-    primitiveListEl.appendChild(li);
+    const run = document.createElement("li");
+    run.className = "group-run";
+    run.dataset.groupId = gid;
+    run.style.setProperty("--gc", groupColor(gid));
+    const inner = document.createElement("ul");
+    inner.className = "group-items";
+    run.appendChild(inner);
+    appendBlocks(inner, state, block, depth + 1);
+    parent.appendChild(run);
+  }
+}
+
+function primitiveRow(state: EditorState, index: number): HTMLElement {
+  const el = state.elements[index]!;
+  const isSelected = state.selection.elementIds.includes(el.id);
+  const li = document.createElement("li");
+  li.className = `acc-item${state.ui.expandedElementId === el.id ? " expanded" : ""}`;
+  li.dataset.elementId = el.id;
+  li.innerHTML = `
+    ${accHeaderHtml({
+      on: isSelected,
+      dotTitle: isSelected ? "Deselect" : "Select",
+      name: el.name || "",
+      placeholder: el.type,
+      extra: `<span class="acc-swatch" style="${headerSwatchStyle(el)}"></span>`,
+      canUp: canMoveWithinParent(state.elements, el.id, -1),
+      canDown: canMoveWithinParent(state.elements, el.id, 1),
+      index,
+      count: state.elements.length,
+    })}
+    <div class="acc-body">${primitiveBodyHtml(el)}</div>
+  `;
+  li.dataset.filltype = el.fillType || "solid";
+  li.classList.toggle("acc-item--invisible", isInvisible(el));
+  if (isInvisible(el)) {
+    const sw = li.querySelector<HTMLElement>(".acc-swatch");
+    if (sw) sw.title = "Invisible: no stroke and no fill";
+  }
+  wireAccRow(li, {
+    onExpand: () => toggleElementExpanded(el.id),
+    onDot: () => toggleElementSelected(el.id),
+    onDelete: () => deletePrimitive(el.id),
+    onMove: (dir, toEnd) => reorder("elements", el.id, dir, toEnd),
   });
+  return li;
 }
 
 function updatePrimitiveListValues(state: EditorState): void {

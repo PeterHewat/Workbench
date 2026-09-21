@@ -398,16 +398,29 @@ describe("groups and transforms on import", () => {
     const r = importSvgFile(
       '<svg xmlns="http://www.w3.org/2000/svg"><g id="group-out"><g id="group-in">' +
         '<rect width="5" height="5"/><rect x="9" width="5" height="5"/>' +
-        "</g></g></svg>",
+        '</g><rect x="20" width="5" height="5"/></g></svg>',
       { keepIds: true }
     );
     expect(r.elements[0]!.groups).toEqual(["group-out", "group-in"]);
   });
 
+  test("a <g> whose whole content is one other <g> collapses into it", () => {
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg"><g id="group-out"><g id="group-in">' +
+        '<rect width="5" height="5"/><rect x="9" width="5" height="5"/>' +
+        "</g></g></svg>",
+      { keepIds: true }
+    );
+    // A group carries nothing but its membership here, so a level with one child says nothing.
+    expect(r.elements[0]!.groups).toEqual(["group-in"]);
+  });
+
   test("nested groups survive a round trip", () => {
     const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-out", "group-in"] });
     const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-out", "group-in"] });
-    const svg = formatExportSvg(doc([a, b]), true);
+    // A third member of the outer group only, so the outer one has two children and stays.
+    const c = Object.assign(createRect(4, 4, 1, 1), { groups: ["group-out"] });
+    const svg = formatExportSvg(doc([a, b, c]), true);
     expect(svg.match(/<g id="group-out">/g)).toHaveLength(1);
     expect(svg.match(/<g id="group-in">/g)).toHaveLength(1);
     const back = importSvgFile(svg, { keepIds: true });

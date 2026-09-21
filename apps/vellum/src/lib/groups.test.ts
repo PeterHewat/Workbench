@@ -7,6 +7,7 @@ import {
   moveWithinParent,
   normalizeGroups,
   pruneGroups,
+  pruneGroupsInPlace,
   expandToGroups,
   topLevelBlocks,
 } from "./groups.js";
@@ -90,15 +91,49 @@ describe("normalizeGroups", () => {
   });
 });
 
+describe("a group that holds one thing is not a group", () => {
+  test("deleting all but one member leaves the survivor loose", () => {
+    const list = [el("a", "g1"), el("b", "g1"), el("c")];
+    const after = pruneGroups(list.filter((e) => e.id !== "b"));
+    expect(after.map((e) => e.groups)).toEqual([undefined, undefined]);
+  });
+
+  test("in place, the same rule, for the pass that runs on every change", () => {
+    const list = [el("a", "g1"), el("b", "g1"), el("c", "g2"), el("d", "g2")];
+    list.splice(1, 1); // b goes
+    pruneGroupsInPlace(list);
+    expect(list.map((e) => e.groups)).toEqual([undefined, ["g2"], ["g2"]]);
+  });
+
+  test("an emptied inner group goes while the outer one stays", () => {
+    const list = [el("a", "g1", "g2"), el("b", "g1", "g2"), el("c", "g1")];
+    list.splice(1, 1); // one of the two members of g2 goes
+    pruneGroupsInPlace(list);
+    expect(list.map((e) => e.groups)).toEqual([["g1"], ["g1"]]);
+  });
+
+  test("a group whose whole content is one other group collapses into it", () => {
+    const list = [el("a", "g1", "g2"), el("b", "g1", "g2")];
+    pruneGroupsInPlace(list);
+    expect(list.map((e) => e.groups)).toEqual([["g2"], ["g2"]]);
+  });
+
+  test("an outer group with a second child of its own stays", () => {
+    const list = [el("a", "g1", "g2"), el("b", "g1", "g2"), el("c", "g1")];
+    pruneGroupsInPlace(list);
+    expect(list.map((e) => e.groups)).toEqual([["g1", "g2"], ["g1", "g2"], ["g1"]]);
+  });
+});
+
 describe("pruneGroups", () => {
   test("a group of one is dropped", () => {
     const [only] = pruneGroups([el("a", "g1")]);
     expect(only!.groups).toBeUndefined();
   });
 
-  test("an outer group of one is dropped but a real inner one stays", () => {
+  test("an outer group holding only the inner one is dropped", () => {
     const out = pruneGroups([el("a", "g1", "g2"), el("b", "g1", "g2")]);
-    expect(out[0]!.groups).toEqual(["g1", "g2"]);
+    expect(out[0]!.groups).toEqual(["g2"]);
   });
 });
 

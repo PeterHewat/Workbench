@@ -924,8 +924,21 @@
                 >, or <kbd>Ctrl</kbd>+<kbd>G</kbd> and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd
                   >G</kbd
                 ></span
-              >. Selecting a member selects the whole group; the ◉ / ○ button in the list selects
-              single members. Exported as <code>&lt;g&gt;</code>.
+              >. Selecting a member selects the whole group; the checkbox on a row in the list
+              selects single members. Exported as <code>&lt;g&gt;</code>.
+            </li>
+            <li>
+              In the Primitives list a group is one coloured line down the left of the rows it
+              holds, and a group inside a group is a line inside a line. Members stay together: the
+              ▲ ▼ arrows reorder a shape among its siblings, and when it is already at the edge the
+              move widens to the group itself.
+            </li>
+            <li>
+              <b>A group holds at least two things.</b> A group carries nothing here but its
+              membership — no transform, no style — so one that holds a single shape, or whose whole
+              content is one other group, says exactly as much as no group at all. Delete members
+              until one is left and the group dissolves around it, and an imported
+              <code>&lt;g&gt;</code> wrapping only another <code>&lt;g&gt;</code> collapses into it.
             </li>
           </ul>
 

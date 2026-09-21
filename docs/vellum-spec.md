@@ -483,6 +483,12 @@ name-in-id export, Help panel (`?` button).
   in `sessionStorage` (`session.ts`) and restored on reload, keyed by document id so another
   document still gets its own fitted view. A new tab starts fresh, and nothing of it travels with
   an exported or shared file.
+- **A group holds at least two children** (`groups.ts`). A group carries nothing but its
+  membership, so a `<g>` around one shape, or around only one other `<g>`, expresses nothing that
+  its content does not; both are dropped. The rule runs on every state change, so deleting members
+  dissolves the group around the survivor, and it runs on import, so a redundant wrapper collapses.
+- **The Primitives list is a tree**, not a flat list with per-row stripes: a group is one coloured
+  rail down the rows it holds, nested rails for nested groups.
 - **One scroller:** the Document panel scrolls as a whole; no section brings its own scroll area
   and none has a fixed share of the height. The SVG source box is the single exception, at a
   clamped height, because a text editor that grows without bound pushes everything past the edge.

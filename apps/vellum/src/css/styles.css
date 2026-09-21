@@ -984,10 +984,25 @@ body {
   display: none;
 }
 
-.acc-item--grouped {
+/* A group is one bracket down the left of the rows it holds, not a stripe repeated on each of
+   them: the line says "these rows are one thing" rather than "these rows are alike". A group
+   inside a group nests the brackets, which is what nesting looks like. */
+.group-run {
+  margin: 0 0 6px;
+  padding-left: 8px;
   border-left: 3px solid var(--gc, var(--accent));
-  /* One step of indent per level of nesting, so the list reads as the tree it is. */
-  margin-left: calc((var(--depth, 1) - 1) * 10px);
+  border-radius: 7px 0 0 7px;
+}
+
+.group-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* The bracket supplies the gap under the group, so the last row inside it does not add another. */
+.group-items > :last-child {
+  margin-bottom: 0;
 }
 
 .acc-body .field-row select {

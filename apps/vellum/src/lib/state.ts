@@ -1,5 +1,6 @@
 import { AUTO_NAME_RE, deepClone } from "./utils.js";
 import { isCoarsePointer } from "./pointer.js";
+import { pruneGroupsInPlace } from "./groups.js";
 import type { EditorState, PathEdit, SceneElement, Selection } from "./types.js";
 
 export interface NotifyOptions {
@@ -53,6 +54,7 @@ export function subscribe(fn: Listener): () => void {
 
 function notify(options: NotifyOptions): void {
   ensureDefaultNames(state.elements);
+  pruneGroupsInPlace(state.elements);
   for (const fn of listeners) fn(state, options);
 }
 

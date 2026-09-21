@@ -229,22 +229,63 @@ export function normalizeGroups(elements: readonly SceneElement[]): SceneElement
   return level(elements, 0);
 }
 
-/** Drops group ids that only one element carries: a group of one is not a group. */
-export function pruneGroups(elements: readonly SceneElement[]): SceneElement[] {
-  const counts = new Map<string, number>();
+/**
+ * Group ids that hold only one thing, and so hold nothing: a group of one element, and a group
+ * whose entire content is one other group. Both are a `<g>` around a single child, which in a
+ * model where a group carries nothing but its membership says exactly as much as no group at all.
+ *
+ * Measured by what sits one level in from each id: if every member of a group continues into the
+ * same nested group, or there is only one member, that id has a single child.
+ */
+function redundantGroupIds(elements: readonly SceneElement[]): Set<string> {
+  const children = new Map<string, Set<string>>();
   for (const el of elements) {
-    for (const gid of groupsOf(el)) counts.set(gid, (counts.get(gid) ?? 0) + 1);
+    const chain = groupsOf(el);
+    chain.forEach((gid, depth) => {
+      let set = children.get(gid);
+      if (!set) children.set(gid, (set = new Set()));
+      // An element that does not continue into a nested group is a child in its own right.
+      set.add(chain[depth + 1] ?? `only:${el.id}`);
+    });
   }
+  const redundant = new Set<string>();
+  for (const [gid, kids] of children) if (kids.size < 2) redundant.add(gid);
+  return redundant;
+}
+
+/** Drops the groups that hold only one thing, returning a new list. */
+export function pruneGroups(elements: readonly SceneElement[]): SceneElement[] {
+  const gone = redundantGroupIds(elements);
+  if (!gone.size) return [...elements];
   return elements.map((el) => {
     const chain = groupsOf(el);
-    if (!chain.length) return el;
-    const kept = chain.filter((gid) => (counts.get(gid) ?? 0) > 1);
-    if (kept.length === chain.length) return el;
+    if (!chain.some((gid) => gone.has(gid))) return el;
+    const kept = chain.filter((gid) => !gone.has(gid));
     const next = { ...el };
     if (kept.length) next.groups = kept;
     else delete next.groups;
     return next;
   });
+}
+
+/**
+ * The same rule, applied in place.
+ *
+ * Deleting members of a group used to leave the survivor still carrying the group id - a group
+ * of one, which exports as a `<g>` around a single shape and behaves like a group when you
+ * select it. This runs on every state change, so the moment a group is down to one child it
+ * stops being a group, whatever emptied it.
+ */
+export function pruneGroupsInPlace(elements: SceneElement[]): void {
+  const gone = redundantGroupIds(elements);
+  if (!gone.size) return;
+  for (const el of elements) {
+    const chain = groupsOf(el);
+    if (!chain.some((gid) => gone.has(gid))) continue;
+    const kept = chain.filter((gid) => !gone.has(gid));
+    if (kept.length) el.groups = kept;
+    else delete el.groups;
+  }
 }
 
 /** Every element whose outermost group is one of the outermost groups of `ids`. */
