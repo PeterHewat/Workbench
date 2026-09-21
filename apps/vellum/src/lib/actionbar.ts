@@ -256,6 +256,19 @@ function anchorRect(state: EditorState): AnchorRect | null {
   return { left, right, top, bottom, rotatable };
 }
 
+/**
+ * The strip of window the toolbars leave free. The bar has to stay inside it: pushed to the top
+ * of the canvas it used to slide under the toolbar, where half of it was unreachable.
+ */
+function freeBand(): { top: number; bottom: number } {
+  const visible = (el: HTMLElement | null) => (el?.getClientRects().length ? el : null);
+  const topBar = visible(document.querySelector<HTMLElement>(".top-bar"));
+  const toolBar = visible(document.getElementById("tool-bar"));
+  const top = topBar ? topBar.getBoundingClientRect().bottom + GAP : 8;
+  const bottom = toolBar ? toolBar.getBoundingClientRect().top - GAP : window.innerHeight - 8;
+  return { top: Math.max(8, top), bottom: Math.min(window.innerHeight - 8, bottom) };
+}
+
 /** Puts the bar just above the selection, or below it when there is no room. */
 function position(state: EditorState): void {
   const at = anchorRect(state);
@@ -265,12 +278,13 @@ function position(state: EditorState): void {
     Math.max((at.left + at.right) / 2 - size.width / 2, 8),
     window.innerWidth - size.width - 8
   );
+  const band = freeBand();
   // Above, the rotate handle hangs off the top of the shape and has to be cleared. Below there
   // is nothing in the way, so the bar sits close rather than a handle's height adrift.
   const above = at.top - size.height - GAP - (at.rotatable ? ROTATE_HANDLE_REACH : 0);
-  const y = above > 8 ? above : Math.min(at.bottom + GAP, window.innerHeight - size.height - 8);
+  const y = above >= band.top ? above : at.bottom + GAP;
   bar.style.left = `${Math.max(8, x)}px`;
-  bar.style.top = `${Math.max(8, y)}px`;
+  bar.style.top = `${Math.max(band.top, Math.min(y, band.bottom - size.height))}px`;
 }
 
 /** Called on every state change: shows, rebuilds and repositions the bar as needed. */

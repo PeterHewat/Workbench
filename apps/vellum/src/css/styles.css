@@ -489,6 +489,15 @@ body {
   border-color: var(--accent);
 }
 
+/* Standing in for the row's name field, so it takes that width rather than a field's. */
+.acc-title-file {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  height: 26px;
+  margin: 0 4px;
+}
+
 /* Overlay handles: a transparent target circle with the visible dot drawn over it. */
 .handle {
   fill: #fff;
@@ -1260,19 +1269,6 @@ body {
   font-size: 10.5px;
 }
 
-.doc-del {
-  padding: 2px 8px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 16px;
-  cursor: pointer;
-}
-
-.doc-del:hover {
-  color: #ff6b6b;
-}
-
 /* Row actions are always there. A mouse dims them until the row is hovered, so the list stays
    calm; without hover there is nothing to reveal them, so they simply stay at full strength. */
 .doc-list li .doc-act,
@@ -1296,13 +1292,11 @@ body {
   }
 }
 
-.doc-list li .doc-act {
-  padding: 2px 5px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 13px;
-  cursor: pointer;
+/* Same dot, same icons, same sizes as a Primitives or Reference images row. */
+.doc-list li .doc-act,
+.doc-list li .doc-del {
+  height: 30px;
+  width: 30px;
 }
 
 .doc-list li .doc-act:hover {

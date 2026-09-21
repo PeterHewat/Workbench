@@ -484,8 +484,10 @@ function invalidateLists(): void {
 interface AccHeaderOptions {
   on: boolean;
   dotTitle: string;
-  name: string;
-  placeholder: string;
+  /** The editable name, unless `titleHtml` replaces the field with something else. */
+  name?: string;
+  placeholder?: string;
+  titleHtml?: string;
   extra?: string;
   index: number;
   count: number;
@@ -500,7 +502,7 @@ function accHeaderHtml(o: AccHeaderOptions): string {
         <span class="chevron" aria-hidden="true">▶</span>
       </button>
       <button type="button" class="btn-visibility${o.on ? "" : " is-off"}" data-action="toggle-dot" title="${o.dotTitle}" aria-label="${o.dotTitle}">${o.on ? "◉" : "○"}</button>
-      <input type="text" class="acc-title-input" data-field="name" value="${escapeAttr(o.name)}" placeholder="${escapeAttr(o.placeholder)}" />
+      ${o.titleHtml ?? `<input type="text" class="acc-title-input" data-field="name" value="${escapeAttr(o.name ?? "")}" placeholder="${escapeAttr(o.placeholder ?? "")}" />`}
       ${o.extra ?? ""}
       <button type="button" class="acc-icon-btn acc-move" data-action="move-up" title="Move up (Shift: to top)" aria-label="Move up"${(o.canUp ?? o.index > 0) ? "" : " disabled"}>▲</button>
       <button type="button" class="acc-icon-btn acc-move" data-action="move-down" title="Move down (Shift: to bottom)" aria-label="Move down"${(o.canDown ?? o.index < o.count - 1) ? "" : " disabled"}>▼</button>
@@ -1155,16 +1157,12 @@ primitiveListEl.addEventListener("click", (e) => {
 /* ---------- Reference images list ---------- */
 
 function imageListKeyOf(state: EditorState): string {
-  const meta = state.images.map((i) => `${i.id}:${i.name}:${i.visible}`).join(",");
+  const meta = state.images.map((i) => `${i.id}:${i.fileName || i.name}:${i.visible}`).join(",");
   return `${meta}|${state.ui.expandedImageId}`;
 }
 
 function imageBodyHtml(img: ReferenceImage): string {
   return `<div class="acc-body">
-      <label class="field-row field-row--wide">
-        <span>File</span>
-        <button type="button" class="file-chip" data-action="replace-file" title="Click to replace the source image">${escapeXml(img.fileName || img.name)}</button>
-      </label>
       <label class="field-row"><span>X</span><input type="number" data-field="x" step="1" value="${img.x}" /></label>
       <label class="field-row"><span>Y</span><input type="number" data-field="y" step="1" value="${img.y}" /></label>
       <label class="field-row"><span>Scale</span><input type="number" data-field="scale" min="0.01" step="0.01" value="${img.scaleX}" /></label>
@@ -1184,8 +1182,10 @@ function buildImageList(state: EditorState): void {
       accHeaderHtml({
         on: visible,
         dotTitle: visible ? "Hide overlay" : "Show overlay",
-        name: img.name,
-        placeholder: "Untitled",
+        // A reference image is the file it came from, so the row says which file and lets you
+        // swap it. There is nothing to rename: a name of its own would only be a second,
+        // less true label for the same thing.
+        titleHtml: `<button type="button" class="file-chip acc-title-file" data-action="replace-file" title="${escapeAttr(img.fileName || img.name)} — click to trace a different file">${escapeXml(img.fileName || img.name)}</button>`,
         index,
         count: state.images.length,
       }) + imageBodyHtml(img);
@@ -1207,7 +1207,6 @@ function updateImageListValues(state: EditorState): void {
   for (const img of state.images) {
     const li = imageListEl.querySelector<HTMLElement>(`[data-image-id="${img.id}"]`);
     if (!li) continue;
-    setField(li, "name", img.name);
     const fileChip = li.querySelector<HTMLElement>(".file-chip");
     if (fileChip) fileChip.textContent = img.fileName || img.name;
     if (!li.classList.contains("expanded")) continue;
@@ -1260,7 +1259,6 @@ imageListEl.addEventListener("change", (e) => {
     ...s,
     images: s.images.map((img) => {
       if (img.id !== imgId) return img;
-      if (field === "name") return { ...img, name: input.value.trim() || img.name };
       const val = parseFloat(input.value);
       if (field === "scale") return { ...img, scaleX: val, scaleY: val };
       return { ...img, [field]: val };
@@ -1841,12 +1839,17 @@ async function refreshDocList(): Promise<void> {
       dateStyle: "short",
       timeStyle: "short",
     });
-    li.innerHTML = `<div class="doc-item" data-doc-open title="${isCurrent ? "Click the name to rename" : "Open"}">
+    li.innerHTML = `<button type="button" class="btn-visibility${isCurrent ? "" : " is-off"}" data-doc-open title="${isCurrent ? "This is the open document" : "Open"}" aria-label="${isCurrent ? "Open document" : "Open"}">${isCurrent ? "◉" : "○"}</button>
+      <div class="doc-item" data-doc-open title="${isCurrent ? "Click the name to rename" : "Open"}">
         <input type="text" class="doc-title-input" value="${escapeAttr(d.name)}" maxlength="80" aria-label="Document name"${isCurrent ? "" : ' readonly tabindex="-1"'} />
         <small>${when}</small>
       </div>
-      <button type="button" class="doc-act" data-doc-dup title="Duplicate" aria-label="Duplicate document">⧉</button>
-      <button type="button" class="doc-del" data-doc-delete title="Delete" aria-label="Delete document">×</button>`;
+      <button type="button" class="acc-icon-btn doc-act" data-doc-dup title="Duplicate" aria-label="Duplicate document">
+        <svg class="ui-icon" aria-hidden="true"><use href="#icon-copy" /></svg>
+      </button>
+      <button type="button" class="acc-icon-btn acc-trash doc-del" data-doc-delete title="Delete" aria-label="Delete document">
+        <svg class="ui-icon" aria-hidden="true"><use href="#icon-trash" /></svg>
+      </button>`;
     docListEl.appendChild(li);
   }
 }

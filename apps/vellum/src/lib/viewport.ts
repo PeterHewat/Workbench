@@ -83,7 +83,8 @@ export function fitArtboardInView(padding = 40, insets: ViewInsets = {}): Viewpo
   const usableH = Math.max(1, rect.height - top - bottom);
   const aw = state.artboard.width;
   const ah = state.artboard.height;
-  const zoom = Math.min((rect.width - padding * 2) / aw, (usableH - padding * 2) / ah, 1.6);
+  // No cap of its own: "fit" means fill what is free, and clampZoom already has the last word.
+  const zoom = Math.min((rect.width - padding * 2) / aw, (usableH - padding * 2) / ah);
   return {
     panX: (rect.width - aw * zoom) / 2,
     panY: top + (usableH - ah * zoom) / 2,

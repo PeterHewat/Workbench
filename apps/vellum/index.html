@@ -932,8 +932,11 @@
               Reference images, SVG, Primitives) fold open and closed, and are remembered.
             </li>
             <li>
-              <b>Reference images</b> — add reference images to trace; each has visibility, opacity,
-              position, scale and rotation.
+              <b>Reference images</b> — add reference images to trace; each row is the file it came
+              from, and <span data-help="mouse">clicking</span
+              ><span data-help="touch">tapping</span>
+              that file name swaps in a different one. Open the row for position, scale, rotation
+              and opacity; the dot beside it shows the overlay or hides it.
             </li>
             <li>
               <b>SVG</b> — the artboard size (width × height), the grid (its visibility and its step
@@ -960,13 +963,15 @@
               <b>Documents</b> lists everything stored in this browser (reference images included).
               <span data-help="mouse">Click</span><span data-help="touch">Tap</span> a document to
               open it; <span data-help="mouse">click</span><span data-help="touch">tap</span> the
-              name of the open document to rename it in place. Each row carries duplicate ⧉ and
-              delete × (deleting an empty document doesn't ask; others do). <b>+</b> starts a new
-              document (named Untitled, Untitled 2, …; the current one is already saved). The last
-              document reopens when you start the app. Documents live in this browser only, so back
-              them up: the ⬇ / ⬆ buttons in the <b>Documents</b> header export every document to one
-              JSON file and restore them again (restored copies are added alongside your existing
-              ones, never overwriting them).<span data-help="mouse">
+              name of the open document to rename it in place. Every row reads like the other lists:
+              a dot showing which one is open, then duplicate and delete (deleting an empty document
+              doesn't ask; others do). <b>+</b> starts a new document (named Untitled, Untitled 2,
+              …; the current one is already saved). The last document reopens when you start the
+              app. Documents live in this browser only, so back them up: the ⬇ / ⬆ buttons in the
+              <b>Documents</b> header export every document to one JSON file and restore them again
+              (restored copies are added alongside your existing ones, never overwriting them).<span
+                data-help="mouse"
+              >
                 To empty a document, <kbd>Ctrl</kbd>+<kbd>A</kbd> then <kbd>Delete</kbd>.</span
               >
             </li>
