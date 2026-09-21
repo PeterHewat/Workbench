@@ -276,6 +276,12 @@ function renderPrimitiveHandles(
     const p = toWorldPoint(el, { x, y });
     addResizeHandle(parent, p.x, p.y, el.id, role, selected, hitR);
   };
+  /** A faint tether from a handle to the corner it belongs to, so the pairing is visible. */
+  const tether = (fromX: number, fromY: number, toX: number, toY: number) => {
+    const a = toWorldPoint(el, { x: fromX, y: fromY });
+    const b = toWorldPoint(el, { x: toX, y: toY });
+    add(parent, "line", { class: "handle-tether", x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+  };
   switch (el.type) {
     case "rect": {
       put(el.x, el.y, "tl");
@@ -283,9 +289,17 @@ function renderPrimitiveHandles(
       put(el.x, el.y + el.height, "bl");
       put(el.x + el.width, el.y + el.height, "br");
       const off = cornerHandleInset() / zoom;
-      put(el.x + el.width - off - cornerRadius(el), el.y + off + cornerRadiusY(el), "corner");
+      // Each of the two extra handles is tethered to the corner it works from, so which is
+      // which is visible rather than something to remember.
+      const radiusX = el.x + el.width - off - cornerRadius(el);
+      const radiusY = el.y + off + cornerRadiusY(el);
+      tether(radiusX, radiusY, el.x + el.width, el.y);
+      put(radiusX, radiusY, "corner");
       // Just outside the bottom-right corner: drag it and the rect stays a square.
-      put(el.x + el.width + off / 2, el.y + el.height + off / 2, "uniform");
+      const squareX = el.x + el.width + off / 2;
+      const squareY = el.y + el.height + off / 2;
+      tether(squareX, squareY, el.x + el.width, el.y + el.height);
+      put(squareX, squareY, "uniform");
       break;
     }
     case "circle":
@@ -296,6 +310,7 @@ function renderPrimitiveHandles(
       put(el.cx, el.cy + el.ry, "ry");
       // On the diagonal between them: drag it and the ellipse stays a circle.
       const d = Math.SQRT1_2;
+      tether(el.cx, el.cy, el.cx + el.rx * d, el.cy + el.ry * d);
       put(el.cx + el.rx * d, el.cy + el.ry * d, "uniform");
       break;
     }

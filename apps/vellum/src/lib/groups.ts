@@ -126,9 +126,29 @@ export function moveSelectionZ(
   return flatten(elements, reorderBlocks(blocks, picked, direction));
 }
 
+/** The widening blocks around an element: itself, then the group holding it, and so on out. */
+function blockLadder(
+  elements: readonly SceneElement[],
+  index: number
+): { depth: number; range: Block; blocks: Block[]; at: number }[] {
+  const out: { depth: number; range: Block; blocks: Block[]; at: number }[] = [];
+  for (let depth = groupsOf(elements[index]).length; depth >= 0; depth--) {
+    const range = groupRange(elements, index, depth);
+    const blocks = childBlocks(elements, range, depth);
+    const at = blocks.findIndex((b) => index >= b.start && index < b.end);
+    if (at >= 0) out.push({ depth, range, blocks, at });
+  }
+  return out;
+}
+
 /**
  * Moves one element among its siblings - the other members of the group that directly contains
- * it, with any nested group counting as one sibling. An element never leaves its group this way.
+ * it, with a nested group counting as one sibling. An element never leaves its group this way.
+ *
+ * When it is already at the edge of its group there is nowhere left to go at that level, so the
+ * move widens: the group itself steps past whatever is beyond it, and so on outwards. That keeps
+ * the arrows from going dead while there is still somewhere to move, and it is the only way to
+ * reorder a group, since the list has rows for elements rather than for groups.
  */
 export function moveWithinParent(
   elements: readonly SceneElement[],
@@ -138,12 +158,6 @@ export function moveWithinParent(
 ): SceneElement[] {
   const index = elements.findIndex((e) => e.id === id);
   if (index < 0) return [...elements];
-  const depth = groupsOf(elements[index]).length;
-  const range = groupRange(elements, index, depth);
-  const blocks = childBlocks(elements, range, depth);
-  const at = blocks.findIndex((b) => index >= b.start && index < b.end);
-  if (at < 0) return [...elements];
-  const picked = blocks.map((_, i) => i === at);
   const direction: ZDirection = toEnd
     ? dir < 0
       ? "backmost"
@@ -151,8 +165,42 @@ export function moveWithinParent(
     : dir < 0
       ? "back"
       : "forward";
-  const moved = flatten(elements, reorderBlocks(blocks, picked, direction));
-  return [...elements.slice(0, range.start), ...moved, ...elements.slice(range.end)];
+  for (const level of blockLadder(elements, index)) {
+    const room = dir < 0 ? level.at > 0 : level.at < level.blocks.length - 1;
+    if (!room) continue;
+    const picked = level.blocks.map((_, i) => i === level.at);
+    const moved = flatten(elements, reorderBlocks(level.blocks, picked, direction));
+    return [...elements.slice(0, level.range.start), ...moved, ...elements.slice(level.range.end)];
+  }
+  return [...elements];
+}
+
+/** Whether `moveWithinParent` would change anything, so the arrow can be disabled when not. */
+export function canMoveWithinParent(
+  elements: readonly SceneElement[],
+  id: string,
+  dir: -1 | 1
+): boolean {
+  const index = elements.findIndex((e) => e.id === id);
+  if (index < 0) return false;
+  return blockLadder(elements, index).some((level) =>
+    dir < 0 ? level.at > 0 : level.at < level.blocks.length - 1
+  );
+}
+
+/** Whether the selection has anywhere to go in z-order, for the same reason. */
+export function canMoveSelectionZ(
+  elements: readonly SceneElement[],
+  selectedIds: ReadonlySet<string>,
+  dir: -1 | 1
+): boolean {
+  const blocks = topLevelBlocks(elements);
+  const picked = blocks.map((b) => {
+    for (let i = b.start; i < b.end; i++) if (selectedIds.has(elements[i]!.id)) return true;
+    return false;
+  });
+  // A block moves when the neighbour it would swap with is not itself part of the selection.
+  return picked.some((p, i) => p && !picked[i + (dir < 0 ? -1 : 1)] && blocks[i + dir] != null);
 }
 
 /**

@@ -179,6 +179,40 @@ export function finishPath(): void {
   }));
 }
 
+/** Closes the path being drawn and finishes it, the button form of clicking the first anchor. */
+export function closeAndFinishPath(): void {
+  const activeId = getState().drawing?.activePathId;
+  const path = findElement(activeId);
+  if (!activeId || path?.type !== "path" || path.points.length < 3) return;
+  pushUndo();
+  mutate(() => {
+    const p = findElement(activeId);
+    if (p?.type === "path") p.closed = true;
+  });
+  finishPath();
+}
+
+/** Takes back the last point placed by the pen, so a misplaced tap is one button to undo. */
+export function removeLastPenPoint(): void {
+  const activeId = getState().drawing?.activePathId;
+  const path = findElement(activeId);
+  if (!activeId || path?.type !== "path" || !path.points.length) return;
+  pushUndo();
+  if (path.points.length === 1) {
+    setState((s) => ({
+      ...s,
+      elements: s.elements.filter((e) => e.id !== activeId),
+      drawing: null,
+    }));
+    return;
+  }
+  mutate(() => {
+    const p = findElement(activeId);
+    if (p?.type === "path") p.points.pop();
+  });
+  setState((s) => ({ ...s, drawing: { ...s.drawing, activePathId: activeId, preview: null } }));
+}
+
 function hitElement(target: EventTarget | null): string | null {
   let node = target as Node | null;
   while (node && node !== document) {

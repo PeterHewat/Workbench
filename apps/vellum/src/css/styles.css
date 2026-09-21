@@ -1039,14 +1039,6 @@ body {
   border-width: 0 0 0 1px;
 }
 
-.help-btn {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  font-weight: 700;
-  font-size: 15px;
-}
-
 .help-body {
   flex: 1;
   min-height: 0;
@@ -1216,8 +1208,30 @@ body {
   color: #ff6b6b;
 }
 
+/* Row actions are always there. A mouse dims them until the row is hovered, so the list stays
+   calm; without hover there is nothing to reveal them, so they simply stay at full strength. */
+.doc-list li .doc-act,
+.doc-list li .doc-del {
+  display: inline-block;
+  opacity: 1;
+  transition: opacity 0.12s ease;
+}
+
+@media (hover: hover) {
+  .doc-list li .doc-act,
+  .doc-list li .doc-del {
+    opacity: 0.4;
+  }
+
+  .doc-list li:hover .doc-act,
+  .doc-list li:hover .doc-del,
+  .doc-list li:focus-within .doc-act,
+  .doc-list li:focus-within .doc-del {
+    opacity: 1;
+  }
+}
+
 .doc-list li .doc-act {
-  display: none;
   padding: 2px 5px;
   border: 0;
   background: transparent;
@@ -1226,30 +1240,8 @@ body {
   cursor: pointer;
 }
 
-.doc-list li:hover .doc-act,
-.doc-list li:focus-within .doc-act {
-  display: inline-block;
-}
-
-/* Without hover there is no way to reveal them, so they stay visible. */
-@media (hover: none) {
-  .doc-list li .doc-act,
-  .doc-list li .doc-del {
-    display: inline-block;
-  }
-}
-
 .doc-list li .doc-act:hover {
   color: var(--accent);
-}
-
-.doc-list li .doc-del {
-  display: none;
-}
-
-.doc-list li:hover .doc-del,
-.doc-list li:focus-within .doc-del {
-  display: inline-block;
 }
 
 .doc-list li.draft .doc-open {
@@ -1498,25 +1490,53 @@ body {
     display: none;
   }
 
-  /* Out of the bar and into a dropdown under its button. */
+  /* Out of the bar and into a labelled menu under its button: a column of rows reads and
+     hits far better on a phone than a wrapped grid of unlabelled icons. */
   .tool-group--view {
     position: absolute;
     top: 100%;
     right: 0;
     z-index: 100;
     display: none;
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
     width: max-content;
+    min-width: 220px;
     max-width: 92vw;
     margin-top: 6px;
-    padding: 8px;
+    padding: 6px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 10px;
     background: rgba(37, 38, 43, 0.86);
     -webkit-backdrop-filter: blur(16px) saturate(140%);
     backdrop-filter: blur(16px) saturate(140%);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+
+  .tool-group--view > .tool-btn {
+    justify-content: flex-start;
+    gap: 10px;
+    width: 100%;
+    padding: 0 12px;
+    border-color: transparent;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 400;
+  }
+
+  .tool-group--view > .tool-btn[data-label]::after {
+    content: attr(data-label);
+  }
+
+  .tool-group--view > .tool-btn.active {
+    background: var(--accent-dim);
+  }
+
+  /* Zoom is one control in three parts, so it keeps its own row. */
+  .tool-group--view .zoom-group {
+    justify-content: flex-start;
+    padding: 2px 8px;
   }
 
   #menu-view-wrap.open .tool-group--view {
@@ -1657,4 +1677,31 @@ body {
 
 .geom-field--wide {
   grid-column: 1 / -1;
+}
+
+/* An action that has nowhere to go reads as unavailable rather than silently doing nothing. */
+.action-bar .tool-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.action-bar .tool-btn:disabled:hover {
+  border-color: var(--border);
+}
+
+/* The grid row in the Document panel puts its toggle beside the step, like the size row. */
+.doc-size-row .doc-size .tool-btn {
+  min-width: 32px;
+  min-height: 32px;
+}
+
+/* Ties a handle to the corner it works from: the corner-radius and square handles sit away
+   from their corner, and without this the pairing is something you have to remember. */
+.handle-tether {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  stroke-opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }

@@ -63,6 +63,75 @@
             stroke-width="2"
           />
         </symbol>
+        <symbol id="icon-check" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M4 13l5 5L20 6"
+          />
+        </symbol>
+        <symbol id="icon-close-path" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M6 19V7l7-3 5 6v9z"
+          />
+          <circle cx="6" cy="19" r="2.2" fill="currentColor" />
+          <circle cx="6" cy="7" r="2.2" fill="currentColor" />
+        </symbol>
+        <symbol id="icon-open-path" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M6 19V7l7-3 5 6v9"
+          />
+          <circle cx="6" cy="19" r="2.2" fill="currentColor" />
+          <circle cx="18" cy="19" r="2.2" fill="currentColor" />
+        </symbol>
+        <symbol id="icon-split" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M3 12h5M16 12h5"
+          />
+          <path fill="none" stroke="currentColor" stroke-width="2" d="M12 4v4M12 16v4" />
+          <circle cx="12" cy="12" r="2.4" fill="currentColor" />
+        </symbol>
+        <symbol id="icon-join" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M4 16a6 6 0 016-6h4a6 6 0 016 6"
+          />
+          <circle cx="4" cy="16" r="2.2" fill="currentColor" />
+          <circle cx="20" cy="16" r="2.2" fill="currentColor" />
+        </symbol>
+        <symbol id="icon-group" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+            <rect x="3" y="3" width="8" height="8" rx="1" />
+            <rect x="13" y="13" width="8" height="8" rx="1" />
+            <path stroke-dasharray="3 2" d="M3 3h18v18H3z" />
+          </g>
+        </symbol>
+        <symbol id="icon-ungroup" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+            <rect x="2" y="2" width="8" height="8" rx="1" />
+            <rect x="14" y="14" width="8" height="8" rx="1" />
+          </g>
+        </symbol>
         <symbol id="icon-sliders" viewBox="0 0 24 24">
           <g
             fill="none"
@@ -371,6 +440,31 @@
                     />
                   </div>
                 </div>
+                <div class="doc-size-row">
+                  <span>Grid</span>
+                  <div class="doc-size" title="Grid spacing, in artboard units">
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      id="btn-grid"
+                      title="Show / hide the grid (hidden anyway at a step of 1)"
+                      aria-label="Show grid"
+                      aria-pressed="true"
+                    >
+                      <svg class="ui-icon" aria-hidden="true"><use href="#icon-grid" /></svg>
+                    </button>
+                    <input
+                      type="number"
+                      id="grid-step"
+                      class="grid-step-input"
+                      min="1"
+                      step="1"
+                      value="16"
+                      title="Grid step"
+                      aria-label="Grid step"
+                    />
+                  </div>
+                </div>
                 <div class="svg-editor">
                   <pre id="svg-preview" class="svg-preview mono" aria-hidden="true"></pre>
                   <textarea
@@ -478,7 +572,7 @@
             type="button"
             class="tool-btn"
             data-tool="arc"
-            title="Arc (A) — drag the two ends; hold Shift for a half circle"
+            title="Arc (A) — an exact circular arc: drag the two ends, Shift for a half circle"
             aria-label="Arc"
           >
             <svg class="ui-icon" aria-hidden="true"><use href="#icon-arc" /></svg>
@@ -515,30 +609,11 @@
             <button
               type="button"
               class="tool-btn"
-              id="btn-grid"
-              title="Show / hide grid (hidden anyway at step 1)"
-              aria-label="Show grid"
-              aria-pressed="true"
-            >
-              <svg class="ui-icon" aria-hidden="true"><use href="#icon-grid" /></svg>
-            </button>
-            <input
-              type="number"
-              id="grid-step"
-              class="grid-step-input"
-              min="1"
-              step="1"
-              value="16"
-              title="Grid step"
-              aria-label="Grid step"
-            />
-            <button
-              type="button"
-              class="tool-btn"
               id="btn-snap"
               title="Snap to grid (G)"
               aria-label="Snap to grid"
               aria-pressed="false"
+              data-label="Snap to grid"
             >
               <svg class="ui-icon" aria-hidden="true"><use href="#icon-magnet" /></svg>
             </button>
@@ -548,36 +623,39 @@
               id="btn-fit-view"
               title="Fit artboard in view"
               aria-label="Fit view"
+              data-label="Fit artboard in view"
             >
               <svg class="ui-icon" aria-hidden="true"><use href="#icon-fit" /></svg>
             </button>
-            <button
-              type="button"
-              class="tool-btn tool-btn--text"
-              id="btn-zoom-out"
-              title="Zoom out"
-              aria-label="Zoom out"
-            >
-              −
-            </button>
-            <button
-              type="button"
-              class="tool-btn tool-btn--text"
-              id="btn-reset-zoom"
-              title="Zoom to 100%"
-              aria-label="Zoom to 100%"
-            >
-              100%
-            </button>
-            <button
-              type="button"
-              class="tool-btn tool-btn--text"
-              id="btn-zoom-in"
-              title="Zoom in"
-              aria-label="Zoom in"
-            >
-              +
-            </button>
+            <div class="tool-group zoom-group" role="group" aria-label="Zoom">
+              <button
+                type="button"
+                class="tool-btn tool-btn--text"
+                id="btn-zoom-out"
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                class="tool-btn tool-btn--text"
+                id="btn-reset-zoom"
+                title="Zoom to 100%"
+                aria-label="Zoom to 100%"
+              >
+                100%
+              </button>
+              <button
+                type="button"
+                class="tool-btn tool-btn--text"
+                id="btn-zoom-in"
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                +
+              </button>
+            </div>
             <button
               type="button"
               class="tool-btn"
@@ -585,23 +663,26 @@
               title="Final SVG only: hide the grid, guides and reference images"
               aria-label="Final SVG only"
               aria-pressed="false"
+              data-label="Final SVG only"
             >
               <svg class="ui-icon" aria-hidden="true"><use href="#icon-eye" /></svg>
+            </button>
+
+            <button
+              type="button"
+              class="tool-btn tool-btn--text"
+              id="btn-help"
+              aria-expanded="false"
+              title="Help — what everything does"
+              aria-label="Help"
+              data-label="Help"
+            >
+              ?
             </button>
           </div>
         </div>
 
         <p id="cursor-pos" class="cursor-readout mono" aria-live="polite">—</p>
-        <button
-          type="button"
-          class="menu-trigger menu-trigger--icon help-btn"
-          id="btn-help"
-          aria-expanded="false"
-          title="Help — what everything does"
-          aria-label="Help"
-        >
-          ?
-        </button>
       </header>
 
       <aside
@@ -640,7 +721,11 @@
             <li>
               <b>Arc (A)</b> — drag from one end of the arc to the other and it bulges a quarter
               turn to the right; hold <kbd>Shift</kbd> for a half circle. The result is an ordinary
-              two-point curve, so reshaping it afterwards means dragging its handles.
+              two-point curve, so reshaping it afterwards means dragging its handles, exactly as
+              with the pen. What the arc tool gives you that the pen does not is an
+              <em>exact circular</em> arc: the pen's curves are whatever your hand drags, which can
+              look circular without being so. If you never need that exactness, the pen covers this
+              tool entirely.
             </li>
             <li>
               <b>Text (T)</b> — click to place, then type in the field that opens in the SVG panel.
@@ -652,7 +737,8 @@
             <li>
               <b>Resize</b> — drag the blue handles. Rectangles also have a corner handle just
               inside the top-right corner; drag it to round the corners, hold <kbd>Alt</kbd> to set
-              horizontal and vertical radii separately.
+              horizontal and vertical radii separately. A faint dashed line ties each of these extra
+              handles to the corner it works from.
             </li>
             <li>
               <b>Rotate</b> — drag the pink handle above a selected shape, or put two fingers on a
@@ -662,6 +748,12 @@
               Paths and polylines have the rotation baked into their points, which loses nothing.
             </li>
             <li><b>Nudge</b> — arrow keys move by 1 unit, <kbd>Shift</kbd> by 10.</li>
+            <li>
+              <b>Order</b> — the ▲ ▼ arrows on a Primitives row move a shape among its siblings.
+              When it is already at the edge of its group the move widens to the group itself, so a
+              group is reordered by pressing the arrow on the row at its edge; the arrow is dimmed
+              only when there is genuinely nowhere left to go.
+            </li>
             <li>
               <b>Align</b> — hold <kbd>Alt</kbd> while drawing or dragging to snap to points that
               line up horizontally or vertically with other shapes (this replaces grid snapping
@@ -774,22 +866,23 @@
               position, scale and rotation.
             </li>
             <li>
-              <b>SVG</b> — the artboard size (width × height) and the live markup, which you can
-              <b>edit directly</b>: changes apply to the drawing after a short pause (an error
-              message appears if the markup is invalid, and nothing is changed until it is valid).
-              Click or move the cursor into a shape's line and that shape is selected, exactly as if
-              you had picked it in Primitives; selected shapes are shown in blue. When a field in a
-              Primitives row has focus, the SVG attribute it edits is highlighted in yellow, even if
-              the shape is not selected. Only shapes the app knows (path, line, rect, circle,
-              ellipse, polyline, polygon, text) are kept. Icons import, export and copy the SVG
-              (coordinates are exported as integers).
+              <b>SVG</b> — the artboard size (width × height), the grid (its visibility and its step
+              in artboard units), and the live markup, which you can <b>edit directly</b>: changes
+              apply to the drawing after a short pause (an error message appears if the markup is
+              invalid, and nothing is changed until it is valid). Click or move the cursor into a
+              shape's line and that shape is selected, exactly as if you had picked it in
+              Primitives; selected shapes are shown in blue. When a field in a Primitives row has
+              focus, the SVG attribute it edits is highlighted in yellow, even if the shape is not
+              selected. Only shapes the app knows (path, line, rect, circle, ellipse, polyline,
+              polygon, text) are kept. Icons import, export and copy the SVG (coordinates are
+              exported as integers).
             </li>
             <li><b>Primitives</b> — one row per shape (see Style).</li>
             <li>
               Documents save automatically, like Pages or Notes on macOS — there is no Save button.
               <b>Documents</b> lists everything stored in this browser (reference images included).
               Click a document to open it; click the name of the open document to rename it in
-              place. Hover a row for duplicate ⧉ and delete × (deleting an empty document doesn't
+              place. Each row carries duplicate ⧉ and delete × (deleting an empty document doesn't
               ask; others do). <b>+</b> starts a new document (named Untitled, Untitled 2, …; the
               current one is already saved). The last document reopens when you start the app.
               Documents live in this browser only, so back them up: the ⬇ / ⬆ buttons in the
@@ -802,14 +895,31 @@
           <h3>Toolbar: grid and view</h3>
           <ul>
             <li>
-              The grid button shows or hides the grid, and the small field next to it sets the grid
-              step. The magnet (or <kbd>G</kbd>) toggles snap to grid; a marker shows where the
-              point will land. Snapping applies to drawing, dragged handles and moved shapes; hold
-              <kbd>Alt</kbd> to switch to alignment snapping instead.
+              The magnet (or <kbd>G</kbd>) toggles snap to grid; a marker shows where the point will
+              land. Snapping applies to drawing, dragged handles and moved shapes; hold
+              <kbd>Alt</kbd> to switch to alignment snapping instead. Whether the grid is shown, and
+              how far apart its lines are, belong to the document, so they live in the
+              <b>SVG</b> section of the Document panel beside the artboard size.
             </li>
             <li>
-              Fit view, 100% zoom, and the eye button (<b>Final SVG only</b>: hides the grid, guides
-              and reference images).
+              Fit view, zoom out / 100% / zoom in, the eye button (<b>Final SVG only</b>: hides the
+              grid, guides and reference images) and Help. On a narrow screen these fold into one
+              button at the right of the toolbar.
+            </li>
+          </ul>
+
+          <h3>The bar beside the selection</h3>
+          <ul>
+            <li>
+              Select a shape and a small bar appears next to it with what applies: delete,
+              duplicate, send backward / bring forward (dimmed when there is nowhere to go), close
+              or open a path, split at a selected point, join two paths, group and ungroup, and edit
+              text. It is the same set the keyboard shortcuts reach, within reach of a thumb.
+            </li>
+            <li>
+              While the pen has a path open the bar shows that instead: take back the last point,
+              close the path and finish, or just finish. That is how you end a path without a
+              keyboard.
             </li>
           </ul>
 

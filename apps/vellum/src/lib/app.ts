@@ -19,6 +19,8 @@ import {
   nudgeSelection,
   moveZOrder,
   cancelOperation,
+  closeAndFinishPath,
+  removeLastPenPoint,
   groupSelection,
   ungroupSelection,
   splitAtSelectedPoint,
@@ -82,7 +84,13 @@ import {
   positionTextEditor,
 } from "./textedit.js";
 import { initPointerKind } from "./pointer.js";
-import { groupsOf, innerGroup, moveWithinParent, outerGroup } from "./groups.js";
+import {
+  canMoveWithinParent,
+  groupsOf,
+  innerGroup,
+  moveWithinParent,
+  outerGroup,
+} from "./groups.js";
 import { scaleAbout, transformElement } from "./transform.js";
 import { registerServiceWorker } from "@workbench/ui";
 import type { EditorState, ProjectFile, ReferenceImage, SceneElement } from "./types.js";
@@ -130,6 +138,12 @@ initActionBar(byId("action-bar"), {
   splitPoint: () => splitAtSelectedPoint(),
   join: () => joinSelected(),
   editText: (id) => beginTextEdit(id),
+  finishPath: () => {
+    pushUndo();
+    finishPath();
+  },
+  closeAndFinishPath: () => closeAndFinishPath(),
+  undoPoint: () => removeLastPenPoint(),
 });
 bindInteraction(svg, wrap);
 setTouchFinishPathHandler(() => finishPath());
@@ -465,6 +479,9 @@ interface AccHeaderOptions {
   extra?: string;
   index: number;
   count: number;
+  /** Whether the move would actually do anything; defaults to the plain list position. */
+  canUp?: boolean;
+  canDown?: boolean;
 }
 
 function accHeaderHtml(o: AccHeaderOptions): string {
@@ -475,8 +492,8 @@ function accHeaderHtml(o: AccHeaderOptions): string {
       <button type="button" class="btn-visibility${o.on ? "" : " is-off"}" data-action="toggle-dot" title="${o.dotTitle}" aria-label="${o.dotTitle}">${o.on ? "◉" : "○"}</button>
       <input type="text" class="acc-title-input" data-field="name" value="${escapeAttr(o.name)}" placeholder="${escapeAttr(o.placeholder)}" />
       ${o.extra ?? ""}
-      <button type="button" class="acc-icon-btn acc-move" data-action="move-up" title="Move up (Shift: to top)" aria-label="Move up"${o.index === 0 ? " disabled" : ""}>▲</button>
-      <button type="button" class="acc-icon-btn acc-move" data-action="move-down" title="Move down (Shift: to bottom)" aria-label="Move down"${o.index === o.count - 1 ? " disabled" : ""}>▼</button>
+      <button type="button" class="acc-icon-btn acc-move" data-action="move-up" title="Move up (Shift: to top)" aria-label="Move up"${(o.canUp ?? o.index > 0) ? "" : " disabled"}>▲</button>
+      <button type="button" class="acc-icon-btn acc-move" data-action="move-down" title="Move down (Shift: to bottom)" aria-label="Move down"${(o.canDown ?? o.index < o.count - 1) ? "" : " disabled"}>▼</button>
       <button type="button" class="acc-icon-btn acc-trash" data-action="delete" title="Delete" aria-label="Delete">
         <svg class="ui-icon" aria-hidden="true"><use href="#icon-trash" /></svg>
       </button>
@@ -736,6 +753,8 @@ function buildPrimitiveList(state: EditorState): void {
         name: el.name || "",
         placeholder: el.type,
         extra: `<span class="acc-swatch" style="${headerSwatchStyle(el)}"></span>`,
+        canUp: canMoveWithinParent(state.elements, el.id, -1),
+        canDown: canMoveWithinParent(state.elements, el.id, 1),
         index,
         count: state.elements.length,
       })}
@@ -1302,6 +1321,8 @@ helpBtn.addEventListener("click", () => {
   const show = helpPanel.classList.contains("hidden");
   helpPanel.classList.toggle("hidden", !show);
   helpBtn.setAttribute("aria-expanded", String(show));
+  // Help now lives in the view menu, which has no business staying open over it.
+  closeViewMenu();
   layoutPanels();
 });
 
