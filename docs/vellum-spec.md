@@ -237,10 +237,10 @@ Paths support **multiple subpaths** in one `<path>` only when user explicitly jo
 
 ## 11. View modes
 
-| Mode                        | What is visible                                                                     |
-| --------------------------- | ----------------------------------------------------------------------------------- |
-| **Edit** (default)          | Images + grid (if on) + SVG document + handles/selection overlay.                   |
-| **Final SVG only** (toggle) | **Only** exportable SVG layer—no images, no grid, no handles. Pan/zoom still apply. |
+| Mode                   | What is visible                                                                     |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| **Edit** (default)     | Images + grid (if on) + SVG document + handles/selection overlay.                   |
+| **Final SVG** (toggle) | **Only** exportable SVG layer—no images, no grid, no handles. Pan/zoom still apply. |
 
 Live **formatted SVG** text in side panel always reflects exportable document (pretty-printed, stable attribute order where practical).
 
@@ -253,7 +253,7 @@ Live **formatted SVG** text in side panel always reflects exportable document (p
 - Artboard width/height.
 - Grid step; grid visible toggle.
 - Alt-to-align hint (no persistent snap toggle).
-- View: “Final SVG only” toggle.
+- View: “Final SVG” toggle.
 
 ### 12.2 Selection / cursor
 
