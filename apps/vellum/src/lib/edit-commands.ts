@@ -1,13 +1,7 @@
 import { getState } from "./state.js";
-import {
-  setTool,
-  groupSelection,
-  ungroupSelection,
-  joinSelected,
-  copySelectionText,
-  cutSelection,
-  pasteFromText,
-} from "./interaction.js";
+import { setTool } from "./pen-commands.js";
+import { groupSelection, ungroupSelection, joinSelected } from "./selection-commands.js";
+import { copySelectionText, cutSelection, pasteFromText } from "./clipboard.js";
 import { undo, redo } from "./undo.js";
 import { beginTextEdit, endTextEdit, isTextEditing } from "./textedit.js";
 import { type EditorState } from "./types.js";

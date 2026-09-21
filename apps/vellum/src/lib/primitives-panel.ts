@@ -1,5 +1,5 @@
 import { setState, mutate, findElement, selectOnly } from "./state.js";
-import { setElementClosed } from "./interaction.js";
+import { setElementClosed } from "./selection-commands.js";
 import { pushUndo } from "./undo.js";
 import {
   MARKER_TYPES,

@@ -1,23 +1,19 @@
 import { getState, setState, subscribe, selectOnly } from "./state.js";
 import { initViewport } from "./viewport.js";
 import { initRender, renderAll } from "./render.js";
+import { bindInteraction, cancelOperation } from "./interaction.js";
+import { setTool, finishPath, closeAndFinishPath, removeLastPenPoint } from "./pen-commands.js";
 import {
-  bindInteraction,
-  setTool,
-  finishPath,
   deleteSelection,
   duplicateSelection,
   nudgeSelection,
   moveZOrder,
-  cancelOperation,
-  closeAndFinishPath,
-  removeLastPenPoint,
   groupSelection,
   ungroupSelection,
   splitAtSelectedPoint,
   joinSelected,
   setElementClosed,
-} from "./interaction.js";
+} from "./selection-commands.js";
 import { pushUndo, canUndo, canRedo } from "./undo.js";
 import { formatExportSvg, importSvgFile } from "./io.js";
 import { canJoin } from "./model.js";
