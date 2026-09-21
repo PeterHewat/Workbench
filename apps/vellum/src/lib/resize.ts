@@ -51,6 +51,10 @@ export function applyResize(
         const off = cornerHandleInset() / getState().viewport.zoom;
         const along = (world.x - base.x + (world.y - base.y)) / 2;
         const side = Math.max(0.5, along - off);
+        // Start from the press-time corner: the last move's re-anchoring shifted el.x/el.y, and
+        // anchoring against that drifted the shape a little further on every move.
+        el.x = base.x;
+        el.y = base.y;
         el.width = side;
         el.height = side;
         reanchor(el, base, { x: base.x, y: base.y });
