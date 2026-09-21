@@ -23,6 +23,7 @@ import {
 } from "./model.js";
 import { canMoveSelectionZ, groupsOf, outerGroup } from "./groups.js";
 import { worldToScreen } from "./viewport.js";
+import { rotateHandleReach } from "./render.js";
 import type { EditorState, SceneElement } from "./types.js";
 
 export interface ActionBarHandlers {
@@ -51,8 +52,6 @@ interface Action {
   run: () => void;
 }
 
-/** How far above the selection the rotate handle hangs, in screen pixels (see render.ts). */
-const ROTATE_HANDLE_REACH = 56;
 const GAP = 12;
 
 let bar: HTMLElement;
@@ -281,7 +280,7 @@ function position(state: EditorState): void {
   const band = freeBand();
   // Above, the rotate handle hangs off the top of the shape and has to be cleared. Below there
   // is nothing in the way, so the bar sits close rather than a handle's height adrift.
-  const above = at.top - size.height - GAP - (at.rotatable ? ROTATE_HANDLE_REACH : 0);
+  const above = at.top - size.height - GAP - (at.rotatable ? rotateHandleReach() : 0);
   const y = above >= band.top ? above : at.bottom + GAP;
   bar.style.left = `${Math.max(8, x)}px`;
   bar.style.top = `${Math.max(band.top, Math.min(y, band.bottom - size.height))}px`;

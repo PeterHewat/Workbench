@@ -612,7 +612,10 @@ body {
   z-index: 90;
   border-radius: 0;
   border-width: 0 1px 0 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #4a4e59 transparent;
   flex-direction: column;
 }
 
@@ -621,13 +624,11 @@ body {
 }
 
 /* Collapsible sections of the Document panel */
+/* The panel is one scroller. Sections used to bring their own - the top pair, the primitives
+   list, the SVG box - so a phone had four nested scroll areas and no way to tell which one a
+   drag would move. Everything now sizes to its content and the panel scrolls as a whole. */
 .doc-top {
-  flex: 0 1 auto;
-  max-height: 45%;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #4a4e59 transparent;
+  flex: 0 0 auto;
 }
 
 .doc-section {
@@ -691,11 +692,7 @@ body {
   display: none;
 }
 
-.doc-grow:not(.collapsed) {
-  flex: 1 1 0;
-}
-
-.doc-section.collapsed {
+.doc-section {
   flex: 0 0 auto;
 }
 
@@ -710,8 +707,8 @@ body {
 
 .svg-editor {
   position: relative;
-  flex: 1;
-  min-height: 60px;
+  /* Not flex: 1 - in a column the flex basis would win over the height set below. */
+  flex: 0 0 auto;
 }
 
 .svg-preview,
@@ -813,15 +810,6 @@ body {
 
 #doc-primitives.collapsed .doc-section-body {
   display: none;
-}
-
-.menu-dropdown--docked .primitive-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  scrollbar-color: #4a4e59 transparent;
-  scrollbar-width: thin;
 }
 
 .tool-btn.active[aria-pressed="true"] {
@@ -1228,21 +1216,20 @@ body {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 170px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #4a4e59 transparent;
 }
 
-.doc-list li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 4px;
+/* A document has no body to open, so nothing sits where the other lists put their chevron -
+   a spacer keeps the dot and the name on the same line as every other row. */
+.acc-expand-spacer {
+  flex: 0 0 30px;
 }
 
 .doc-list li.current {
   background: rgba(91, 141, 239, 0.18);
+}
+
+.doc-list li.current .acc-header-row {
+  background: transparent;
 }
 
 .doc-open {
@@ -1351,9 +1338,10 @@ body {
   font-size: 10.5px;
 }
 
-/* SVG section: fixed third of the window when open, no space when collapsed. */
-#doc-svg:not(.collapsed) {
-  flex: 0 0 33.333vh;
+/* The SVG source is the one box that keeps a scroller of its own: it is a text editor, and a
+   text editor that grows without bound would push everything below it off the panel. */
+.svg-editor {
+  height: clamp(160px, 26vh, 300px);
 }
 
 /* One control height for every input, dropdown, swatch and file chip in the row bodies, and a

@@ -496,12 +496,31 @@ interface AccHeaderOptions {
   canDown?: boolean;
 }
 
+/**
+ * The dot at the head of a row. A radio where only one thing can be chosen at a time (which
+ * document is open), a checkbox where any number can (which shapes are selected, which overlays
+ * are shown) - the shape of the control is the rule it obeys.
+ */
+function rowDotHtml(kind: "radio" | "check", on: boolean, title: string, extra = ""): string {
+  const icon =
+    kind === "radio"
+      ? on
+        ? "icon-radio-on"
+        : "icon-radio-off"
+      : on
+        ? "icon-check-on"
+        : "icon-check-off";
+  return `<button type="button" class="btn-visibility${on ? "" : " is-off"}"${extra} title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}" role="${kind === "radio" ? "radio" : "checkbox"}" aria-checked="${on}">
+      <svg class="ui-icon" aria-hidden="true"><use href="#${icon}" /></svg>
+    </button>`;
+}
+
 function accHeaderHtml(o: AccHeaderOptions): string {
   return `<div class="acc-header-row">
       <button type="button" class="acc-expand-btn" data-action="toggle-expand" aria-label="Expand" title="Expand / collapse">
         <span class="chevron" aria-hidden="true">▶</span>
       </button>
-      <button type="button" class="btn-visibility${o.on ? "" : " is-off"}" data-action="toggle-dot" title="${o.dotTitle}" aria-label="${o.dotTitle}">${o.on ? "◉" : "○"}</button>
+      ${rowDotHtml("check", o.on, o.dotTitle, ' data-action="toggle-dot"')}
       ${o.titleHtml ?? `<input type="text" class="acc-title-input" data-field="name" value="${escapeAttr(o.name ?? "")}" placeholder="${escapeAttr(o.placeholder ?? "")}" />`}
       ${o.extra ?? ""}
       <button type="button" class="acc-icon-btn acc-move" data-action="move-up" title="Move up (Shift: to top)" aria-label="Move up"${(o.canUp ?? o.index > 0) ? "" : " disabled"}>▲</button>
@@ -1834,22 +1853,23 @@ async function refreshDocList(): Promise<void> {
     const isCurrent = d.id === currentDoc.id;
     const li = document.createElement("li");
     li.dataset.docId = d.id;
-    li.className = isCurrent ? "current" : "";
+    li.className = `acc-item doc-row${isCurrent ? " current" : ""}`;
     const when = new Date(d.updated).toLocaleString([], {
       dateStyle: "short",
       timeStyle: "short",
     });
-    li.innerHTML = `<button type="button" class="btn-visibility${isCurrent ? "" : " is-off"}" data-doc-open title="${isCurrent ? "This is the open document" : "Open"}" aria-label="${isCurrent ? "Open document" : "Open"}">${isCurrent ? "◉" : "○"}</button>
-      <div class="doc-item" data-doc-open title="${isCurrent ? "Click the name to rename" : "Open"}">
-        <input type="text" class="doc-title-input" value="${escapeAttr(d.name)}" maxlength="80" aria-label="Document name"${isCurrent ? "" : ' readonly tabindex="-1"'} />
-        <small>${when}</small>
-      </div>
-      <button type="button" class="acc-icon-btn doc-act" data-doc-dup title="Duplicate" aria-label="Duplicate document">
-        <svg class="ui-icon" aria-hidden="true"><use href="#icon-copy" /></svg>
-      </button>
-      <button type="button" class="acc-icon-btn acc-trash doc-del" data-doc-delete title="Delete" aria-label="Delete document">
-        <svg class="ui-icon" aria-hidden="true"><use href="#icon-trash" /></svg>
-      </button>`;
+    li.title = isCurrent ? `Open since ${when}` : `Open (last saved ${when})`;
+    li.innerHTML = `<div class="acc-header-row">
+        <span class="acc-expand-spacer" aria-hidden="true"></span>
+        ${rowDotHtml("radio", isCurrent, isCurrent ? "This is the open document" : "Open", " data-doc-open")}
+        <input type="text" class="acc-title-input doc-title-input" data-doc-open value="${escapeAttr(d.name)}" maxlength="80" aria-label="Document name"${isCurrent ? "" : ' readonly tabindex="-1"'} />
+        <button type="button" class="acc-icon-btn doc-act" data-doc-dup title="Duplicate" aria-label="Duplicate document">
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-copy" /></svg>
+        </button>
+        <button type="button" class="acc-icon-btn acc-trash doc-del" data-doc-delete title="Delete" aria-label="Delete document">
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-trash" /></svg>
+        </button>
+      </div>`;
     docListEl.appendChild(li);
   }
 }

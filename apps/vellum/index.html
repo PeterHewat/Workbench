@@ -101,6 +101,38 @@
           <circle cx="5" cy="19" r="2.3" fill="currentColor" />
           <circle cx="19" cy="19" r="2.3" fill="currentColor" />
         </symbol>
+        <!-- The dot in a row says what kind of choice it is: a radio where only one can be
+             chosen (documents), a checkbox where any number can (primitives, reference images). -->
+        <symbol id="icon-radio-on" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2" />
+          <circle cx="12" cy="12" r="4" fill="currentColor" />
+        </symbol>
+        <symbol id="icon-radio-off" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2" />
+        </symbol>
+        <symbol id="icon-check-on" viewBox="0 0 24 24">
+          <rect x="4" y="4" width="16" height="16" rx="4" fill="currentColor" />
+          <path
+            fill="none"
+            stroke="var(--panel, #24262b)"
+            stroke-width="2.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M8 12.4 11 15.4 16.2 9"
+          />
+        </symbol>
+        <symbol id="icon-check-off" viewBox="0 0 24 24">
+          <rect
+            x="4"
+            y="4"
+            width="16"
+            height="16"
+            rx="4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+        </symbol>
         <symbol id="icon-split" viewBox="0 0 24 24">
           <path
             fill="none"
@@ -929,7 +961,12 @@
             <li>
               The <b>Document</b> button (first in the toolbar) toggles a panel docked on the left.
               It floats over the canvas and stays open while you work. Its sections (Documents,
-              Reference images, SVG, Primitives) fold open and closed, and are remembered.
+              Reference images, SVG, Primitives) fold open and closed, and are remembered. The panel
+              is one scrolling surface: only the SVG source keeps a scrollbar of its own. Every row
+              across the lists is built the same way, and the control at its head says which kind of
+              choice it is — a round radio where only one thing can be chosen (which document is
+              open), a square checkbox where any number can (which shapes are selected, which
+              overlays are shown).
             </li>
             <li>
               <b>Reference images</b> — add reference images to trace; each row is the file it came

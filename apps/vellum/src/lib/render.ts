@@ -238,6 +238,15 @@ function addHandleLine(parent: Element, x1: number, y1: number, x2: number, y2: 
   add(parent, "line", { class: "handle-line", x1, y1, x2, y2 });
 }
 
+/**
+ * How far above a shape the rotate handle hangs, in screen pixels, dot included. Anything that
+ * wants to sit above the selection has to clear it, and the distance is not the same on a mouse
+ * as on a finger.
+ */
+export function rotateHandleReach(): number {
+  return (isCoarsePointer() ? 48 : 28) + HANDLE_R;
+}
+
 function renderRotateHandle(parent: Element, el: SceneElement, state: EditorState): void {
   const box = localBBox(el);
   if (!box) return;
