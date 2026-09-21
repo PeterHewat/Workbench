@@ -1218,18 +1218,22 @@ body {
   padding: 0;
 }
 
-/* A document has no body to open, so nothing sits where the other lists put their chevron -
-   a spacer keeps the dot and the name on the same line as every other row. */
-.acc-expand-spacer {
-  flex: 0 0 30px;
-}
-
+/* A document has no body to open, so its dot starts at the row's edge rather than behind a
+   gap left for a chevron that is not there. The open row is opaque: a translucent tint here
+   let the canvas show through the frosted panel behind it. */
 .doc-list li.current {
-  background: rgba(91, 141, 239, 0.18);
+  background: #364159;
+  border-color: var(--accent);
 }
 
 .doc-list li.current .acc-header-row {
   background: transparent;
+}
+
+/* No move buttons, so both icons take the trash width and the pair reads as a column. */
+.doc-list li .doc-act,
+.doc-list li .doc-del {
+  width: 30px;
 }
 
 .doc-open {
@@ -1277,13 +1281,6 @@ body {
   .doc-list li:focus-within .doc-del {
     opacity: 1;
   }
-}
-
-/* Same dot, same icons, same sizes as a Primitives or Reference images row. */
-.doc-list li .doc-act,
-.doc-list li .doc-del {
-  height: 30px;
-  width: 30px;
 }
 
 .doc-list li .doc-act:hover {
@@ -1376,12 +1373,14 @@ body {
   display: none;
 }
 
-.acc-body > .geom-grid,
 .acc-body > .field-row--wide {
   grid-column: 1 / -1;
 }
 
-.acc-body .field-row > span {
+/* One label column for the whole body, whether the label is a word or a checkbox and a word,
+   so every control in a column starts at the same x. */
+.acc-body .field-row > span,
+.acc-body .field-row > .fill-toggle {
   flex: 0 0 auto;
   min-width: 58px;
 }
@@ -1482,37 +1481,6 @@ body {
     min-height: 36px;
     padding: 0 10px;
   }
-}
-
-/* Position and size: four small numbers in a grid rather than four full-width rows. */
-.geom-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.geom-field {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.geom-field span {
-  flex: 0 0 14px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.geom-field input {
-  flex: 1;
-  min-width: 0;
-  padding: 4px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: #1a1b1e;
-  color: var(--text);
 }
 
 /* Text edited where it sits on the canvas, instead of in a panel that covers the artboard. */
@@ -1789,10 +1757,6 @@ body {
 
 .grad-stop-add:hover {
   border-color: var(--accent);
-}
-
-.geom-field--wide {
-  grid-column: 1 / -1;
 }
 
 /* An action that has nowhere to go reads as unavailable rather than silently doing nothing. */

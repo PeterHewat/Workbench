@@ -84,6 +84,7 @@ import {
   positionTextEditor,
 } from "./textedit.js";
 import { initPointerKind, isCoarsePointer } from "./pointer.js";
+import { readSessionView, writeSessionView } from "./session.js";
 import {
   canMoveWithinParent,
   groupsOf,
@@ -158,8 +159,19 @@ initRulers({
 });
 window.addEventListener("resize", () => renderRulers(getState()));
 
+/** Declared up here because the first render happens long before the document code runs. */
+let currentDoc: { id: string | null; name: string } = { id: null, name: "" };
+/** Read before the first render, which would otherwise overwrite it with a fitted view. */
+const savedView = readSessionView();
+let lastSavedViewport: EditorState["viewport"] | null = null;
+
 subscribe((state) => {
   renderAll(state);
+  // Where you are looking belongs to the tab, not to the drawing: kept so a refresh returns it.
+  if (state.viewport !== lastSavedViewport) {
+    lastSavedViewport = state.viewport;
+    writeSessionView({ docId: currentDoc.id, viewport: state.viewport });
+  }
   renderRulers(state);
   syncPanel(state);
   syncActionBar(state);
@@ -629,21 +641,24 @@ function selectHtml(field: string, value: string, options: readonly Option[]): s
 function geometryRowsHtml(el: SceneElement): string {
   const box = elementBBox(el);
   if (!box) return "";
-  const field = (key: string, label: string, value: number, min?: number) =>
-    `<label class="geom-field"><span>${label}</span><input type="number" data-field="${key}" step="1"${
+  // Ordinary field rows, not a grid of their own: they land in the same two columns, with the
+  // same label width and the same control width, as every other field in the body.
+  const field = (key: string, label: string, aria: string, value: number, step = 1, min?: number) =>
+    `<label class="field-row"><span>${label}</span><input type="number" data-field="${key}" step="${step}"${
       min == null ? "" : ` min="${min}"`
-    } value="${Math.round(value * 100) / 100}" aria-label="${label}" /></label>`;
-  const position = field("geomX", "X", box.x) + field("geomY", "Y", box.y);
+    } value="${Math.round(value * 100) / 100}" aria-label="${aria}" /></label>`;
+  const position = field("geomX", "X", "X", box.x) + field("geomY", "Y", "Y", box.y);
   // Text has no width of its own - its size is the font size, which has its own field.
   const size =
     el.type === "text"
       ? ""
-      : field("geomW", "W", box.width, 0) + field("geomH", "H", box.height, 0);
+      : field("geomW", "W", "Width", box.width, 1, 0) +
+        field("geomH", "H", "Height", box.height, 1, 0);
   // Only the shapes that store an angle get a field for it; on a path it is baked into points.
   const angle = keepsRotation(el)
-    ? `<label class="geom-field geom-field--wide"><span>∠</span><input type="number" data-field="rotation" step="5" value="${Math.round(el.rotation ?? 0)}" aria-label="Rotation (degrees)" /></label>`
+    ? field("rotation", "Angle", "Rotation (degrees)", el.rotation ?? 0, 5)
     : "";
-  return `<div class="geom-grid">${position}${size}${angle}</div>`;
+  return position + size + angle;
 }
 
 function primitiveBodyHtml(el: SceneElement): string {
@@ -1338,6 +1353,14 @@ function layoutPanels(): void {
 function setDocPanelVisible(visible: boolean): void {
   docPanel.classList.toggle("hidden", !visible);
   docBtn.setAttribute("aria-expanded", String(visible));
+  writeSessionView({ docPanel: visible });
+  layoutPanels();
+}
+
+function setHelpVisible(visible: boolean): void {
+  helpPanel.classList.toggle("hidden", !visible);
+  helpBtn.setAttribute("aria-expanded", String(visible));
+  writeSessionView({ help: visible });
   layoutPanels();
 }
 
@@ -1345,13 +1368,14 @@ docBtn.addEventListener("click", () => setDocPanelVisible(docPanel.classList.con
 window.addEventListener("resize", layoutPanels);
 
 helpBtn.addEventListener("click", () => {
-  const show = helpPanel.classList.contains("hidden");
-  helpPanel.classList.toggle("hidden", !show);
-  helpBtn.setAttribute("aria-expanded", String(show));
-  // Help now lives in the view menu, which has no business staying open over it.
+  // The view menu has no business staying open over the panel it just opened.
   closeViewMenu();
-  layoutPanels();
+  setHelpVisible(helpPanel.classList.contains("hidden"));
 });
+
+// What was open when the page was last shown, reopened before anything is drawn.
+if (savedView.docPanel) setDocPanelVisible(true);
+if (savedView.help) setHelpVisible(true);
 
 /**
  * Help answers for the pointer you are using. The starting side is the one detected, but it is a
@@ -1794,7 +1818,6 @@ setState({ viewport: fitToView() });
 const LAST_DOC_KEY = "vector-tracer.lastDoc";
 const docDirtyEl = byId("doc-dirty");
 const docListEl = byId("doc-list");
-let currentDoc: { id: string | null; name: string } = { id: null, name: "" };
 let docsCache: DocumentMeta[] = [];
 let changeSeq = 0;
 let savedSeq = 0;
@@ -1860,7 +1883,6 @@ async function refreshDocList(): Promise<void> {
     });
     li.title = isCurrent ? `Open since ${when}` : `Open (last saved ${when})`;
     li.innerHTML = `<div class="acc-header-row">
-        <span class="acc-expand-spacer" aria-hidden="true"></span>
         ${rowDotHtml("radio", isCurrent, isCurrent ? "This is the open document" : "Open", " data-doc-open")}
         <input type="text" class="acc-title-input doc-title-input" data-doc-open value="${escapeAttr(d.name)}" maxlength="80" aria-label="Document name"${isCurrent ? "" : ' readonly tabindex="-1"'} />
         <button type="button" class="acc-icon-btn doc-act" data-doc-dup title="Duplicate" aria-label="Duplicate document">
@@ -2178,6 +2200,10 @@ void (async () => {
   }
   if (last && docsCache.some((d) => d.id === last)) await openDocument(last);
   else await createBlankDocument();
+  // The view the tab was last showing, but only for the document it was showing it of.
+  if (savedView.viewport && savedView.docId === currentDoc.id) {
+    setState({ viewport: savedView.viewport });
+  }
 })();
 
 registerServiceWorker();

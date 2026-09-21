@@ -479,6 +479,10 @@ name-in-id export, Help panel (`?` button).
 - **Default names:** every shape always has a real name stored in `el.name` (so it is exported in the id and re-imported from it; nothing else is stored in the document that the SVG does not express). Unnamed shapes get `<type> <n>` ("path 1", "rect 2", …) with n = highest used for that type + 1; default names of a different type (path→line, rect→polygon after rotation) and duplicated defaults (copy/paste) are renumbered automatically; clearing a name restores a default; names typed by the user are never touched. Enforced centrally in `state.js` (`ensureDefaultNames`, run by `setState`/`replaceState`), so old documents and imported SVGs get names too.
 - **Invisible shapes:** a shape with stroke width 0 (exported as `stroke="none"`) and no fill paints nothing, exactly as in any SVG viewer. The app keeps it clickable (pointer-events `all`) and shows its Primitives row dimmed/italic so it can be found and fixed.
 - **Control widths:** every input, dropdown, color swatch and file chip in a primitive/image row body is 150px wide (`--field-w`) so the right edges line up; the row-header color preview lines up with them (see Row layout) and shows the gradient at its real angle.
+- **View state is the tab's, not the document's:** zoom, pan and which panels are open are kept
+  in `sessionStorage` (`session.ts`) and restored on reload, keyed by document id so another
+  document still gets its own fitted view. A new tab starts fresh, and nothing of it travels with
+  an exported or shared file.
 - **One scroller:** the Document panel scrolls as a whole; no section brings its own scroll area
   and none has a fixed share of the height. The SVG source box is the single exception, at a
   clamped height, because a text editor that grows without bound pushes everything past the edge.
