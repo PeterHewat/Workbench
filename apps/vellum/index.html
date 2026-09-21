@@ -145,17 +145,6 @@
             <circle cx="11" cy="17" r="2" />
           </g>
         </symbol>
-        <symbol id="icon-arc" viewBox="0 0 24 24">
-          <path
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            d="M4 19a15 15 0 0 1 15-15"
-          />
-          <circle cx="4" cy="19" r="2" fill="currentColor" />
-          <circle cx="19" cy="4" r="2" fill="currentColor" />
-        </symbol>
         <symbol id="icon-text" viewBox="0 0 24 24">
           <path
             fill="none"
@@ -571,15 +560,6 @@
           <button
             type="button"
             class="tool-btn"
-            data-tool="arc"
-            title="Arc (A) — an exact circular arc: drag the two ends, Shift for a half circle"
-            aria-label="Arc"
-          >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-arc" /></svg>
-          </button>
-          <button
-            type="button"
-            class="tool-btn"
             data-tool="text"
             title="Text (T) — click to place"
             aria-label="Text"
@@ -717,15 +697,6 @@
             <li>
               <b>Rectangle (R) / Ellipse (E)</b> — drag, or click twice. <kbd>Shift</kbd> makes a
               square / circle.
-            </li>
-            <li>
-              <b>Arc (A)</b> — drag from one end of the arc to the other and it bulges a quarter
-              turn to the right; hold <kbd>Shift</kbd> for a half circle. The result is an ordinary
-              two-point curve, so reshaping it afterwards means dragging its handles, exactly as
-              with the pen. What the arc tool gives you that the pen does not is an
-              <em>exact circular</em> arc: the pen's curves are whatever your hand drags, which can
-              look circular without being so. If you never need that exactness, the pen covers this
-              tool entirely.
             </li>
             <li>
               <b>Text (T)</b> — click to place, then type in the field that opens in the SVG panel.
@@ -956,8 +927,8 @@
               <td>Toggle snap to grid (a marker shows where the point will land)</td>
             </tr>
             <tr>
-              <td>S P R E A T</td>
-              <td>Select, Pen, Rect, Ellipse, Arc, Text</td>
+              <td>S P R E T</td>
+              <td>Select, Pen, Rect, Ellipse, Text</td>
             </tr>
             <tr>
               <td>Space (hold)</td>

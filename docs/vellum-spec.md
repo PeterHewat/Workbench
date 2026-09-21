@@ -138,14 +138,14 @@ Future: per-vertex fill rules, pattern fills.
 
 ### 7.2 Supported SVG primitives (target completeness)
 
-| Tool    | SVG element                                    | v1      | Notes                                                                                                                                                                                                                                                                                                                                    |
-| ------- | ---------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pen     | `<path>`, or `<line>`/`<polyline>`/`<polygon>` | **Yes** | One tool for all freeform shapes — see §7.4.                                                                                                                                                                                                                                                                                             |
-| Rect    | `<rect>`                                       | **Yes** | Corner radius `rx`/`ry` optional later. Hold Shift for a square.                                                                                                                                                                                                                                                                         |
-| Ellipse | `<ellipse>`                                    | **Yes** | Hold Shift for a circle (no separate Circle tool).                                                                                                                                                                                                                                                                                       |
-| Circle  | `<circle>`                                     | n/a     | No dedicated tool. An ellipse has a diagonal handle that keeps both radii equal, and an ellipse whose radii are equal exports as `<circle>`.                                                                                                                                                                                             |
-| Arc     | `<path>` cubic segments                        | **Yes** | Drag from one end to the other; a quarter turn, or a half circle with Shift. What it adds over the pen is an _exact circular_ arc - a dragged pen curve can look circular without being so. Stored as an ordinary two-point curve and reshaped by dragging its handles, so it is a starting point rather than a second kind of geometry. |
-| Text    | `<text>`                                       | **Yes** | Click to place; edit content/size/font/alignment in the row.                                                                                                                                                                                                                                                                             |
+| Tool    | SVG element                                    | v1      | Notes                                                                                                                                                                                                                         |
+| ------- | ---------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pen     | `<path>`, or `<line>`/`<polyline>`/`<polygon>` | **Yes** | One tool for all freeform shapes — see §7.4.                                                                                                                                                                                  |
+| Rect    | `<rect>`                                       | **Yes** | Corner radius `rx`/`ry` optional later. Hold Shift for a square.                                                                                                                                                              |
+| Ellipse | `<ellipse>`                                    | **Yes** | Hold Shift for a circle (no separate Circle tool).                                                                                                                                                                            |
+| Circle  | `<circle>`                                     | n/a     | No dedicated tool. An ellipse has a diagonal handle that keeps both radii equal, and an ellipse whose radii are equal exports as `<circle>`.                                                                                  |
+| Arc     | `<path>` cubic segments                        | No      | Dropped. It produced the same two-point cubic the pen does, differing only in being an _exact_ circle; that is not worth a permanent slot in a six-button toolbar. `A` commands still import, converted to cubics (`arc.ts`). |
+| Text    | `<text>`                                       | **Yes** | Click to place; edit content/size/font/alignment in the row.                                                                                                                                                                  |
 
 Each primitive is a **first-class object** in the scene graph with stable `id` (for project file and selection).
 
@@ -356,7 +356,6 @@ Stored shape (versioned by `version`):
 | --------------------- | ------------------------------------------------------------ |
 | S                     | Select tool (also the resting state: no drawing tool chosen) |
 | P                     | Pen tool                                                     |
-| A                     | Arc (Shift = half circle)                                    |
 | R                     | Rect (Shift = square)                                        |
 | E                     | Ellipse (Shift = circle)                                     |
 | T                     | Text                                                         |
@@ -425,8 +424,8 @@ name-in-id export, Help panel (`?` button).
   angle. Stored as fractions of the bounding box, so the gradient follows the shape.
 - **Nested groups** and **imported `<g transform>`**, baked into coordinates at import
   (`transform.ts`); a shape keeps its type when the transform is one it can express.
-- **Arc tool**, and a path parser that reads what other tools actually write: implicit command
-  repeats, `Q`/`T`/`S`, and `A` converted to cubics.
+- **A path parser that reads what other tools actually write:** implicit command repeats,
+  `Q`/`T`/`S`, and `A` converted to cubics.
 - **Non-destructive rotation** for rect, ellipse, circle and text (§8.2).
 - **Touch:** one-finger pan, hold-to-marquee, two-finger pinch/pan/rotate, finger-sized handle
   targets, a tool bar under the canvas, a contextual action bar beside the selection, and text

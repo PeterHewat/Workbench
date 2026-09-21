@@ -19,7 +19,7 @@ export type LineCap = "round" | "butt" | "square";
 export type LineJoin = "round" | "miter" | "bevel";
 export type TextAnchor = "start" | "middle" | "end";
 /** "select" is the rest state: no drawing tool chosen, so the canvas selects and navigates. */
-export type ToolName = "select" | "pen" | "rect" | "ellipse" | "arc" | "text";
+export type ToolName = "select" | "pen" | "rect" | "ellipse" | "text";
 
 export interface Point {
   x: number;

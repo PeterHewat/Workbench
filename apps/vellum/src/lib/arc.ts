@@ -2,13 +2,12 @@
  * Elliptical arcs as cubic Béziers.
  *
  * The scene graph has one curve type - the cubic with two handles per anchor - which is what
- * makes point editing uniform. Arcs therefore become cubics: on import for an `A` command, and
- * in the arc tool for a fresh one. Four pieces per full turn keeps the error far below what is
- * visible at any zoom this tool reaches.
+ * makes point editing uniform. An `A` command in an imported path therefore becomes cubics.
+ * Four pieces per full turn keeps the error far below what is visible at any zoom this tool
+ * reaches.
  */
 
-import { createPath } from "./model.js";
-import type { Anchor, PathElement, Point, StyleCarrier } from "./types.js";
+import type { Point } from "./types.js";
 
 export interface CubicSegment {
   c1: Point;
@@ -106,39 +105,4 @@ export function arcToCubics(
   const lastSeg = out[out.length - 1];
   if (lastSeg) lastSeg.to = { ...to };
   return out;
-}
-
-/**
- * A path along an arc from `from` to `to`, bulging by `sweepDegrees` of turn. The tool draws the
- * chord and picks the radius that gives that much of a turn; after that it is an ordinary path,
- * so reshaping it means dragging its handles like any other curve.
- */
-export function createArcPath(
-  from: Point,
-  to: Point,
-  sweepDegrees: number,
-  clockwise: boolean,
-  style: StyleCarrier = {}
-): PathElement | null {
-  const chord = Math.hypot(to.x - from.x, to.y - from.y);
-  if (chord < 1e-6) return null;
-  const theta = (Math.min(359, Math.max(1, sweepDegrees)) * Math.PI) / 180;
-  const radius = chord / (2 * Math.sin(theta / 2));
-  const segments = arcToCubics(from, radius, radius, 0, theta > Math.PI, clockwise, to);
-
-  const points: Anchor[] = [
-    { x: from.x, y: from.y, smooth: true, hIn: { ...from }, hOut: { ...from } },
-  ];
-  for (const seg of segments) {
-    const last = points[points.length - 1]!;
-    last.hOut = { ...seg.c1 };
-    points.push({
-      x: seg.to.x,
-      y: seg.to.y,
-      smooth: true,
-      hIn: { ...seg.c2 },
-      hOut: { ...seg.to },
-    });
-  }
-  return createPath(points, false, style);
 }
