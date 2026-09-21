@@ -1,4 +1,6 @@
 import { AUTO_NAME_RE, deepClone } from "./utils.js";
+import { isCoarsePointer } from "./pointer.js";
+import { pruneGroupsInPlace } from "./groups.js";
 import type { EditorState, PathEdit, SceneElement, Selection } from "./types.js";
 
 export interface NotifyOptions {
@@ -14,8 +16,13 @@ export function selectOnly(elementIds: string[] = [], pathEdit: PathEdit | null 
 
 export function createInitialState(): EditorState {
   return {
-    artboard: { width: 1000, height: 1000 },
-    grid: { step: 10, visible: true, snap: false },
+    // 512 with a step of 16 is 32 cells across: one cell per pixel of a 32px icon, and it
+    // halves cleanly all the way down. Both are editable in the Document panel.
+    artboard: { width: 512, height: 512 },
+    // Transparent, because that is what an icon is. The canvas shows it as a checkerboard so
+    // transparent and white are told apart, and nothing is exported until a colour is chosen.
+    background: { color: "#ffffff", opacity: 0 },
+    grid: { step: 16, visible: true, snap: isCoarsePointer() },
     elements: [],
     images: [],
     viewport: { panX: 40, panY: 40, zoom: 1 },
@@ -26,7 +33,7 @@ export function createInitialState(): EditorState {
     hoverId: null,
     cursor: { x: 0, y: 0, snapX: 0, snapY: 0, snapActive: false },
     align: { x: null, y: null },
-    ui: { expandedImageId: null, expandedElementId: null },
+    ui: { expandedImageId: null, expandedElementId: null, editingTextId: null },
     spacePan: false,
   };
 }
@@ -47,6 +54,7 @@ export function subscribe(fn: Listener): () => void {
 
 function notify(options: NotifyOptions): void {
   ensureDefaultNames(state.elements);
+  pruneGroupsInPlace(state.elements);
   for (const fn of listeners) fn(state, options);
 }
 
@@ -101,8 +109,21 @@ export function replaceState(next: EditorState): void {
   notify({ full: true });
 }
 
+/**
+ * A snapshot for the undo stack. Reference images are cloned without their data URL, which is
+ * then put back by reference: a base64 image is megabytes, the stack holds a hundred entries,
+ * and the pixels never change - only the transform around them, which is what undo has to keep.
+ */
 export function snapshotForUndo(): EditorState {
-  return deepClone(state);
+  const urls = state.images.map((img) => img.dataUrl);
+  const snap = deepClone({
+    ...state,
+    images: state.images.map((img) => ({ ...img, dataUrl: "" })),
+  });
+  snap.images.forEach((img, i) => {
+    img.dataUrl = urls[i] ?? "";
+  });
+  return snap;
 }
 
 export function restoreSnapshot(snap: EditorState): void {

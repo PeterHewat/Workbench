@@ -18,7 +18,8 @@ export type MarkerShape = "none" | "arrow" | "dot" | "square" | "diamond";
 export type LineCap = "round" | "butt" | "square";
 export type LineJoin = "round" | "miter" | "bevel";
 export type TextAnchor = "start" | "middle" | "end";
-export type ToolName = "select" | "hand" | "pen" | "rect" | "ellipse" | "text";
+/** "select" is the rest state: no drawing tool chosen, so the canvas selects and navigates. */
+export type ToolName = "select" | "pen" | "rect" | "ellipse" | "text";
 
 export interface Point {
   x: number;
@@ -39,6 +40,22 @@ export interface BBox {
   height: number;
 }
 
+/**
+ * What the artboard is painted with. An opacity of 0 is the transparent document, which exports
+ * no background at all; the colour is still remembered so the swatch does not forget it.
+ */
+export interface BackgroundPaint {
+  color: string;
+  opacity: number;
+}
+
+/** One colour stop of a gradient. `offset` runs 0..1 along the gradient. */
+export interface GradientStop {
+  offset: number;
+  color: string;
+  opacity: number;
+}
+
 /** Every style an element carries. Elements always hold a complete set. */
 export interface StyleProps {
   stroke: string;
@@ -50,9 +67,15 @@ export interface StyleProps {
   fillType: FillType;
   fill: string;
   fillOpacity: number;
-  fill2: string;
-  fill2Opacity: number;
-  gradAngle: number;
+  /** Two or more stops, in offset order. Used when `fillType` is a gradient. */
+  gradStops: GradientStop[];
+  /**
+   * Where the gradient runs, in fractions of the shape's bounding box, so it follows the shape
+   * when that is moved or resized. Linear: the two ends of the vector. Radial: the centre, and
+   * a point on the circle that sets the radius. Both are dragged on the canvas.
+   */
+  gradFrom: Point;
+  gradTo: Point;
   markerStart: MarkerShape;
   markerEnd: MarkerShape;
 }
@@ -60,7 +83,15 @@ export interface StyleProps {
 interface ElementBase extends StyleProps {
   id: string;
   name: string;
-  groupId?: string;
+  /** The groups containing this element, outermost first. Absent when it is in none. */
+  groups?: string[];
+  /**
+   * Degrees clockwise about the shape's own centre, exported as `transform="rotate()"`.
+   * Carried by the shapes that cannot express a rotation in their coordinates - rect, ellipse,
+   * circle and text. Paths and polylines have their rotation baked into their points instead,
+   * which loses nothing, and never set this.
+   */
+  rotation?: number;
 }
 
 export interface PathElement extends ElementBase {
@@ -113,9 +144,6 @@ export interface PolygonElement extends ElementBase {
   points: Point[];
 }
 
-/** Either open or closed run of plain vertices. */
-export type PolyElement = PolylineElement | PolygonElement;
-
 export interface TextElement extends ElementBase {
   type: "text";
   x: number;
@@ -124,7 +152,6 @@ export interface TextElement extends ElementBase {
   fontSize: number;
   fontFamily: string;
   anchor: TextAnchor;
-  rotation?: number;
 }
 
 export type SceneElement =
@@ -138,7 +165,7 @@ export type SceneElement =
   | TextElement;
 
 /** Elements whose geometry is a list of points that can be edited individually. */
-export type PointsElement = PathElement | PolyElement;
+export type PointsElement = PathElement | PolylineElement | PolygonElement;
 
 export interface ReferenceImage {
   id: string;
@@ -173,7 +200,7 @@ export interface Viewport {
   zoom: number;
 }
 
-export interface RubberPreview {
+interface RubberPreview {
   type: "rubber";
   x1: number;
   y1: number;
@@ -183,10 +210,10 @@ export interface RubberPreview {
   strokeWidth: number;
 }
 
-export interface ShapePreview {
+interface ShapePreview {
   type: "shape";
-  tag: "rect" | "ellipse";
-  nodeAttrs: Record<string, number>;
+  tag: "rect" | "ellipse" | "path";
+  nodeAttrs: Record<string, number | string>;
   stroke?: string;
   strokeWidth?: number;
 }
@@ -218,6 +245,7 @@ export interface Drawing {
 
 export interface EditorState {
   artboard: { width: number; height: number };
+  background: BackgroundPaint;
   grid: { step: number; visible: boolean; snap: boolean };
   elements: SceneElement[];
   images: ReferenceImage[];
@@ -229,7 +257,12 @@ export interface EditorState {
   hoverId: string | null;
   cursor: { x: number; y: number; snapX: number; snapY: number; snapActive: boolean };
   align: { x: number | null; y: number | null };
-  ui: { expandedImageId: string | null; expandedElementId: string | null };
+  ui: {
+    expandedImageId: string | null;
+    expandedElementId: string | null;
+    /** The text element being edited in place on the canvas, if any. */
+    editingTextId: string | null;
+  };
   spacePan: boolean;
 }
 
@@ -237,13 +270,17 @@ export interface EditorState {
 export type StyleCarrier = Partial<StyleProps> & {
   id?: string;
   name?: string;
-  groupId?: string;
+  groups?: string[];
+  /** Import only: the gradient arrived in artboard units and still has to be converted. */
+  gradUserSpace?: boolean;
 };
 
 /** The serialized document written to storage. */
 export interface ProjectFile {
-  version: 1;
+  version: 2;
   artboard: EditorState["artboard"];
+  /** Absent in documents saved before backgrounds existed, which means transparent. */
+  background?: BackgroundPaint;
   grid: EditorState["grid"];
   images: ReferenceImage[];
   elements: SceneElement[];

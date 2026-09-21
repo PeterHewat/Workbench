@@ -22,6 +22,7 @@
   ],
   "scripts": {
     "dev": "bun run --filter @workbench/vellum dev",
+    "dev:home": "bun run --filter @workbench/home dev",
     "build": "bun tools/build-site.ts",
     "preview": "bun run --filter @workbench/home preview",
     "lint": "eslint .",

@@ -14,6 +14,7 @@
   --accent-dim: #3d5a9e;
   --danger: #e85d5d;
   --toolbar-h: 48px;
+  --ruler-h: 20px;
   --panel-w: 320px;
   font-family:
     system-ui,
@@ -76,7 +77,10 @@ body {
   border-color: var(--accent);
 }
 
-.menu-trigger[aria-expanded="true"] {
+/* Anything that opens a panel reads as pressed while that panel is up, whether it is a menu
+   trigger or a plain toolbar button such as Help. */
+.menu-trigger[aria-expanded="true"],
+.tool-btn[aria-expanded="true"] {
   background: var(--accent-dim);
   border-color: var(--accent);
 }
@@ -90,8 +94,10 @@ body {
   margin-top: 4px;
   padding: 4px;
   background: rgba(37, 38, 43, 0.72);
-  backdrop-filter: blur(16px) saturate(140%);
+  /* Prefixed first: the minifier keeps only the last of the pair, and Chrome has no
+     -webkit- alias, so the standard property must win. */
   -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
   border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
@@ -137,6 +143,14 @@ body {
   width: 18px;
   height: 18px;
   display: block;
+}
+
+/* A toolbar button is a target with a picture in it, and the picture is the whole point: at
+   18px in a 34-44px button the glyph read as a smudge rather than as what it means. */
+.tool-btn .ui-icon,
+.menu-trigger--icon .ui-icon {
+  width: 22px;
+  height: 22px;
 }
 
 .tool-btn {
@@ -223,11 +237,17 @@ body {
   touch-action: none;
 }
 
-.artboard-bg {
-  fill: #ffffff;
+/* Two rects: the checkerboard says "nothing here", the paint above it says what was chosen.
+   A fully transparent background leaves the checkerboard showing through. */
+.artboard-checks {
+  fill: url(#artboard-checks);
   stroke: #888;
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
+}
+
+.artboard-bg {
+  stroke: none;
 }
 
 .acc-item.acc-item--hidden .acc-title-input {
@@ -453,12 +473,7 @@ body {
 }
 
 .acc-body {
-  display: none;
   padding: 8px 10px 10px;
-}
-
-.acc-item.expanded .acc-body {
-  display: block;
 }
 
 .acc-body .field-row input {
@@ -485,13 +500,33 @@ body {
   border-color: var(--accent);
 }
 
-/* Overlay handles */
+/* Standing in for the row's name field, so it takes that width rather than a field's. */
+.acc-title-file {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  height: 26px;
+  margin: 0 4px;
+}
+
+/* Overlay handles: a transparent target circle with the visible dot drawn over it. */
 .handle {
   fill: #fff;
   stroke: var(--accent);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
   cursor: pointer;
+  pointer-events: none;
+}
+
+.handle-hit {
+  fill: transparent;
+  stroke: none;
+  cursor: pointer;
+}
+
+.handle-hit.coarse {
+  fill: rgba(91, 141, 239, 0.16);
 }
 
 .handle.anchor {
@@ -518,6 +553,13 @@ body {
   stroke-dasharray: 4 2;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
+}
+
+/* Hover is the same outline the selection draws, quieter: solid rather than marching dashes,
+   so a hovered shape and a selected one are never confused for each other. */
+.hover-box {
+  stroke-dasharray: none;
+  stroke-opacity: 0.55;
 }
 
 .marquee {
@@ -581,7 +623,10 @@ body {
   z-index: 90;
   border-radius: 0;
   border-width: 0 1px 0 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #4a4e59 transparent;
   flex-direction: column;
 }
 
@@ -590,13 +635,11 @@ body {
 }
 
 /* Collapsible sections of the Document panel */
+/* The panel is one scroller. Sections used to bring their own - the top pair, the primitives
+   list, the SVG box - so a phone had four nested scroll areas and no way to tell which one a
+   drag would move. Everything now sizes to its content and the panel scrolls as a whole. */
 .doc-top {
-  flex: 0 1 auto;
-  max-height: 45%;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #4a4e59 transparent;
+  flex: 0 0 auto;
 }
 
 .doc-section {
@@ -660,11 +703,7 @@ body {
   display: none;
 }
 
-.doc-grow:not(.collapsed) {
-  flex: 1 1 0;
-}
-
-.doc-section.collapsed {
+.doc-section {
   flex: 0 0 auto;
 }
 
@@ -679,8 +718,8 @@ body {
 
 .svg-editor {
   position: relative;
-  flex: 1;
-  min-height: 60px;
+  /* Not flex: 1 - in a column the flex basis would win over the height set below. */
+  flex: 0 0 auto;
 }
 
 .svg-preview,
@@ -741,10 +780,14 @@ body {
   font-size: 11.5px;
 }
 
+/* Size and Grid share one row. Everything in it - inputs and the grid toggle alike - takes the
+   same height, or the button makes its half of the row taller than the other. */
 .doc-size-row {
+  --ctl-h: 28px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 14px;
   margin-bottom: 8px;
   color: var(--muted);
   font-size: 12px;
@@ -754,6 +797,23 @@ body {
   margin-left: 0;
 }
 
+/* Each group keeps its own width and the row wraps when they no longer fit, rather than the
+   last control being squeezed to nothing. */
+.doc-size-row > .doc-size {
+  flex: 0 0 auto;
+}
+
+.doc-size-row .doc-size input {
+  width: 58px;
+  height: var(--ctl-h);
+  box-sizing: border-box;
+}
+
+.doc-size-row .color-swatch {
+  flex: 0 0 64px;
+  height: var(--ctl-h);
+}
+
 #doc-primitives .doc-section-body {
   display: flex;
   flex-direction: column;
@@ -761,15 +821,6 @@ body {
 
 #doc-primitives.collapsed .doc-section-body {
   display: none;
-}
-
-.menu-dropdown--docked .primitive-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  scrollbar-color: #4a4e59 transparent;
-  scrollbar-width: thin;
 }
 
 .tool-btn.active[aria-pressed="true"] {
@@ -827,8 +878,10 @@ body {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: rgba(37, 38, 43, 0.92);
-  backdrop-filter: blur(16px) saturate(140%);
+  /* Prefixed first: the minifier keeps only the last of the pair, and Chrome has no
+     -webkit- alias, so the standard property must win. */
   -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
@@ -918,10 +971,13 @@ body {
   font-size: 12px;
 }
 
+/* Label first, box second, like every other row: the label starts where the labels start, and
+   the control sits where the controls sit. */
 .fill-toggle {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   font-size: 12px;
   color: var(--muted);
@@ -936,8 +992,25 @@ body {
   display: none;
 }
 
-.acc-item--grouped {
+/* A group is one bracket down the left of the rows it holds, not a stripe repeated on each of
+   them: the line says "these rows are one thing" rather than "these rows are alike". A group
+   inside a group nests the brackets, which is what nesting looks like. */
+.group-run {
+  margin: 0 0 6px;
+  padding-left: 8px;
   border-left: 3px solid var(--gc, var(--accent));
+  border-radius: 7px 0 0 7px;
+}
+
+.group-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* The bracket supplies the gap under the group, so the last row inside it does not add another. */
+.group-items > :last-child {
+  margin-bottom: 0;
 }
 
 .acc-body .field-row select {
@@ -953,6 +1026,27 @@ body {
   fill: #fff;
   stroke: var(--accent);
   stroke-width: 3;
+}
+
+/* Keeps the shape square or circular while dragged - the modifier-free square/circle. */
+.handle.uniform-handle {
+  fill: #7ee787;
+  stroke: #2f8f46;
+}
+
+/* Where the gradient runs: two handles and the line between them. */
+.handle.grad-handle {
+  fill: #fff;
+  stroke: #b06cff;
+  stroke-width: 2;
+}
+
+.grad-guide {
+  stroke: #b06cff;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }
 
 .handle.rotate-handle {
@@ -974,15 +1068,15 @@ body {
 }
 
 .ruler-left {
-  top: 20px;
+  top: var(--ruler-h);
 }
 
 .ruler-corner {
   position: absolute;
   top: 0;
   left: 0;
-  width: 20px;
-  height: 20px;
+  width: var(--ruler-h);
+  height: var(--ruler-h);
   z-index: 6;
   background: var(--panel);
   pointer-events: none;
@@ -1001,12 +1095,38 @@ body {
   border-width: 0 0 0 1px;
 }
 
-.help-btn {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  font-weight: 700;
-  font-size: 15px;
+/* Help answers for one pointer at a time. It is a switch rather than a media query because a
+   laptop with a touch screen is both, and because the other half is often what you want to read. */
+.help-mode {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.help-mode-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.help-mode-btn:hover {
+  border-color: var(--accent);
+}
+
+.help-mode-btn.active {
+  color: var(--text);
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.help-body.help--mouse [data-help="touch"],
+.help-body.help--touch [data-help="mouse"] {
+  display: none;
 }
 
 .help-body {
@@ -1068,13 +1188,6 @@ body {
   font-size: 11.5px;
 }
 
-@media (pointer: coarse) {
-  .handle {
-    stroke: rgba(91, 141, 239, 0.35);
-    stroke-width: 16px;
-  }
-}
-
 .snap-indicator circle,
 .snap-indicator line {
   fill: none;
@@ -1111,9 +1224,65 @@ body {
   font-weight: 600;
 }
 
+/* One control for zoom: it reads the current level and opens a list to set it. */
+.zoom-wrap {
+  position: relative;
+  display: flex;
+}
+
+.zoom-level {
+  min-width: 48px;
+  font-variant-numeric: tabular-nums;
+}
+
+.zoom-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 84px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  transform: translateX(-50%);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(37, 38, 43, 0.92);
+  /* Prefixed first: the minifier keeps only the last of the pair. */
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.zoom-menu button {
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.zoom-menu button:hover {
+  background: #3a3d45;
+}
+
+.zoom-menu button.active {
+  background: var(--accent-dim);
+}
+
 .grid-step-input {
   width: 48px;
   height: 32px;
+  box-sizing: border-box;
   padding: 0 4px;
   text-align: center;
   border-radius: 4px;
@@ -1131,21 +1300,24 @@ body {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 170px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #4a4e59 transparent;
 }
 
-.doc-list li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 4px;
-}
-
+/* A document has no body to open, so its dot starts at the row's edge rather than behind a
+   gap left for a chevron that is not there. The open row is opaque: a translucent tint here
+   let the canvas show through the frosted panel behind it. */
 .doc-list li.current {
-  background: rgba(91, 141, 239, 0.18);
+  background: #364159;
+  border-color: var(--accent);
+}
+
+.doc-list li.current .acc-header-row {
+  background: transparent;
+}
+
+/* No move buttons, so both icons take the trash width and the pair reads as a column. */
+.doc-list li .doc-act,
+.doc-list li .doc-del {
+  width: 30px;
 }
 
 .doc-open {
@@ -1172,45 +1344,32 @@ body {
   font-size: 10.5px;
 }
 
-.doc-del {
-  padding: 2px 8px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 16px;
-  cursor: pointer;
+/* Row actions are always there. A mouse dims them until the row is hovered, so the list stays
+   calm; without hover there is nothing to reveal them, so they simply stay at full strength. */
+.doc-list li .doc-act,
+.doc-list li .doc-del {
+  /* No display here: .acc-icon-btn is the flex box that centres the icon, and overriding it
+     with inline-block pinned every icon to the left edge of its button. */
+  opacity: 1;
+  transition: opacity 0.12s ease;
 }
 
-.doc-del:hover {
-  color: #ff6b6b;
-}
+@media (hover: hover) {
+  .doc-list li .doc-act,
+  .doc-list li .doc-del {
+    opacity: 0.4;
+  }
 
-.doc-list li .doc-act {
-  display: none;
-  padding: 2px 5px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.doc-list li:hover .doc-act,
-.doc-list li:focus-within .doc-act {
-  display: inline-block;
+  .doc-list li:hover .doc-act,
+  .doc-list li:hover .doc-del,
+  .doc-list li:focus-within .doc-act,
+  .doc-list li:focus-within .doc-del {
+    opacity: 1;
+  }
 }
 
 .doc-list li .doc-act:hover {
   color: var(--accent);
-}
-
-.doc-list li .doc-del {
-  display: none;
-}
-
-.doc-list li:hover .doc-del,
-.doc-list li:focus-within .doc-del {
-  display: inline-block;
 }
 
 .doc-list li.draft .doc-open {
@@ -1221,13 +1380,6 @@ body {
 
 .doc-list li.draft .doc-open {
   font-style: normal;
-}
-
-.doc-item {
-  flex: 1;
-  min-width: 0;
-  padding: 3px 4px;
-  cursor: pointer;
 }
 
 .doc-title-input {
@@ -1254,19 +1406,14 @@ body {
   background: #1a1b1e;
 }
 
-.doc-item small {
-  display: block;
-  padding: 0 7px;
-  color: var(--muted);
-  font-size: 10.5px;
+/* The SVG source is the one box that keeps a scroller of its own: it is a text editor, and a
+   text editor that grows without bound would push everything below it off the panel. */
+.svg-editor {
+  height: clamp(160px, 26vh, 300px);
 }
 
-/* SVG section: fixed third of the window when open, no space when collapsed. */
-#doc-svg:not(.collapsed) {
-  flex: 0 0 33.333vh;
-}
-
-/* One control width for every input, dropdown, swatch and file chip in the row bodies. */
+/* One control height for every input, dropdown, swatch and file chip in the row bodies, and a
+   width that gives way so two of these rows fit side by side. */
 .acc-body {
   --field-w: 150px;
 }
@@ -1275,11 +1422,53 @@ body {
   .field-row
   :is(input:not([type="checkbox"]):not([type="radio"]), select, .color-swatch, .file-chip) {
   box-sizing: border-box;
-  flex: 0 0 var(--field-w);
-  width: var(--field-w);
-  max-width: none;
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  max-width: var(--field-w);
   height: 26px;
   margin: 0;
+}
+
+/* A shape has a dozen fields, most of them a label and one small control: side by side they take
+   half the scrolling. auto-fit drops back to one column when the panel is too narrow to bear it,
+   which is what a phone gets. */
+.acc-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  align-content: start;
+  gap: 0 14px;
+}
+
+.acc-item:not(.expanded) .acc-body {
+  display: none;
+}
+
+.acc-body > .field-row--wide {
+  grid-column: 1 / -1;
+}
+
+/* One label column for the whole body, whether the label is a word or a word and a checkbox,
+   so every control in a column starts at the same x. */
+.acc-body .field-row > span {
+  flex: 0 0 auto;
+  min-width: 58px;
+}
+
+/* A checkbox row keeps its box inside the label column, at the right of its word, so what
+   follows it still lines up with the controls above and below. */
+.acc-body .field-row > .fill-toggle {
+  flex: 0 0 58px;
+  width: 58px;
+  gap: 4px;
+  justify-content: flex-start;
+}
+
+/* The word inside inherits the 72px label basis from .field-row span, which overflows the
+   58px toggle and shoves the box under the input. Let it be as wide as the word. */
+.acc-body .field-row > .fill-toggle > span {
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .acc-swatch {
@@ -1350,4 +1539,317 @@ body {
 .acc-trash:hover:not(:disabled) {
   background: rgba(232, 93, 93, 0.18);
   color: var(--danger);
+}
+
+/* Touch: every control gets at least the usual 44px target. */
+@media (pointer: coarse) {
+  .tool-btn,
+  .menu-trigger--icon,
+  .icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .doc-act,
+  .doc-del,
+  .acc-icon-btn,
+  .acc-trash,
+  .btn-visibility {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .doc-size-row {
+    --ctl-h: 40px;
+  }
+
+  .help-mode-btn {
+    min-height: 36px;
+    padding: 0 10px;
+  }
+}
+
+/* Text edited where it sits on the canvas, instead of in a panel that covers the artboard. */
+.text-edit {
+  position: absolute;
+  z-index: 20;
+  display: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid var(--accent);
+  border-radius: 0;
+  background: rgba(91, 141, 239, 0.12);
+  color: var(--text);
+  line-height: 1;
+  outline: none;
+  caret-color: var(--accent);
+}
+
+.text-edit.visible {
+  display: block;
+}
+
+/* ---------- Narrow screens: tools at the bottom, view controls behind one button ----------
+   A phone toolbar wrapped to four rows and ate a fifth of the screen. The tools move to a bar
+   under the canvas, where thumbs are; the grid and view controls collapse into a menu; and the
+   cursor readout, which is a mouse idea, goes away. */
+
+.tool-slot {
+  display: contents;
+}
+
+.tool-bar {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  /* Both bars float over the canvas instead of taking a strip of it: on a phone the artboard
+     is the scarce thing. The top one starts below the ruler, which it must not cover, and the
+     bar itself is transparent and click-through - only the buttons take the pointer, so the
+     canvas between them still pans. */
+  .top-bar {
+    position: fixed;
+    top: calc(var(--ruler-h) + 6px);
+    right: 0;
+    left: 0;
+    z-index: 95;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-height: 0;
+    /* Clear of the left ruler as well as the top one. */
+    padding: 0 8px 0 calc(var(--ruler-h) + 6px);
+    border-bottom: 0;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .top-bar > * {
+    pointer-events: auto;
+  }
+
+  /* Each floating cluster carries its own pill. It goes on the buttons and groups rather than
+     on the .menu wrappers, because backdrop-filter would make one a containing block and the
+     docked panel inside it is positioned against the viewport. */
+  .top-bar > .tool-group,
+  .top-bar .menu-trigger--icon,
+  .top-bar > .help-btn,
+  .tool-bar {
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(37, 38, 43, 0.86);
+    /* Prefixed first: the minifier keeps only the last of the pair, and Chrome has no
+       unprefixed alias for it on some versions. */
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  }
+
+  /* A single-button pill matches a grouped one: the group's padding makes it taller, so the
+     lone buttons take that size rather than sitting 6px shorter beside it. */
+  .top-bar .menu-trigger--icon,
+  .top-bar > .help-btn {
+    min-width: 46px;
+    min-height: 46px;
+    margin-left: 0;
+  }
+
+  .cursor-readout {
+    display: none;
+  }
+
+  /* Seven controls on one line at 360px, so none of them is behind a menu. They shrink to fit
+     rather than being sized to the narrowest phone and left small on every other one. */
+  #group-view {
+    margin-left: auto;
+  }
+
+  .top-bar .tool-btn,
+  .top-bar .menu-trigger--icon,
+  .tool-bar .tool-btn {
+    flex: 0 1 40px;
+    box-sizing: border-box;
+    width: 40px;
+    min-width: 32px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+  }
+
+  .top-bar .zoom-level {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 46px;
+    padding: 0 4px;
+  }
+
+  .top-bar,
+  .tool-bar {
+    gap: 4px;
+  }
+
+  .top-bar > .tool-group,
+  .tool-group {
+    gap: 4px;
+  }
+
+  /* The pill background comes later in the file than the pressed rule, so it has to restate it
+     or a toggled button and an open panel would read as unpressed on a phone only. */
+  .top-bar .menu-trigger[aria-expanded="true"],
+  .top-bar .tool-btn[aria-expanded="true"],
+  .top-bar .tool-btn.active[aria-pressed="true"],
+  .tool-bar .tool-btn.active[aria-pressed="true"],
+  .tool-bar .tool-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+  }
+
+  .tool-bar {
+    position: fixed;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    left: 50%;
+    z-index: 60;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    max-width: calc(100vw - 16px);
+    transform: translateX(-50%);
+  }
+
+  .menu-dropdown--docked {
+    width: 100%;
+    max-width: none;
+    bottom: calc(66px + env(safe-area-inset-bottom));
+    border-right-width: 0;
+  }
+}
+
+/* The bar that follows the selection: what you would otherwise need a keyboard for. */
+.action-bar {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  gap: 4px;
+  max-width: calc(100vw - 16px);
+  padding: 4px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(37, 38, 43, 0.86);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  scrollbar-width: none;
+}
+
+.action-bar .tool-btn {
+  flex: 0 0 auto;
+}
+
+.action-bar .action-danger {
+  color: var(--danger);
+}
+
+.action-bar .action-danger:hover {
+  border-color: var(--danger);
+}
+
+/* Gradient stops: one row per stop, inside the shape's row. */
+.grad-stops-row {
+  align-items: flex-start;
+}
+
+.grad-stops {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.grad-stop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.grad-stop input {
+  width: 56px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: #1a1b1e;
+  color: var(--text);
+}
+
+.grad-stop-unit {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.grad-stop-del {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.grad-stop-del:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.grad-stop-del:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.grad-stop-add {
+  align-self: flex-start;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #2e3038;
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.grad-stop-add:hover {
+  border-color: var(--accent);
+}
+
+/* An action that has nowhere to go reads as unavailable rather than silently doing nothing. */
+.action-bar .tool-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.action-bar .tool-btn:disabled:hover {
+  border-color: var(--border);
+}
+
+/* The grid toggle sits inside the shared row, so it matches the inputs beside it. */
+.doc-size-row .doc-size .tool-btn {
+  width: var(--ctl-h);
+  min-width: var(--ctl-h);
+  height: var(--ctl-h);
+  min-height: var(--ctl-h);
+}
+
+/* Ties a handle to the corner it works from: the corner-radius and square handles sit away
+   from their corner, and without this the pairing is something you have to remember. */
+.handle-tether {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  stroke-opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }

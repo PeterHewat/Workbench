@@ -1,4 +1,5 @@
 import {
+  elementBBox,
   createPath,
   createLine,
   createRect,
@@ -9,13 +10,25 @@ import {
   createText,
   MARKER_TYPES,
   isGradient,
+  gradientStops,
   geometryOf,
   styleAttrs,
 } from "./model.js";
 import { ELEMENT_SELECTOR, escapeAttr, escapeXml, uid } from "./utils.js";
+import { groupsOf, normalizeGroups, pruneGroups } from "./groups.js";
+import { arcToCubics } from "./arc.js";
+import {
+  IDENTITY,
+  isIdentity,
+  multiply,
+  parseTransform,
+  transformElement,
+  type Matrix,
+} from "./transform.js";
 import { replaceState, createInitialState, selectOnly } from "./state.js";
 import type {
   Anchor,
+  BackgroundPaint,
   EditorState,
   MarkerShape,
   ProjectFile,
@@ -25,6 +38,13 @@ import type {
 } from "./types.js";
 
 const NS = "http://www.w3.org/2000/svg";
+
+/**
+ * The id the artboard background is exported under. It is a plain `<rect>` so the file opens
+ * anywhere, and the id is what tells the importer - the live SVG panel, mostly - that this rect
+ * is the document's background rather than a shape somebody drew.
+ */
+const BACKGROUND_ID = "background";
 
 /* ---------- Export ---------- */
 
@@ -71,26 +91,24 @@ function buildDefsLines(elements: readonly SceneElement[]): Line[] {
   const lines: Line[] = [];
   for (const el of elements) {
     if (isGradient(el)) {
-      const stops = [
-        `<stop offset="0" stop-color="${el.fill}" stop-opacity="${n3(el.fillOpacity ?? 1)}"/>`,
-        `<stop offset="1" stop-color="${el.fill2 ?? "#ffffff"}" stop-opacity="${n3(el.fill2Opacity ?? 1)}"/>`,
-      ];
+      const stops = gradientStops(el).map(
+        (stop) =>
+          `<stop offset="${n3(stop.offset)}" stop-color="${stop.color}" stop-opacity="${n3(stop.opacity)}"/>`
+      );
+      const from = el.gradFrom;
+      const to = el.gradTo;
       if (el.fillType === "radial") {
+        const r = n3(Math.hypot(to.x - from.x, to.y - from.y) || 0.5);
         lines.push({
           indent: 0,
-          text: `<radialGradient id="grad-${el.id}" cx="0.5" cy="0.5" r="0.5">`,
+          text: `<radialGradient id="grad-${el.id}" cx="${n3(from.x)}" cy="${n3(from.y)}" r="${r}">`,
         });
         stops.forEach((s) => lines.push({ indent: 1, text: s }));
         lines.push({ indent: 0, text: "</radialGradient>" });
       } else {
-        const a = ((el.gradAngle || 0) * Math.PI) / 180;
-        const x1 = n3(0.5 - Math.cos(a) / 2);
-        const y1 = n3(0.5 - Math.sin(a) / 2);
-        const x2 = n3(0.5 + Math.cos(a) / 2);
-        const y2 = n3(0.5 + Math.sin(a) / 2);
         lines.push({
           indent: 0,
-          text: `<linearGradient id="grad-${el.id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">`,
+          text: `<linearGradient id="grad-${el.id}" x1="${n3(from.x)}" y1="${n3(from.y)}" x2="${n3(to.x)}" y2="${n3(to.y)}">`,
         });
         stops.forEach((s) => lines.push({ indent: 1, text: s }));
         lines.push({ indent: 0, text: "</linearGradient>" });
@@ -154,7 +172,12 @@ function exportIds(elements: readonly SceneElement[]): Map<string, string> {
   return out;
 }
 
-function buildSvgLines(state: Pick<EditorState, "artboard" | "elements">): Line[] {
+/** What export needs from the document: no selection, no viewport, nothing live. */
+export type ExportDoc = Pick<EditorState, "artboard" | "elements"> & {
+  background?: BackgroundPaint | null;
+};
+
+function buildSvgLines(state: ExportDoc): Line[] {
   const ids = exportIds(state.elements);
   const width = Math.round(state.artboard.width);
   const height = Math.round(state.artboard.height);
@@ -170,38 +193,53 @@ function buildSvgLines(state: Pick<EditorState, "artboard" | "elements">): Line[
     defs.forEach((d) => lines.push({ indent: 2 + d.indent, text: d.text }));
     lines.push({ indent: 1, text: "</defs>" });
   }
-  const els = state.elements;
-  const usedGroups = new Set<string>();
-  for (let i = 0; i < els.length;) {
-    const gid = els[i]!.groupId;
-    if (gid) {
-      let j = i;
-      while (j < els.length && els[j]!.groupId === gid) j++;
-      const idAttr = usedGroups.has(gid) ? "" : ` id="${gid}"`;
-      usedGroups.add(gid);
-      lines.push({ indent: 1, text: `<g${idAttr}>` });
-      for (let k = i; k < j; k++) {
-        const el = els[k]!;
-        const text = elementToSvgMarkup(el, ids.get(el.id));
-        if (text) lines.push({ indent: 2, text, elId: el.id });
-      }
-      lines.push({ indent: 1, text: "</g>" });
-      i = j;
-    } else {
-      const el = els[i]!;
-      const text = elementToSvgMarkup(el, ids.get(el.id));
-      if (text) lines.push({ indent: 1, text, elId: el.id });
-      i++;
-    }
+  const bg = state.background;
+  if (bg && bg.opacity > 0) {
+    const alpha = bg.opacity < 1 ? ` fill-opacity="${n3(bg.opacity)}"` : "";
+    lines.push({
+      indent: 1,
+      text: `<rect id="${BACKGROUND_ID}" width="${width}" height="${height}" fill="${bg.color}"${alpha}/>`,
+    });
   }
+  emitRange(state.elements, 0, state.elements.length, 0, 1, lines, ids);
   lines.push({ indent: 0, text: "</svg>" });
   return lines;
 }
 
-export function formatExportSvg(
-  state: Pick<EditorState, "artboard" | "elements">,
-  pretty = false
-): string {
+/**
+ * Writes one level of the document, opening a `<g>` for each run of elements that share a group
+ * at this depth and recursing into it. Members of a group are contiguous (see groups.ts), so a
+ * group is always exactly one `<g>`.
+ */
+function emitRange(
+  els: readonly SceneElement[],
+  start: number,
+  end: number,
+  depth: number,
+  indent: number,
+  lines: Line[],
+  ids: Map<string, string>
+): void {
+  let i = start;
+  while (i < end) {
+    const gid = groupsOf(els[i])[depth];
+    if (gid) {
+      let j = i;
+      while (j < end && groupsOf(els[j])[depth] === gid) j++;
+      lines.push({ indent, text: `<g id="${gid}">` });
+      emitRange(els, i, j, depth + 1, indent + 1, lines, ids);
+      lines.push({ indent, text: "</g>" });
+      i = j;
+    } else {
+      const el = els[i]!;
+      const text = elementToSvgMarkup(el, ids.get(el.id));
+      if (text) lines.push({ indent, text, elId: el.id });
+      i++;
+    }
+  }
+}
+
+export function formatExportSvg(state: ExportDoc, pretty = false): string {
   const lines = buildSvgLines(state);
   if (pretty) return lines.map((l) => "  ".repeat(l.indent) + l.text).join("\n");
   return lines.map((l) => l.text).join("");
@@ -209,8 +247,9 @@ export function formatExportSvg(
 
 export function serializeProject(state: EditorState): ProjectFile {
   return {
-    version: 1,
+    version: 2,
     artboard: state.artboard,
+    background: state.background,
     grid: state.grid,
     images: state.images,
     elements: state.elements,
@@ -221,11 +260,18 @@ export function serializeProject(state: EditorState): ProjectFile {
 }
 
 export function loadProject(json: ProjectFile): void {
-  if (json.version !== 1) throw new Error("Unsupported project version");
+  // Greenfield: no migration. A document written by an older build is refused, not rewritten.
+  if (json.version !== 2) {
+    throw new Error(
+      `This document was saved by an incompatible version (v${String(json.version)}). ` +
+        "Re-import its SVG, or clear the browser storage for this app."
+    );
+  }
   const base = createInitialState();
   replaceState({
     ...base,
     artboard: json.artboard,
+    background: json.background ?? base.background,
     grid: json.grid,
     images: (json.images || []).map((img) => ({ ...img, visible: img.visible !== false })),
     elements: json.elements || [],
@@ -239,69 +285,128 @@ export function loadProject(json: ProjectFile): void {
 
 /* ---------- Import ---------- */
 
+/**
+ * Parses a path's `d` into anchors with cubic handles, which is the only curve the model has.
+ *
+ * Everything else is converted: quadratics (Q/T) have an exact cubic equivalent, arcs (A) are
+ * approximated by up to four cubics per quarter turn, and the shorthands (S/T) reflect the
+ * previous control point. Commands also repeat implicitly - `L 1 1 2 2` is two line segments,
+ * and a repeated `M` continues as `L` - which is how most tools write their output.
+ */
 function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
-  const tokens = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) ?? [];
+  const tokens = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? [];
   const points: Anchor[] = [];
   let i = 0;
   let cx = 0;
   let cy = 0;
   let subStart: Point | null = null;
+  let command = "";
+  let relative = false;
+  // The control point the smooth shorthands reflect, and which curve kind set it.
+  let lastControl: Point | null = null;
+  let lastCurve: "cubic" | "quad" | "" = "";
 
   const readNum = () => parseFloat(tokens[i++] ?? "0");
   const last = (): Anchor | undefined => points[points.length - 1];
-  const corner = (x: number, y: number) =>
+  const isCommand = (t: string | undefined) => !!t && /^[a-zA-Z]$/.test(t);
+
+  const corner = (x: number, y: number) => {
     points.push({ x, y, smooth: false, hIn: null, hOut: null });
+    lastControl = null;
+    lastCurve = "";
+  };
+
+  /** Appends a cubic segment from the current point to (x, y). */
+  const cubic = (c1: Point, c2: Point, x: number, y: number, kind: "cubic" | "quad") => {
+    const from = last();
+    if (from) {
+      from.hOut = { x: c1.x, y: c1.y };
+      from.smooth = true;
+    }
+    points.push({ x, y, smooth: true, hIn: { x: c2.x, y: c2.y }, hOut: { x, y } });
+    lastControl = c2;
+    lastCurve = kind;
+  };
+
+  /** A quadratic control point becomes the two cubic ones that draw the same curve. */
+  const quadToCubic = (q: Point, x: number, y: number) => {
+    const from = last() ?? { x: cx, y: cy };
+    cubic(
+      { x: from.x + (2 / 3) * (q.x - from.x), y: from.y + (2 / 3) * (q.y - from.y) },
+      { x: x + (2 / 3) * (q.x - x), y: y + (2 / 3) * (q.y - y) },
+      x,
+      y,
+      "quad"
+    );
+  };
+
+  /** The reflection of the previous control point, or the current point when there is none. */
+  const reflected = (kind: "cubic" | "quad"): Point => {
+    const from = last();
+    if (!from) return { x: cx, y: cy };
+    if (!lastControl || lastCurve !== kind) return { x: from.x, y: from.y };
+    return { x: 2 * from.x - lastControl.x, y: 2 * from.y - lastControl.y };
+  };
 
   while (i < tokens.length) {
-    const cmd = tokens[i++]!;
-    const rel = cmd === cmd.toLowerCase();
-    const c = cmd.toUpperCase();
+    if (isCommand(tokens[i])) {
+      command = tokens[i++]!;
+      relative = command === command.toLowerCase();
+      // A repeated moveto draws lines, per the SVG grammar.
+    } else if (!command) {
+      i++;
+      continue;
+    } else if (command === "M" || command === "m") {
+      command = relative ? "l" : "L";
+    }
+
+    const c = command.toUpperCase();
+    const ox = relative ? cx : 0;
+    const oy = relative ? cy : 0;
 
     if (c === "M") {
-      cx = readNum();
-      cy = readNum();
-      const p = last();
-      if (rel && p) {
-        cx += p.x;
-        cy += p.y;
-      }
+      cx = readNum() + ox;
+      cy = readNum() + oy;
       subStart = { x: cx, y: cy };
       corner(cx, cy);
     } else if (c === "L") {
-      cx = readNum();
-      cy = readNum();
-      const p = last();
-      if (rel && p) {
-        cx += p.x;
-        cy += p.y;
-      }
+      cx = readNum() + ox;
+      cy = readNum() + oy;
       corner(cx, cy);
-    } else if (c === "C") {
-      const x1 = readNum();
-      const y1 = readNum();
-      const x2 = readNum();
-      const y2 = readNum();
-      cx = readNum();
-      cy = readNum();
-      const p = last();
-      // Relative control points are offsets from the current point, absolute ones are not.
-      const ox = rel && p ? p.x : 0;
-      const oy = rel && p ? p.y : 0;
-      if (rel) {
-        cx += ox;
-        cy += oy;
+    } else if (c === "H") {
+      cx = readNum() + ox;
+      corner(cx, cy);
+    } else if (c === "V") {
+      cy = readNum() + oy;
+      corner(cx, cy);
+    } else if (c === "C" || c === "S") {
+      const c1 = c === "C" ? { x: readNum() + ox, y: readNum() + oy } : reflected("cubic");
+      const c2 = { x: readNum() + ox, y: readNum() + oy };
+      const x = readNum() + ox;
+      const y = readNum() + oy;
+      cubic(c1, c2, x, y, "cubic");
+      cx = x;
+      cy = y;
+    } else if (c === "Q" || c === "T") {
+      const q = c === "Q" ? { x: readNum() + ox, y: readNum() + oy } : reflected("quad");
+      const x = readNum() + ox;
+      const y = readNum() + oy;
+      quadToCubic(q, x, y);
+      cx = x;
+      cy = y;
+    } else if (c === "A") {
+      const rx = readNum();
+      const ry = readNum();
+      const rot = readNum();
+      const largeArc = readNum() !== 0;
+      const sweep = readNum() !== 0;
+      const x = readNum() + ox;
+      const y = readNum() + oy;
+      for (const seg of arcToCubics({ x: cx, y: cy }, rx, ry, rot, largeArc, sweep, { x, y })) {
+        cubic(seg.c1, seg.c2, seg.to.x, seg.to.y, "cubic");
       }
-      if (p) {
-        p.hOut = { x: x1 + ox, y: y1 + oy };
-        p.smooth = true;
-      }
-      points.push({
-        x: cx,
-        y: cy,
-        smooth: true,
-        hIn: { x: x2 + ox, y: y2 + oy },
-        hOut: { x: cx, y: cy },
-      });
+      cx = x;
+      cy = y;
     } else if (c === "Z") {
       if (subStart && points.length > 2) {
         const first = points[0]!;
@@ -309,16 +414,11 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
       }
       cx = subStart?.x ?? cx;
       cy = subStart?.y ?? cy;
-    } else if (c === "H") {
-      cx = readNum();
-      const p = last();
-      if (rel && p) cx += p.x;
-      corner(cx, cy);
-    } else if (c === "V") {
-      cy = readNum();
-      const p = last();
-      if (rel && p) cy += p.y;
-      corner(cx, cy);
+      lastControl = null;
+      lastCurve = "";
+    } else {
+      // An unrecognised command: skip its numbers rather than reading them as coordinates.
+      while (i < tokens.length && !isCommand(tokens[i])) i++;
     }
   }
   return { points, closed: /z/i.test(d) };
@@ -399,25 +499,44 @@ function markerFromRef(svg: Element, ref: string | null): MarkerShape {
 
 function gradientStyle(svg: Element, ref: string, style: StyleCarrier): void {
   const grad = findById(svg, "linearGradient,radialGradient", ref);
-  const stops = grad ? grad.querySelectorAll("stop") : [];
+  const stops = grad ? [...grad.querySelectorAll("stop")] : [];
   if (!grad || !stops.length) {
     style.fillEnabled = false;
     return;
   }
-  const first = stops[0]!;
-  const last = stops[stops.length - 1]!;
-  style.fillType = grad.tagName.toLowerCase() === "radialgradient" ? "radial" : "linear";
-  style.fill = normalizeColor(ownProp(first, "stop-color"));
-  style.fillOpacity = parseFloat(ownProp(first, "stop-opacity") ?? "1");
-  style.fill2 = normalizeColor(ownProp(last, "stop-color"));
-  style.fill2Opacity = parseFloat(ownProp(last, "stop-opacity") ?? "1");
-  if (style.fillType !== "linear") return;
-  const num = (a: string, d: number) => {
-    const raw = String(grad.getAttribute(a) ?? d);
-    return parseFloat(raw.replace("%", "")) / (raw.includes("%") ? 100 : 1);
-  };
-  const angle = Math.atan2(num("y2", 0) - num("y1", 0), num("x2", 1) - num("x1", 0));
-  style.gradAngle = Math.round((angle * 180) / Math.PI);
+  const radial = grad.tagName.toLowerCase() === "radialgradient";
+  style.fillType = radial ? "radial" : "linear";
+  style.gradStops = stops.map((stop, i) => ({
+    offset: parseFractional(stop.getAttribute("offset"), i / Math.max(1, stops.length - 1)),
+    color: normalizeColor(ownProp(stop, "stop-color")),
+    opacity: parseFloat(ownProp(stop, "stop-opacity") ?? "1") || 0,
+  }));
+  // The first stop doubles as the solid colour, so turning the gradient off keeps something.
+  style.fill = style.gradStops[0]!.color;
+  style.fillOpacity = style.gradStops[0]!.opacity;
+
+  const num = (a: string, d: number) => parseFractional(grad.getAttribute(a), d);
+  if (radial) {
+    const cx = num("cx", 0.5);
+    const cy = num("cy", 0.5);
+    const r = num("r", 0.5);
+    style.gradFrom = { x: cx, y: cy };
+    style.gradTo = { x: cx + r, y: cy };
+  } else {
+    style.gradFrom = { x: num("x1", 0), y: num("y1", 0) };
+    style.gradTo = { x: num("x2", 1), y: num("y2", 0) };
+  }
+  // userSpaceOnUse coordinates are in artboard units; they are converted once the element
+  // exists and its bounding box is known (see importSvgFile).
+  if (grad.getAttribute("gradientUnits") === "userSpaceOnUse") style.gradUserSpace = true;
+}
+
+/** A gradient coordinate or offset: a plain number, or a percentage. */
+function parseFractional(raw: string | null, fallback: number): number {
+  if (raw == null) return fallback;
+  const value = parseFloat(raw.replace("%", ""));
+  if (Number.isNaN(value)) return fallback;
+  return raw.includes("%") ? value / 100 : value;
 }
 
 function styleFromNode(node: Element, svg: Element): StyleCarrier {
@@ -519,20 +638,6 @@ function elementFromNode(node: Element, tag: string, style: StyleCarrier): Scene
       el.fontSize = parseFloat(inheritedProp(node, "font-size") || "48") || 48;
       el.fontFamily = inheritedProp(node, "font-family") || "sans-serif";
       el.anchor = (inheritedProp(node, "text-anchor") as typeof el.anchor) || "start";
-      const m = (node.getAttribute("transform") ?? "").match(
-        /rotate\(\s*(-?[\d.]+)(?:[\s,]+(-?[\d.]+)[\s,]+(-?[\d.]+))?\s*\)/
-      );
-      if (m) {
-        const a = parseFloat(m[1]!);
-        const cx = m[2] != null ? parseFloat(m[2]) : 0;
-        const cy = m[3] != null ? parseFloat(m[3]) : 0;
-        const rad = (a * Math.PI) / 180;
-        const dx = el.x - cx;
-        const dy = el.y - cy;
-        el.x = cx + dx * Math.cos(rad) - dy * Math.sin(rad);
-        el.y = cy + dx * Math.sin(rad) + dy * Math.cos(rad);
-        el.rotation = ((a % 360) + 360) % 360;
-      }
       return el;
     }
     default:
@@ -540,13 +645,32 @@ function elementFromNode(node: Element, tag: string, style: StyleCarrier): Scene
   }
 }
 
+/**
+ * Rewrites a gradient written in artboard units into the fractions of the shape's bounding box
+ * that the model stores, so the gradient keeps following the shape when it is moved or resized.
+ */
+function toBoundingBoxUnits(el: SceneElement): void {
+  const box = elementBBox(el);
+  if (!box) return;
+  const w = box.width || 1;
+  const h = box.height || 1;
+  const map = (p: Point): Point => ({ x: (p.x - box.x) / w, y: (p.y - box.y) / h });
+  el.gradFrom = map(el.gradFrom);
+  el.gradTo = map(el.gradTo);
+}
+
 export interface ImportResult {
   artboard: { width: number; height: number } | null;
+  /** The background rect the file carried, or null when it has none: a transparent document. */
+  background: BackgroundPaint | null;
   elements: SceneElement[];
 }
 
 /** `keepIds` restores generated ids from the markup (used when editing the SVG text in place). */
 export function importSvgFile(text: string, { keepIds = false } = {}): ImportResult {
+  // A DOCTYPE is the only way to declare entities, so refusing it rules out entity-expansion
+  // bombs; SVG written by editors does not need one.
+  if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error("SVG with a DOCTYPE is not supported");
   const doc = new DOMParser().parseFromString(text, "image/svg+xml");
   const err = doc.querySelector("parsererror");
   if (err) {
@@ -563,26 +687,30 @@ export function importSvgFile(text: string, { keepIds = false } = {}): ImportRes
   const h = parseFloat(svg.getAttribute("height") ?? "");
   if (!artboard && w && h) artboard = { width: w, height: h };
 
+  // The background is a rect like any other; only its id says it is the document's, and it is
+  // read here rather than swept up as a shape.
+  const bgNode = [...svg.children].find(
+    (c) => c.tagName.toLowerCase() === "rect" && c.getAttribute("id") === BACKGROUND_ID
+  );
+  const background: BackgroundPaint | null = bgNode
+    ? {
+        color: normalizeColor(bgNode.getAttribute("fill")),
+        opacity: parseFractional(bgNode.getAttribute("fill-opacity"), 1),
+      }
+    : null;
+
   const imported: SceneElement[] = [];
   const groupIds = new Map<Element, string>();
   const usedIds = new Set<string>();
   svg.querySelectorAll(ELEMENT_SELECTOR).forEach((node) => {
+    if (node === bgNode) return;
     if (insideNonRendered(node, svg)) return;
     const style = styleFromNode(node, svg);
     const nodeId = node.getAttribute("id");
     const name = nameFromNode(node, nodeId);
     if (name) style.name = name;
-    for (let g = node.parentNode; g && g !== svg; g = g.parentNode) {
-      const gEl = g as Element;
-      if (gEl.tagName?.toLowerCase() === "g") {
-        if (!groupIds.has(gEl)) {
-          const gid = gEl.getAttribute("id") ?? "";
-          groupIds.set(gEl, keepIds && gid.startsWith("group-") ? gid : uid("group"));
-        }
-        style.groupId = groupIds.get(gEl);
-        break;
-      }
-    }
+    const { chain, matrix } = ancestry(node, svg, groupIds, keepIds);
+    if (chain.length) style.groups = chain;
     const el = elementFromNode(node, node.tagName.toLowerCase(), style);
     if (!el) return;
     if (keepIds) {
@@ -590,17 +718,41 @@ export function importSvgFile(text: string, { keepIds = false } = {}): ImportRes
       if (rid && !usedIds.has(rid)) el.id = rid;
       usedIds.add(el.id);
     }
-    imported.push(el);
+    // An element's own transform, and every <g transform> above it, are baked into the
+    // coordinates here: the scene graph has no transform of its own.
+    const own = multiply(matrix, parseTransform(node.getAttribute("transform")));
+    const placed = isIdentity(own) ? el : transformElement(el, own);
+    if (style.gradUserSpace) toBoundingBoxUnits(placed);
+    imported.push(placed);
   });
 
-  // A group with a single member isn't worth keeping.
-  const counts = new Map<string, number>();
-  imported.forEach((e) => {
-    if (e.groupId) counts.set(e.groupId, (counts.get(e.groupId) ?? 0) + 1);
-  });
-  imported.forEach((e) => {
-    if (e.groupId && (counts.get(e.groupId) ?? 0) < 2) delete e.groupId;
-  });
+  return { artboard, background, elements: normalizeGroups(pruneGroups(imported)) };
+}
 
-  return { artboard, elements: imported };
+/**
+ * Walks from the SVG root down to `node`: the chain of groups it belongs to (outermost first)
+ * and the transform those groups apply to it.
+ */
+function ancestry(
+  node: Element,
+  svg: Element,
+  groupIds: Map<Element, string>,
+  keepIds: boolean
+): { chain: string[]; matrix: Matrix } {
+  const groups: Element[] = [];
+  for (let g = node.parentNode; g && g !== svg; g = g.parentNode) {
+    const gEl = g as Element;
+    if (gEl.tagName?.toLowerCase() === "g") groups.unshift(gEl);
+  }
+  const chain: string[] = [];
+  let matrix: Matrix = IDENTITY;
+  for (const gEl of groups) {
+    if (!groupIds.has(gEl)) {
+      const gid = gEl.getAttribute("id") ?? "";
+      groupIds.set(gEl, keepIds && /^group-[A-Za-z0-9_-]+$/.test(gid) ? gid : uid("group"));
+    }
+    chain.push(groupIds.get(gEl)!);
+    matrix = multiply(matrix, parseTransform(gEl.getAttribute("transform")));
+  }
+  return { chain, matrix };
 }

@@ -2,13 +2,10 @@ import { getState, setState, mutate, findElement, selectOnly } from "./state.js"
 import {
   createPath,
   createPoint,
-  createRect,
-  createEllipse,
   elementBBox,
   translateElement,
   collectAlignPoints,
   alignToPoints,
-  duplicateElement,
   mirrorHandle,
   simplifyPathIfStraight,
   toPathElement,
@@ -16,35 +13,34 @@ import {
   nearestOnElement,
   insertPointAt,
   canRotate,
-  canToggleClosed,
   rotationBase,
   rotateElementCopy,
   createText,
-  closeByMerge,
-  setClosed,
-  splitAt,
-  joinPaths,
-  canJoin,
   type AlignOptions,
 } from "./model.js";
 import { screenToWorld, zoomAt } from "./viewport.js";
-import { deepClone, dist, uid } from "./utils.js";
+import { deepClone, dist } from "./utils.js";
 import { pushUndo } from "./undo.js";
-import { importSvgFile } from "./io.js";
-import type {
-  Anchor,
-  Drawing,
-  EditorState,
-  Marquee,
-  PathElement,
-  Point,
-  SceneElement,
+import {
+  type Anchor,
+  type EditorState,
+  type Marquee,
+  type Point,
+  type SceneElement,
 } from "./types.js";
+import { setDrawing, clearDrawing, commit, pointIndexForRole } from "./ops.js";
+import { finishPath } from "./pen-commands.js";
+import { expandGroups, mergeDroppedEnd } from "./selection-commands.js";
+import { applyResize } from "./resize.js";
+import {
+  type ShapeTool,
+  updatePenPreview,
+  updateShapePreview,
+  finalizeShape,
+} from "./shape-tools.js";
 
 const CLOSE_TOL = 12;
 const ALIGN_TOL_PX = 6;
-const CLIP_TAG = "vector-tracer/elements";
-
 type DragState =
   | { type: "pan"; startX: number; startY: number; panX: number; panY: number }
   | ({ type: "marquee" } & Marquee)
@@ -58,7 +54,14 @@ type DragState =
       last: Point | null;
     }
   | { type: "pen-handle"; pathId: string; index: number }
-  | { type: "resize"; elementId: string; role: string; base: SceneElement }
+  | {
+      type: "resize";
+      elementId: string;
+      role: string;
+      base: SceneElement;
+      /** Handle centre minus pointer at the press: see `grabOffset`. */
+      grab: Point;
+    }
   | {
       type: "rotate";
       elementId: string;
@@ -69,84 +72,7 @@ type DragState =
       radius: number;
       active: boolean;
     }
-  | { type: "shape-drag"; tool: "rect" | "ellipse"; start: Point; current: Point };
-
-function setDrawing(drawing: Drawing): void {
-  setState({ drawing });
-}
-
-function clearDrawing(): void {
-  setState({ drawing: null });
-}
-
-function commit(fn: () => void): void {
-  pushUndo();
-  fn();
-}
-
-/** The anchor index a resize-handle role refers to, or null for box/radius handles. */
-function pointIndexForRole(role: string): number | null {
-  if (role.startsWith("pt-")) return parseInt(role.slice(3), 10);
-  if (role === "p1") return 0;
-  if (role === "p2") return 1;
-  return null;
-}
-
-/** Copies elements with fresh ids and fresh group ids, offset by `off`. */
-function copyElements(elements: readonly SceneElement[], off: number): SceneElement[] {
-  const groupMap = new Map<string, string>();
-  return elements.map((el) => {
-    const c = duplicateElement(el);
-    translateElement(c, off, off);
-    if (c.groupId) {
-      if (!groupMap.has(c.groupId)) groupMap.set(c.groupId, uid("group"));
-      c.groupId = groupMap.get(c.groupId);
-    }
-    return c;
-  });
-}
-
-/** Geometry of a rect/ellipse dragged from `start` to `end`, as SVG attributes. */
-function shapeGeometry(tool: "rect" | "ellipse", start: Point, end: Point): Record<string, number> {
-  if (tool === "rect") {
-    return {
-      x: Math.min(start.x, end.x),
-      y: Math.min(start.y, end.y),
-      width: Math.abs(end.x - start.x),
-      height: Math.abs(end.y - start.y),
-    };
-  }
-  return {
-    cx: start.x,
-    cy: start.y,
-    rx: Math.abs(end.x - start.x),
-    ry: Math.abs(end.y - start.y),
-  };
-}
-
-export function setTool(tool: EditorState["tool"]): void {
-  setState({ tool, selection: selectOnly(), drawing: null });
-}
-
-export function finishPath(): void {
-  const d = getState().drawing;
-  const activeId = d?.activePathId;
-  if (!d || !activeId) return;
-  const path = findElement(activeId);
-  if (!path || path.type !== "path" || path.points.length < 2) {
-    setState((s) => ({
-      ...s,
-      elements: s.elements.filter((e) => e.id !== activeId),
-      drawing: null,
-    }));
-    return;
-  }
-  setState((s) => ({
-    ...s,
-    elements: s.elements.map((e) => (e.id === path.id ? simplifyPathIfStraight(e) : e)),
-    drawing: { ...d, activePathId: null, preview: null },
-  }));
-}
+  | { type: "shape-drag"; tool: ShapeTool; start: Point; current: Point };
 
 function hitElement(target: EventTarget | null): string | null {
   let node = target as Node | null;
@@ -181,281 +107,56 @@ function elementsInMarquee(m: Marquee): string[] {
   return ids;
 }
 
-export type ZOrder = "forward" | "back" | "front" | "backmost";
+/** How long a finger must rest on empty canvas before the drag becomes a marquee. */
+const HOLD_MS = 450;
 
-export function moveZOrder(direction: ZOrder): void {
-  const ids = new Set(getState().selection.elementIds);
-  if (!ids.size) return;
-  commit(() => {
-    setState((s) => {
-      const els = [...s.elements];
-      if (direction === "front" || direction === "backmost") {
-        const picked = els.filter((e) => ids.has(e.id));
-        const rest = els.filter((e) => !ids.has(e.id));
-        return {
-          ...s,
-          elements: direction === "front" ? [...rest, ...picked] : [...picked, ...rest],
-        };
-      }
-      const moveOne = (i: number, dir: number) => {
-        const j = i + dir;
-        const a = els[i];
-        const b = els[j];
-        if (!a || !b || !ids.has(a.id)) return;
-        els[i] = b;
-        els[j] = a;
-      };
-      if (direction === "forward") for (let i = els.length - 2; i >= 0; i--) moveOne(i, 1);
-      else for (let i = 1; i < els.length; i++) moveOne(i, -1);
-      return { ...s, elements: els };
-    });
-  });
+/** How far a pointer must travel before a press counts as a drag, in screen pixels. */
+function dragSlop(e: PointerEvent): number {
+  if (e.pointerType === "touch") return 10;
+  return e.pointerType === "pen" ? 6 : 4;
 }
 
-/** Selecting one member of a group selects the whole group. */
-function expandGroups(ids: string[]): string[] {
-  const els = getState().elements;
-  const gids = new Set(
-    els.filter((e) => ids.includes(e.id) && e.groupId).map((e) => e.groupId as string)
-  );
-  if (!gids.size) return [...ids];
-  const out = new Set(ids);
-  for (const e of els) if (e.groupId && gids.has(e.groupId)) out.add(e.id);
-  return [...out];
-}
-
-export function groupSelection(): void {
-  const st = getState();
-  const ids = new Set(st.selection.elementIds);
-  if (st.elements.filter((e) => ids.has(e.id)).length < 2) return;
-  const gid = uid("group");
-  pushUndo();
-  setState((s) => {
-    const lastIdx = Math.max(...s.elements.map((e, i) => (ids.has(e.id) ? i : -1)));
-    const rest = s.elements.filter((e) => !ids.has(e.id));
-    const before = s.elements.slice(0, lastIdx + 1).filter((e) => !ids.has(e.id)).length;
-    const grouped = s.elements.filter((e) => ids.has(e.id)).map((e) => ({ ...e, groupId: gid }));
-    return { ...s, elements: [...rest.slice(0, before), ...grouped, ...rest.slice(before)] };
-  });
-}
-
-export function ungroupSelection(): void {
-  const st = getState();
-  const gids = new Set(
-    st.elements
-      .filter((e) => st.selection.elementIds.includes(e.id) && e.groupId)
-      .map((e) => e.groupId as string)
-  );
-  if (!gids.size) return;
-  pushUndo();
-  setState((s) => ({
-    ...s,
-    elements: s.elements.map((e) => {
-      if (!e.groupId || !gids.has(e.groupId)) return e;
-      const { groupId: _drop, ...rest } = e;
-      return rest as SceneElement;
-    }),
-  }));
-}
-
-export function deleteSelection(): void {
-  const st = getState();
-  const pe = st.selection.pathEdit;
-  if (pe && pe.kind === "anchor") {
-    commit(() => {
-      setState((s) => {
-        const el = findElement(pe.pathId);
-        if (!el || !("points" in el)) {
-          return { ...s, selection: selectOnly(s.selection.elementIds) };
-        }
-        el.points.splice(pe.index, 1);
-        let next: SceneElement | null = el;
-        if (el.points.length < 2) next = null;
-        else if (el.type !== "path" && el.points.length === 2) {
-          next = simplifyPathIfStraight(toPathElement(el));
-        }
-        return {
-          ...s,
-          elements: next
-            ? s.elements.map((x) => (x.id === el.id ? next : x))
-            : s.elements.filter((x) => x.id !== el.id),
-          selection: selectOnly(next ? [next.id] : []),
-        };
-      });
-    });
-    return;
-  }
-  if (st.selection.elementIds.length) {
-    commit(() => {
-      setState((s) => ({
-        ...s,
-        elements: s.elements.filter((e) => !s.selection.elementIds.includes(e.id)),
-        selection: selectOnly(),
-      }));
-    });
-  }
-}
-
-/** Cuts the selected path at the selected anchor. */
-export function splitAtSelectedPoint(): void {
-  const pe = getState().selection.pathEdit;
-  if (!pe || pe.kind !== "anchor") return;
-  const el = findElement(pe.pathId);
-  const parts = el ? splitAt(el, pe.index) : null;
-  if (!el || !parts) return;
-  commit(() => {
-    setState((s) => ({
-      ...s,
-      elements: s.elements.flatMap((x) => (x.id === el.id ? parts : [x])),
-      selection: selectOnly(parts.map((p) => p.id)),
-    }));
-  });
-}
-
-/** Joins the two selected open shapes at their closest ends. */
-export function joinSelected(): void {
-  const ids = getState().selection.elementIds;
-  if (ids.length !== 2) return;
-  const a = findElement(ids[0]);
-  const b = findElement(ids[1]);
-  if (!a || !b) return;
-  const joined = joinPaths(a, b);
-  if (!joined) return;
-  commit(() => {
-    setState((s) => ({
-      ...s,
-      elements: s.elements.filter((x) => x.id !== b.id).map((x) => (x.id === a.id ? joined : x)),
-      selection: selectOnly([joined.id]),
-    }));
-  });
-}
-
-function ends(el: SceneElement): [Point, Point] | null {
-  if (el.type === "line") {
-    return [
-      { x: el.x1, y: el.y1 },
-      { x: el.x2, y: el.y2 },
-    ];
-  }
-  if (!("points" in el) || !el.points.length) return null;
-  return [el.points[0]!, el.points[el.points.length - 1]!];
-}
-
-function canJoinEnds(el: SceneElement, idx: number): boolean {
-  if (!canJoin(el)) return false;
-  const n = el.type === "line" ? 2 : "points" in el ? el.points.length : 0;
-  return n >= 2 && (idx === 0 || idx === n - 1);
-}
-
-export function setElementClosed(id: string, closed: boolean): void {
-  const el = findElement(id);
-  if (!el || !canToggleClosed(el)) return;
-  commit(() => {
-    setState((s) => {
-      const cur = findElement(id);
-      if (!cur) return s;
-      const next = setClosed(cur, closed);
-      return {
-        ...s,
-        elements: s.elements.map((x) => (x.id === id ? next : x)),
-        selection: selectOnly([id]),
-      };
-    });
-  });
-}
-
-let pasteCount = 0;
-
-/** Serializes the selection for the clipboard (whole groups included), or null. */
-export function copySelectionText(): string | null {
-  const els = expandGroups(getState().selection.elementIds)
-    .map((id) => findElement(id))
-    .filter((e): e is SceneElement => !!e);
-  if (!els.length) return null;
-  pasteCount = 0;
-  return JSON.stringify({ tag: CLIP_TAG, elements: els });
-}
-
-export function cutSelection(): string | null {
-  const text = copySelectionText();
-  if (text) deleteSelection();
-  return text;
-}
-
-/** Pastes clipboard text: our own JSON, or plain SVG markup. True if anything was added. */
-export function pasteFromText(text: string): boolean {
-  let elements: SceneElement[] | null = null;
-  let fromSvg = false;
-  try {
-    const data: unknown = JSON.parse(text);
-    if (
-      data &&
-      typeof data === "object" &&
-      (data as { tag?: string }).tag === CLIP_TAG &&
-      Array.isArray((data as { elements?: unknown }).elements)
-    ) {
-      elements = (data as { elements: SceneElement[] }).elements;
-    }
-  } catch {
-    if (/^\s*<(\?xml|svg)/i.test(text || "")) {
-      try {
-        elements = importSvgFile(text).elements;
-        fromSvg = true;
-      } catch {
-        elements = null;
-      }
-    }
-  }
-  if (!elements?.length) return false;
-  const source = elements;
-  pasteCount += 1;
-  commit(() => {
-    setState((s) => {
-      // SVG markup lands where it says it does; our own copies step away from the original.
-      const off = fromSvg ? 0 : Math.max(s.grid.step, 10) * pasteCount;
-      const copies = copyElements(source, off);
-      return {
-        ...s,
-        elements: [...s.elements, ...copies],
-        selection: selectOnly(copies.map((c) => c.id)),
-      };
-    });
-  });
-  return true;
-}
-
-export function duplicateSelection(): void {
-  if (!getState().selection.elementIds.length) return;
-  commit(() => {
-    setState((s) => {
-      const source = s.selection.elementIds
-        .map((id) => findElement(id))
-        .filter((e): e is SceneElement => !!e);
-      const copies = copyElements(source, s.grid.step);
-      return {
-        ...s,
-        elements: [...s.elements, ...copies],
-        selection: selectOnly(copies.map((c) => c.id)),
-      };
-    });
-  });
-}
-
-export function nudgeSelection(dx: number, dy: number): void {
-  if (!getState().selection.elementIds.length) return;
-  commit(() =>
-    mutate((s) => {
-      for (const id of s.selection.elementIds) {
-        const el = findElement(id);
-        if (el) translateElement(el, dx, dy);
-      }
-    })
-  );
+/** A press that becomes a drag if the pointer moves far enough, and stays a click if not. */
+interface PendingDrag {
+  drag: DragState;
+  x: number;
+  y: number;
+  slop: number;
+  undo: boolean;
+  grab: boolean;
 }
 
 export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   let drag: DragState | null = null;
+  let pending: PendingDrag | null = null;
+  let holdTimer = 0;
   let lastDown = { t: 0, x: 0, y: 0 };
+
+  function cancelHold(): void {
+    if (holdTimer) window.clearTimeout(holdTimer);
+    holdTimer = 0;
+  }
+
+  /**
+   * Arms a drag instead of starting one. Tapping a shape to select it, or a point to pick it,
+   * must not move anything and must not spend an undo step; both happen only once the pointer
+   * really travels, which matters most on a touch screen where every tap wobbles a few pixels.
+   */
+  function arm(e: PointerEvent, next: DragState, { undo = true, grab = true } = {}): void {
+    pending = { drag: next, x: e.clientX, y: e.clientY, slop: dragSlop(e), undo, grab };
+  }
+
+  /** True once the armed drag has started, or when there was none waiting. */
+  function releaseArmed(e: PointerEvent): boolean {
+    if (!pending) return true;
+    if (Math.hypot(e.clientX - pending.x, e.clientY - pending.y) < pending.slop) return false;
+    cancelHold();
+    if (pending.undo) pushUndo();
+    drag = pending.drag;
+    if (pending.grab) wrap.classList.add("grabbing");
+    pending = null;
+    return true;
+  }
 
   function alignExcludes(): AlignOptions {
     if (!drag) return {};
@@ -465,6 +166,22 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       return { excludePoint: { elementId: drag.pathId, index: drag.index } };
     }
     return {};
+  }
+
+  /**
+   * Where the handle is relative to where you pressed.
+   *
+   * A handle's target is far wider than the dot - 22px across on a mouse, 44 on a finger - and a
+   * resize used to read the bare pointer position, so pressing anywhere but the exact centre
+   * jumped the shape by the difference. On the corner-radius handle it did not jump, it stalled:
+   * the radius clamps at zero, so a press on the outer half of the target had to be dragged all
+   * the way back before anything moved at all.
+   */
+  function grabOffset(handle: Element, world: Point): Point {
+    const cx = Number(handle.getAttribute("cx"));
+    const cy = Number(handle.getAttribute("cy"));
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return { x: 0, y: 0 };
+    return { x: cx - world.x, y: cy - world.y };
   }
 
   /** Symmetric by default (partner mirrors); with Alt the partner keeps its position. */
@@ -499,6 +216,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
 
   // A second finger means pinch/pan: drop whatever one-finger drag had started.
   svg.addEventListener("pinch-start", () => {
+    pending = null;
+    cancelHold();
     if (drag && drag.type !== "pan") {
       drag = null;
       wrap.classList.remove("grabbing");
@@ -575,52 +294,52 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         (e.pointerType === "touch" ? 24 : 6);
     lastDown = { t: isDouble ? 0 : nowMs, x: e.clientX, y: e.clientY };
 
-    if (st.tool === "hand" || st.spacePan) {
+    if (st.spacePan) {
       startPan(e);
       return;
     }
 
     const target = e.target as Element;
     const handle = target.closest?.("[data-handle-kind]");
-    if (handle && st.tool === "select") {
+    if (handle) {
       const h = hitHandle(handle);
       const path = h ? findElement(h.pathId) : undefined;
-      if (h && path?.type === "path") {
+      // The pen keeps its own meaning for the path it is drawing: clicking the first anchor
+      // closes it, clicking elsewhere adds a point. Any other path's handles are editable.
+      const penOwns = st.tool === "pen" && h?.pathId === st.drawing?.activePathId;
+      if (h && path?.type === "path" && !penOwns) {
         if (isDouble && h.kind === "anchor") {
           commit(() => mutate(() => togglePointSmooth(path, h.index)));
           drag = null;
           return;
         }
-        pushUndo();
         const p = path.points[h.index];
         const other = h.kind === "out" ? p?.hIn : h.kind === "in" ? p?.hOut : null;
-        drag = {
+        arm(e, {
           type: "handle",
           ...h,
           otherStart: other ? { x: other.x, y: other.y } : null,
           last: null,
-        };
+        });
         setState({
           selection: selectOnly(
             [h.pathId],
             h.kind === "anchor" ? { pathId: h.pathId, kind: "anchor", index: h.index } : null
           ),
         });
-        wrap.classList.add("grabbing");
         return;
       }
     }
 
     const resizeHandle = target.closest?.("[data-handle-role]");
-    const resizeTarget =
-      resizeHandle && st.tool === "select"
-        ? findElement(resizeHandle.getAttribute("data-element-id"))
-        : undefined;
+    const resizeTarget = resizeHandle
+      ? findElement(resizeHandle.getAttribute("data-element-id"))
+      : undefined;
     if (resizeHandle && resizeTarget) {
       const elementId = resizeTarget.id;
       const role = resizeHandle.getAttribute("data-handle-role") ?? "";
       if (role === "rotate") {
-        startRotate(resizeTarget, world);
+        startRotate(e, resizeTarget, world);
         return;
       }
       const ptIndex = pointIndexForRole(role);
@@ -641,8 +360,13 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         drag = null;
         return;
       }
-      pushUndo();
-      drag = { type: "resize", elementId, role, base: deepClone(resizeTarget) };
+      arm(e, {
+        type: "resize",
+        elementId,
+        role,
+        base: deepClone(resizeTarget),
+        grab: grabOffset(resizeHandle, world),
+      });
       setState({
         selection: selectOnly(
           [elementId],
@@ -651,7 +375,6 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
             : null
         ),
       });
-      wrap.classList.add("grabbing");
       return;
     }
 
@@ -681,13 +404,33 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           const found = findElement(id);
           if (found) bases[id] = deepClone(found);
         }
-        pushUndo();
-        drag = { type: "move-elements", start: world, ids, bases };
-        wrap.classList.add("grabbing");
+        arm(e, { type: "move-elements", start: world, ids, bases });
         return;
       }
-      drag = { type: "marquee", x1: world.x, y1: world.y, x2: world.x, y2: world.y };
-      setDrawing({ marquee: { ...drag } });
+      const marquee: DragState = {
+        type: "marquee",
+        x1: world.x,
+        y1: world.y,
+        x2: world.x,
+        y2: world.y,
+      };
+      if (e.pointerType === "touch") {
+        // One finger on empty canvas pans, which is what a hand tool was for. Holding still
+        // for a moment switches to a marquee, so box-selection is reachable without one.
+        const { panX, panY } = getState().viewport;
+        arm(
+          e,
+          { type: "pan", startX: e.clientX, startY: e.clientY, panX, panY },
+          { undo: false, grab: false }
+        );
+        holdTimer = window.setTimeout(() => {
+          if (pending?.drag.type !== "pan") return;
+          pending = { ...pending, drag: marquee };
+          setDrawing({ marquee: { x1: world.x, y1: world.y, x2: world.x, y2: world.y } });
+        }, HOLD_MS);
+      } else {
+        arm(e, marquee, { undo: false, grab: false });
+      }
       if (!e.shiftKey) setState({ selection: selectOnly() });
       return;
     }
@@ -698,7 +441,9 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     }
 
     if (st.tool === "text") {
-      const el = createText(world.x, world.y, "Text");
+      // Empty, not "Text": the in-place field opens straight away, and tapping away without
+      // typing anything leaves nothing behind rather than the word "Text".
+      const el = createText(world.x, world.y, "");
       commit(() => {
         setState((s) => ({
           ...s,
@@ -713,7 +458,9 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       return;
     }
 
-    if (st.tool === "rect" || st.tool === "ellipse") handleShapeDown(st.tool, world, e);
+    if (st.tool === "rect" || st.tool === "ellipse") {
+      handleShapeDown(st.tool, world, e);
+    }
   });
 
   /** Double-click on a shape: edit text, or insert a vertex on the segment under the cursor. */
@@ -740,13 +487,12 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     return true;
   }
 
-  function startRotate(el: SceneElement, world: Point): void {
+  function startRotate(e: PointerEvent, el: SceneElement, world: Point): void {
     const box = elementBBox(el);
     if (!box || !canRotate(el)) return;
     const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
-    pushUndo();
-    drag = {
+    arm(e, {
       type: "rotate",
       elementId: el.id,
       base: rotationBase(deepClone(el)),
@@ -755,8 +501,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       startAngle: Math.atan2(world.y - cy, world.x - cx),
       radius: Math.max(20, Math.hypot(world.x - cx, world.y - cy)),
       active: false,
-    };
-    wrap.classList.add("grabbing");
+    });
   }
 
   function handlePenDown(world: Point): void {
@@ -806,7 +551,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     }
   }
 
-  function handleShapeDown(tool: "rect" | "ellipse", world: Point, e: PointerEvent): void {
+  function handleShapeDown(tool: ShapeTool, world: Point, e: PointerEvent): void {
     const st = getState();
     if (st.drawing?.shapeStart) {
       finalizeShape(tool, st.drawing.shapeStart, world, e.shiftKey);
@@ -814,12 +559,12 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       drag = null;
       return;
     }
-    pushUndo();
     drag = { type: "shape-drag", tool, start: world, current: world };
     updateShapePreview(tool, world, world, e.shiftKey);
   }
 
   svg.addEventListener("pointermove", (e) => {
+    if (!releaseArmed(e)) return;
     const world = pointerWorld(e);
     const st = getState();
 
@@ -836,10 +581,10 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       return;
     }
 
-    if (!drag && st.tool === "select") {
+    if (!drag) {
       const target = e.target as Element;
       const overHandle = !!target.closest?.("[data-handle-kind], [data-handle-role]");
-      const hoverId = overHandle ? null : hitElement(e.target);
+      const hoverId = overHandle || st.tool !== "select" ? null : hitElement(e.target);
       wrap.classList.toggle("hover-target", overHandle || !!hoverId);
       if (getState().hoverId !== hoverId) setState({ hoverId });
     } else if (getState().hoverId) {
@@ -946,7 +691,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     if (drag?.type === "resize") {
       const d = drag;
       const el = findElement(d.elementId);
-      if (el) mutate(() => applyResize(el, d.role, world, d.base, e.altKey));
+      const at = { x: world.x + d.grab.x, y: world.y + d.grab.y };
+      if (el) mutate(() => applyResize(el, d.role, at, d.base, e.altKey));
       return;
     }
 
@@ -982,163 +728,14 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     }
   });
 
-  function applyResize(
-    el: SceneElement,
-    role: string,
-    world: Point,
-    base: SceneElement,
-    alt: boolean
-  ): void {
-    switch (el.type) {
-      case "rect": {
-        if (base.type !== "rect") return;
-        if (role === "corner") {
-          const off = 14 / getState().viewport.zoom;
-          const rx = Math.min(Math.max(el.x + el.width - off - world.x, 0), el.width / 2);
-          const ry = Math.min(Math.max(world.y - el.y - off, 0), el.height / 2);
-          if (alt) {
-            el.rx = rx;
-            el.ry = ry;
-          } else {
-            el.rx = Math.max(rx, ry);
-            delete el.ry;
-          }
-          break;
-        }
-        // The corner opposite the one being dragged stays put.
-        const fixedX = role === "tl" || role === "bl" ? base.x + base.width : base.x;
-        const fixedY = role === "tl" || role === "tr" ? base.y + base.height : base.y;
-        el.x = Math.min(fixedX, world.x);
-        el.y = Math.min(fixedY, world.y);
-        el.width = Math.abs(world.x - fixedX);
-        el.height = Math.abs(world.y - fixedY);
-        break;
-      }
-      case "circle":
-        el.r = Math.max(0.5, dist({ x: el.cx, y: el.cy }, world));
-        break;
-      case "ellipse":
-        if (role === "rx") el.rx = Math.max(0.5, Math.abs(world.x - el.cx));
-        else el.ry = Math.max(0.5, Math.abs(world.y - el.cy));
-        break;
-      case "line":
-        if (role === "p1") {
-          el.x1 = world.x;
-          el.y1 = world.y;
-        } else {
-          el.x2 = world.x;
-          el.y2 = world.y;
-        }
-        break;
-      case "polyline":
-      case "polygon": {
-        const idx = pointIndexForRole(role);
-        const pt = idx == null ? undefined : el.points[idx];
-        if (pt) {
-          pt.x = world.x;
-          pt.y = world.y;
-        }
-        break;
-      }
-    }
-  }
-
-  function updatePenPreview(path: PathElement, world: Point): void {
-    const last = path.points[path.points.length - 1];
-    if (!last) return;
-    setState((s) => ({
-      ...s,
-      drawing: {
-        ...s.drawing,
-        preview: {
-          type: "rubber",
-          x1: last.x,
-          y1: last.y,
-          x2: world.x,
-          y2: world.y,
-          stroke: path.stroke,
-          strokeWidth: path.strokeWidth,
-        },
-      },
-    }));
-  }
-
-  /** Hold Shift to constrain: rect becomes a square, ellipse becomes a circle. */
-  function constrainShapeEnd(start: Point, current: Point, shift: boolean): Point {
-    if (!shift) return current;
-    const dx = current.x - start.x;
-    const dy = current.y - start.y;
-    const s = Math.max(Math.abs(dx), Math.abs(dy));
-    return { x: start.x + Math.sign(dx || 1) * s, y: start.y + Math.sign(dy || 1) * s };
-  }
-
-  function updateShapePreview(
-    tool: "rect" | "ellipse",
-    start: Point,
-    rawCurrent: Point,
-    shift: boolean
-  ): void {
-    const current = constrainShapeEnd(start, rawCurrent, shift);
-    setDrawing({
-      shapeStart: start,
-      preview: { type: "shape", tag: tool, nodeAttrs: shapeGeometry(tool, start, current) },
-    });
-  }
-
-  function finalizeShape(
-    tool: "rect" | "ellipse",
-    start: Point,
-    rawEnd: Point,
-    shift: boolean
-  ): void {
-    const end = constrainShapeEnd(start, rawEnd, shift);
-    if (Math.hypot(end.x - start.x, end.y - start.y) < 0.5) return;
-    const g = shapeGeometry(tool, start, end);
-    const el =
-      tool === "rect"
-        ? createRect(g.x!, g.y!, g.width!, g.height!)
-        : createEllipse(g.cx!, g.cy!, g.rx!, g.ry!);
-    setState((s) => ({
-      ...s,
-      elements: [...s.elements, el],
-      selection: selectOnly([el.id]),
-    }));
-  }
-
-  /** After dragging an endpoint: close the shape onto itself, or join it to another. */
-  function mergeDroppedEnd(el: SceneElement, idx: number, tol: number): void {
-    const merged = closeByMerge(el, idx, tol);
-    if (merged) {
-      setState((s) => ({
-        ...s,
-        elements: s.elements.map((x) => (x.id === el.id ? merged : x)),
-        selection: selectOnly([el.id]),
-      }));
-      return;
-    }
-    if (!canJoinEnds(el, idx)) return;
-    const pair = ends(el);
-    if (!pair) return;
-    const dragged = pair[idx === 0 ? 0 : 1];
-    for (const other of getState().elements) {
-      if (other.id === el.id || !canJoin(other)) continue;
-      const oe = ends(other);
-      if (!oe?.some((p) => Math.hypot(p.x - dragged.x, p.y - dragged.y) <= tol)) continue;
-      const joined = joinPaths(el, other, tol, tol);
-      if (!joined) continue;
-      setState((s) => ({
-        ...s,
-        elements: s.elements
-          .filter((x) => x.id !== other.id)
-          .map((x) => (x.id === el.id ? joined : x)),
-        selection: selectOnly([joined.id]),
-      }));
-      return;
-    }
-  }
-
   svg.addEventListener("pointerup", (e) => {
     wrap.classList.remove("panning", "grabbing");
+    // A press that never passed the slop threshold was a click: the selection it made stands,
+    // but nothing moved and no undo step was spent.
+    const heldMarquee = pending?.drag.type === "marquee";
+    pending = null;
+    cancelHold();
+    if (heldMarquee) clearDrawing();
     if (drag?.type === "pan") {
       drag = null;
       return;

@@ -52,7 +52,8 @@ function sampleElements(): SceneElement[] {
     Object.assign(createRect(0, 0, 9, 9), {
       fillEnabled: true,
       fillType: "linear" as const,
-      gradAngle: 90,
+      gradFrom: { x: 0.5, y: 0 },
+      gradTo: { x: 0.5, y: 1 },
     }),
     Object.assign(createRect(0, 0, 9, 9), {
       fillEnabled: true,
@@ -68,6 +69,8 @@ function sampleElements(): SceneElement[] {
 function doc(elements: SceneElement[]) {
   return { artboard: { width: 1000, height: 1000 }, elements };
 }
+
+const OPAQUE_BLUE = { color: "#3355ff", opacity: 1 };
 
 describe("export markup", () => {
   test("coordinates are rounded but style values are not", () => {
@@ -103,8 +106,8 @@ describe("export document", () => {
   });
 
   test("grouped elements are wrapped in one <g> carrying the group id", () => {
-    const a = Object.assign(createRect(0, 0, 1, 1), { groupId: "group-abc" });
-    const b = Object.assign(createRect(2, 2, 1, 1), { groupId: "group-abc" });
+    const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-abc"] });
+    const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-abc"] });
     const svg = formatExportSvg(doc([a, b]), true);
     expect(svg.match(/<g id="group-abc">/g)).toHaveLength(1);
     expect(svg.match(/<\/g>/g)).toHaveLength(1);
@@ -127,6 +130,56 @@ describe("export document", () => {
   test("a custom name rides along in the exported id", () => {
     const el = Object.assign(createRect(0, 0, 1, 1), { name: "my shape" });
     expect(formatExportSvg(doc([el]), true)).toContain(`id="${el.id}_my_shape"`);
+  });
+});
+
+describe("background", () => {
+  test("a transparent document exports no background rect at all", () => {
+    const svg = formatExportSvg({ ...doc([]), background: { color: "#ffffff", opacity: 0 } }, true);
+    expect(svg).not.toContain('id="background"');
+  });
+
+  test("a chosen colour is the first thing in the file, at the artboard size", () => {
+    const shape = createRect(0, 0, 9, 9);
+    const svg = formatExportSvg({ ...doc([shape]), background: OPAQUE_BLUE }, true);
+    expect(svg).toContain('<rect id="background" width="1000" height="1000" fill="#3355ff"/>');
+    expect(svg.indexOf('id="background"')).toBeLessThan(svg.indexOf(shape.id));
+  });
+
+  test("a partly transparent background carries its alpha", () => {
+    const svg = formatExportSvg(
+      { ...doc([]), background: { color: "#000000", opacity: 0.5 } },
+      true
+    );
+    expect(svg).toContain('fill="#000000" fill-opacity="0.5"');
+  });
+
+  test("the background comes back on import, and is not mistaken for a shape", () => {
+    const svg = formatExportSvg(
+      { ...doc([createRect(0, 0, 9, 9)]), background: OPAQUE_BLUE },
+      true
+    );
+    const back = importSvgFile(svg, { keepIds: true });
+    expect(back.background).toEqual(OPAQUE_BLUE);
+    expect(back.elements).toHaveLength(1);
+  });
+
+  test("a file without one imports as no background", () => {
+    expect(importSvgFile(formatExportSvg(doc([]), true)).background).toBeNull();
+  });
+
+  test("export -> import -> export is stable with a background", () => {
+    const first = formatExportSvg({ ...doc(sampleElements()), background: OPAQUE_BLUE }, true);
+    const back = importSvgFile(first, { keepIds: true });
+    const second = formatExportSvg(
+      {
+        artboard: back.artboard ?? { width: 1000, height: 1000 },
+        background: back.background,
+        elements: back.elements,
+      },
+      true
+    );
+    expect(second).toBe(first);
   });
 });
 
@@ -172,11 +225,11 @@ describe("round trip", () => {
   });
 
   test("groups survive the trip", () => {
-    const a = Object.assign(createRect(0, 0, 1, 1), { groupId: "group-abc" });
-    const b = Object.assign(createRect(2, 2, 1, 1), { groupId: "group-abc" });
+    const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-abc"] });
+    const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-abc"] });
     const back = importSvgFile(formatExportSvg(doc([a, b]), true), { keepIds: true });
-    expect(back.elements[0]!.groupId).toBe("group-abc");
-    expect(back.elements[1]!.groupId).toBe("group-abc");
+    expect(back.elements[0]!.groups).toEqual(["group-abc"]);
+    expect(back.elements[1]!.groups).toEqual(["group-abc"]);
   });
 });
 
@@ -264,7 +317,7 @@ describe("import", () => {
     const r = importSvgFile(
       '<svg xmlns="http://www.w3.org/2000/svg"><g id="group-x"><rect width="5" height="5"/></g></svg>'
     );
-    expect(r.elements[0]!.groupId).toBeUndefined();
+    expect(r.elements[0]!.groups).toBeUndefined();
   });
 
   test("a <title> names the shape", () => {
@@ -324,6 +377,7 @@ describe("project file", () => {
   test("the serialized shape is exactly the documented set of keys", () => {
     expect(Object.keys(serializeProject(createInitialState())).sort()).toEqual([
       "artboard",
+      "background",
       "elements",
       "finalOnly",
       "grid",
@@ -336,5 +390,245 @@ describe("project file", () => {
 
   test("style defaults are not stored: each element carries its own", () => {
     expect(serializeProject(createInitialState())).not.toHaveProperty("defaults");
+  });
+});
+
+describe("groups and transforms on import", () => {
+  test("nested groups become a chain, outermost first", () => {
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg"><g id="group-out"><g id="group-in">' +
+        '<rect width="5" height="5"/><rect x="9" width="5" height="5"/>' +
+        '</g><rect x="20" width="5" height="5"/></g></svg>',
+      { keepIds: true }
+    );
+    expect(r.elements[0]!.groups).toEqual(["group-out", "group-in"]);
+  });
+
+  test("a <g> whose whole content is one other <g> collapses into it", () => {
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg"><g id="group-out"><g id="group-in">' +
+        '<rect width="5" height="5"/><rect x="9" width="5" height="5"/>' +
+        "</g></g></svg>",
+      { keepIds: true }
+    );
+    // A group carries nothing but its membership here, so a level with one child says nothing.
+    expect(r.elements[0]!.groups).toEqual(["group-in"]);
+  });
+
+  test("nested groups survive a round trip", () => {
+    const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-out", "group-in"] });
+    const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-out", "group-in"] });
+    // A third member of the outer group only, so the outer one has two children and stays.
+    const c = Object.assign(createRect(4, 4, 1, 1), { groups: ["group-out"] });
+    const svg = formatExportSvg(doc([a, b, c]), true);
+    expect(svg.match(/<g id="group-out">/g)).toHaveLength(1);
+    expect(svg.match(/<g id="group-in">/g)).toHaveLength(1);
+    const back = importSvgFile(svg, { keepIds: true });
+    expect(back.elements[1]!.groups).toEqual(["group-out", "group-in"]);
+  });
+
+  test("a group transform is baked into the coordinates", () => {
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg"><g transform="translate(10 20)">' +
+        '<rect width="5" height="5"/><rect x="9" width="5" height="5"/></g></svg>'
+    );
+    expect(r.elements[0]).toMatchObject({ type: "rect", x: 10, y: 20 });
+    expect(r.elements[1]).toMatchObject({ type: "rect", x: 19, y: 20 });
+  });
+
+  test("an element's own transform is baked in too", () => {
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg"><rect width="4" height="4" transform="scale(3)"/></svg>'
+    );
+    expect(r.elements[0]).toMatchObject({ type: "rect", width: 12, height: 12 });
+  });
+
+  test("one group split across two <g> is gathered back into one", () => {
+    // Editing the SVG text by hand can leave the same group id on two separate <g> elements.
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<g id="group-a"><rect id="r1" width="1" height="1"/></g>' +
+        '<rect id="r2" width="1" height="1"/>' +
+        '<g id="group-a"><rect id="r3" width="1" height="1"/></g>' +
+        "</svg>",
+      { keepIds: true }
+    );
+    expect(r.elements.map((e) => e.name)).toEqual(["r1", "r3", "r2"]);
+    expect(formatExportSvg(doc(r.elements), true).match(/<g id="group-a">/g)).toHaveLength(1);
+  });
+});
+
+describe("uniform shapes", () => {
+  test("an ellipse with equal radii exports as a circle and comes back as one", () => {
+    const e = createEllipse(50, 50, 20, 20);
+    const svg = formatExportSvg(doc([e]), true);
+    expect(svg).toContain("<circle id=");
+    expect(svg).toContain('r="20"');
+    const back = importSvgFile(svg);
+    expect(back.elements[0]!.type).toBe("circle");
+  });
+
+  test("export stays byte-for-byte stable across that round trip", () => {
+    const first = formatExportSvg(doc([createEllipse(50, 50, 20, 20)]), true);
+    const back = importSvgFile(first, { keepIds: true });
+    expect(formatExportSvg({ artboard: doc([]).artboard, elements: back.elements }, true)).toBe(
+      first
+    );
+  });
+});
+
+describe("path data the old parser dropped", () => {
+  const points = (d: string) => {
+    const r = importSvgFile(
+      `<svg xmlns="http://www.w3.org/2000/svg"><path d="${d}" stroke="#000"/></svg>`
+    );
+    const el = r.elements[0]!;
+    return el.type === "path" ? el.points : [];
+  };
+
+  test("a command repeats implicitly", () => {
+    expect(points("M0 0 L10 0 20 0 30 0").map((p) => p.x)).toEqual([0, 10, 20, 30]);
+  });
+
+  test("a repeated moveto continues as a lineto", () => {
+    expect(points("M0 0 10 0 20 0").map((p) => p.x)).toEqual([0, 10, 20]);
+  });
+
+  test("a run of cubics keeps every segment", () => {
+    expect(points("M0 0 C1 1 2 2 3 3 4 4 5 5 6 6")).toHaveLength(3);
+  });
+
+  test("a quadratic becomes the cubic that draws the same curve", () => {
+    const pts = points("M0 0 Q30 0 30 30");
+    expect(pts).toHaveLength(2);
+    // c1 = p0 + 2/3 (q - p0), c2 = p3 + 2/3 (q - p3).
+    expect(pts[0]!.hOut).toEqual({ x: 20, y: 0 });
+    expect(pts[1]!.hIn).toEqual({ x: 30, y: 10 });
+  });
+
+  test("the smooth shorthands reflect the previous control point", () => {
+    const cubic = points("M0 0 C0 10 10 10 10 0 S20 -10 20 0");
+    expect(cubic).toHaveLength(3);
+    expect(cubic[1]!.hOut).toEqual({ x: 10, y: -10 });
+    expect(points("M0 0 Q10 10 20 0 T40 0")).toHaveLength(3);
+  });
+
+  test("relative commands are resolved against the current point", () => {
+    expect(points("M10 10 l10 0 l0 10").map((p) => [p.x, p.y])).toEqual([
+      [10, 10],
+      [20, 10],
+      [20, 20],
+    ]);
+  });
+
+  test("an arc is approximated and lands exactly on its endpoint", () => {
+    const pts = points("M0 50 A50 50 0 0 1 100 50");
+    expect(pts.length).toBeGreaterThan(2);
+    const end = pts[pts.length - 1]!;
+    expect([Math.round(end.x), Math.round(end.y)]).toEqual([100, 50]);
+    // Halfway round a half circle of radius 50 centred at (50,50): the top of the arc.
+    const mid = pts[Math.floor(pts.length / 2)]!;
+    expect(Math.round(mid.y)).toBe(0);
+  });
+
+  test("an arc with a zero radius degenerates to a line", () => {
+    expect(points("M0 0 A0 0 0 0 1 10 10")).toHaveLength(2);
+  });
+});
+
+describe("gradients", () => {
+  const gradient = (over: Partial<SceneElement>) =>
+    Object.assign(createRect(0, 0, 100, 50), { fillEnabled: true, fillType: "linear" }, over);
+
+  test("every stop is written out, in order", () => {
+    const el = gradient({
+      gradStops: [
+        { offset: 0, color: "#ff0000", opacity: 1 },
+        { offset: 0.4, color: "#00ff00", opacity: 0.5 },
+        { offset: 1, color: "#0000ff", opacity: 1 },
+      ],
+    });
+    const svg = formatExportSvg(doc([el]), true);
+    expect(svg.match(/<stop /g)).toHaveLength(3);
+    expect(svg).toContain('offset="0.4" stop-color="#00ff00" stop-opacity="0.5"');
+  });
+
+  test("the gradient's ends are written as coordinates, not an angle", () => {
+    const el = gradient({ gradFrom: { x: 0.25, y: 0 }, gradTo: { x: 0.75, y: 1 } });
+    expect(formatExportSvg(doc([el]), true)).toContain('x1="0.25" y1="0" x2="0.75" y2="1"');
+  });
+
+  test("a radial gradient's centre and radius come from the same two points", () => {
+    const el = gradient({
+      fillType: "radial",
+      gradFrom: { x: 0.5, y: 0.5 },
+      gradTo: { x: 0.9, y: 0.5 },
+    });
+    expect(formatExportSvg(doc([el]), true)).toContain('cx="0.5" cy="0.5" r="0.4"');
+  });
+
+  test("three stops survive a round trip", () => {
+    const el = gradient({
+      gradStops: [
+        { offset: 0, color: "#ff0000", opacity: 1 },
+        { offset: 0.4, color: "#00ff00", opacity: 1 },
+        { offset: 1, color: "#0000ff", opacity: 1 },
+      ],
+    });
+    const back = importSvgFile(formatExportSvg(doc([el]), true), { keepIds: true });
+    expect(back.elements[0]!.gradStops).toHaveLength(3);
+    expect(back.elements[0]!.gradStops[1]).toMatchObject({ offset: 0.4, color: "#00ff00" });
+  });
+
+  test("percentages are read as fractions", () => {
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+        '<linearGradient id="g" x1="10%" y1="0%" x2="90%" y2="0%">' +
+        '<stop offset="20%" stop-color="#ff0000"/><stop offset="100%" stop-color="#0000ff"/>' +
+        "</linearGradient></defs>" +
+        '<rect width="10" height="10" fill="url(#g)"/></svg>'
+    );
+    expect(r.elements[0]!.gradFrom).toEqual({ x: 0.1, y: 0 });
+    expect(r.elements[0]!.gradStops[0]!.offset).toBeCloseTo(0.2);
+  });
+
+  test("a userSpaceOnUse gradient is converted to the shape's own box", () => {
+    const r = importSvgFile(
+      '<svg xmlns="http://www.w3.org/2000/svg"><defs>' +
+        '<linearGradient id="g" gradientUnits="userSpaceOnUse" x1="100" y1="0" x2="200" y2="0">' +
+        '<stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/>' +
+        "</linearGradient></defs>" +
+        '<rect x="100" y="0" width="100" height="50" fill="url(#g)"/></svg>'
+    );
+    expect(r.elements[0]!.gradFrom).toEqual({ x: 0, y: 0 });
+    expect(r.elements[0]!.gradTo).toEqual({ x: 1, y: 0 });
+  });
+});
+
+describe("rotation round trip", () => {
+  test("a rotated rect stays a rect through export and import", () => {
+    const el = Object.assign(createRect(10, 20, 100, 50), { rotation: 30 });
+    const svg = formatExportSvg(doc([el]), true);
+    expect(svg).toContain("<rect ");
+    expect(svg).toContain('transform="rotate(30 60 45)"');
+    const back = importSvgFile(svg, { keepIds: true });
+    expect(back.elements[0]!.type).toBe("rect");
+    expect(Math.round(back.elements[0]!.rotation ?? 0)).toBe(30);
+  });
+
+  test("export is byte-for-byte stable across that trip", () => {
+    const el = Object.assign(createRect(10, 20, 100, 50), { rotation: 30 });
+    const first = formatExportSvg(doc([el]), true);
+    const back = importSvgFile(first, { keepIds: true });
+    expect(formatExportSvg({ artboard: doc([]).artboard, elements: back.elements }, true)).toBe(
+      first
+    );
+  });
+
+  test("a rotated ellipse keeps its type too", () => {
+    const el = Object.assign(createEllipse(50, 50, 30, 10), { rotation: 45 });
+    const back = importSvgFile(formatExportSvg(doc([el]), true), { keepIds: true });
+    expect(back.elements[0]!.type).toBe("ellipse");
+    expect(Math.round(back.elements[0]!.rotation ?? 0)).toBe(45);
   });
 });

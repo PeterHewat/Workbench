@@ -6,6 +6,12 @@
       "runtimeExecutable": "bunx",
       "runtimeArgs": ["--bun", "serve", "dist", "-l", "3111"],
       "port": 3111
+    },
+    {
+      "name": "vellum-dev",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--filter", "@workbench/vellum", "dev"],
+      "port": 5173
     }
   ]
 }

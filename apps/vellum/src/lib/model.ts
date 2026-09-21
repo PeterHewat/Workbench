@@ -5,6 +5,7 @@ import type {
   CircleElement,
   ElementType,
   EllipseElement,
+  GradientStop,
   LineElement,
   PathElement,
   Point,
@@ -29,20 +30,23 @@ export const DEFAULT_STROKE: StyleProps = {
   fillType: "solid",
   fill: "#000000",
   fillOpacity: 1,
-  fill2: "#ffffff",
-  fill2Opacity: 1,
-  gradAngle: 0,
+  gradStops: [
+    { offset: 0, color: "#000000", opacity: 1 },
+    { offset: 1, color: "#ffffff", opacity: 1 },
+  ],
+  gradFrom: { x: 0, y: 0.5 },
+  gradTo: { x: 1, y: 0.5 },
   markerStart: "none",
   markerEnd: "none",
 };
 
 /** Keys copied when an element is converted from one type to another: identity plus every style. */
-const STYLE_KEYS: readonly string[] = ["name", "groupId", ...Object.keys(DEFAULT_STROKE)];
+const STYLE_KEYS: readonly string[] = ["name", "groups", ...Object.keys(DEFAULT_STROKE)];
 
 export function styleOf(el: SceneElement): StyleCarrier {
   const src = el as unknown as Record<string, unknown>;
   const out: Record<string, unknown> = {};
-  for (const k of STYLE_KEYS) if (src[k] !== undefined) out[k] = src[k];
+  for (const k of STYLE_KEYS) if (src[k] !== undefined) out[k] = deepClone(src[k]);
   return out as StyleCarrier;
 }
 
@@ -61,7 +65,7 @@ export interface Geometry {
 function base<T extends ElementType>(
   type: T,
   style: StyleCarrier
-): { id: string; type: T; name: string; groupId?: string } & StyleProps {
+): { id: string; type: T; name: string; groups?: string[] } & StyleProps {
   const { id, ...rest } = style;
   return {
     id: id ?? uid(type),
@@ -69,7 +73,51 @@ function base<T extends ElementType>(
     name: "",
     ...DEFAULT_STROKE,
     ...rest,
-  } as { id: string; type: T; name: string; groupId?: string } & StyleProps;
+  } as { id: string; type: T; name: string; groups?: string[] } & StyleProps;
+}
+
+/**
+ * The shapes whose rotation is stored rather than baked in: their SVG element cannot express
+ * one in its own coordinates, so rotating a rect used to turn it into a polygon and an ellipse
+ * into a path. Keeping the angle keeps the shape editable as what it is.
+ */
+export function keepsRotation(el: SceneElement): boolean {
+  return el.type === "rect" || el.type === "ellipse" || el.type === "circle" || el.type === "text";
+}
+
+/**
+ * The point a stored rotation turns about. A box or ellipse turns about its own centre; text
+ * turns about its anchor, which is where the SVG `rotate()` on a `<text>` has always put it.
+ */
+export function rotationCentre(el: SceneElement): Point {
+  if (el.type === "rect") return { x: el.x + el.width / 2, y: el.y + el.height / 2 };
+  if (el.type === "ellipse" || el.type === "circle") return { x: el.cx, y: el.cy };
+  if (el.type === "text") return { x: el.x, y: el.y };
+  const box = localBBox(el);
+  return box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : { x: 0, y: 0 };
+}
+
+/** Turns `p` about (cx, cy) by `deg` degrees. */
+export function rotatePoint(p: Point, cx: number, cy: number, deg: number): Point {
+  if (!deg) return { x: p.x, y: p.y };
+  const a = (deg * Math.PI) / 180;
+  const cos = Math.cos(a);
+  const sin = Math.sin(a);
+  const dx = p.x - cx;
+  const dy = p.y - cy;
+  return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+}
+
+/** A world point in the element's own unrotated frame, which is where its geometry lives. */
+export function toLocalPoint(el: SceneElement, p: Point): Point {
+  const c = rotationCentre(el);
+  return rotatePoint(p, c.x, c.y, -(el.rotation ?? 0));
+}
+
+/** The reverse of `toLocalPoint`: an unrotated coordinate back to where it is drawn. */
+export function toWorldPoint(el: SceneElement, p: Point): Point {
+  const c = rotationCentre(el);
+  return rotatePoint(p, c.x, c.y, el.rotation ?? 0);
 }
 
 /** Corner radius clamped so it can never exceed half the rect's shorter side. */
@@ -87,6 +135,18 @@ export function cornerRadiusY(el: RectElement): number {
 /** A circle's radius read as a pair, so circles and ellipses share one code path. */
 function radii(el: CircleElement | EllipseElement): { rx: number; ry: number } {
   return el.type === "circle" ? { rx: el.r, ry: el.r } : { rx: el.rx, ry: el.ry };
+}
+
+/** An element's stops, in offset order, always at least two so a gradient is well formed. */
+export function gradientStops(el: SceneElement): GradientStop[] {
+  const stops = (el.gradStops ?? []).filter((s) => s && Number.isFinite(s.offset));
+  if (stops.length < 2) {
+    return [
+      { offset: 0, color: el.fill || "#000000", opacity: el.fillOpacity ?? 1 },
+      { offset: 1, color: "#ffffff", opacity: 1 },
+    ];
+  }
+  return [...stops].sort((a, b) => a.offset - b.offset);
 }
 
 export function isGradient(el: SceneElement): boolean {
@@ -284,14 +344,16 @@ function geometryPoints(el: SceneElement, skipIndex = -1): Point[] {
         { x: el.x1, y: el.y1 },
         { x: el.x2, y: el.y2 },
       ];
-    case "rect":
+    case "rect": {
       // Perimeter order (TL, TR, BR, BL) so tracing these as a path gives the rectangle back.
-      return [
+      const corners = [
         { x: el.x, y: el.y },
         { x: el.x + el.width, y: el.y },
         { x: el.x + el.width, y: el.y + el.height },
         { x: el.x, y: el.y + el.height },
       ];
+      return el.rotation ? corners.map((p) => toWorldPoint(el, p)) : corners;
+    }
     case "circle":
     case "ellipse":
       return [{ x: el.cx, y: el.cy }];
@@ -331,7 +393,8 @@ function textWidth(el: TextElement): number {
   return measureCtx.measureText(el.text || "").width;
 }
 
-export function elementBBox(el: SceneElement): BBox | null {
+/** A shape's box before any rotation: where its handles and its geometry actually live. */
+export function localBBox(el: SceneElement): BBox | null {
   switch (el.type) {
     case "rect":
       return { x: el.x, y: el.y, width: el.width, height: el.height };
@@ -344,28 +407,38 @@ export function elementBBox(el: SceneElement): BBox | null {
       const w = textWidth(el);
       const h = (el.fontSize || 48) * 1.1;
       const x = el.anchor === "middle" ? el.x - w / 2 : el.anchor === "end" ? el.x - w : el.x;
-      const y = el.y - (el.fontSize || 48) * 0.85;
-      if (!el.rotation) return { x, y, width: w, height: h };
-      const a = (el.rotation * Math.PI) / 180;
-      const cos = Math.cos(a);
-      const sin = Math.sin(a);
-      const corners = (
-        [
-          [x, y],
-          [x + w, y],
-          [x + w, y + h],
-          [x, y + h],
-        ] as const
-      ).map(([px, py]) => {
-        const dx = px - el.x;
-        const dy = py - el.y;
-        return { x: el.x + dx * cos - dy * sin, y: el.y + dx * sin + dy * cos };
-      });
-      return boundsOf(corners);
+      return { x, y: el.y - (el.fontSize || 48) * 0.85, width: w, height: h };
     }
     default:
       return boundsOf(geometryPoints(el));
   }
+}
+
+/** The corners of the local box, turned into where they are actually drawn. */
+export function cornersOf(el: SceneElement): Point[] {
+  const box = localBBox(el);
+  if (!box) return [];
+  return [
+    { x: box.x, y: box.y },
+    { x: box.x + box.width, y: box.y },
+    { x: box.x + box.width, y: box.y + box.height },
+    { x: box.x, y: box.y + box.height },
+  ].map((p) => toWorldPoint(el, p));
+}
+
+/** The axis-aligned box the shape occupies on the artboard, rotation included. */
+export function elementBBox(el: SceneElement): BBox | null {
+  const box = localBBox(el);
+  if (!box || !el.rotation) return box;
+  // An ellipse's rotated extent is not its rotated corner box, so it gets the exact formula.
+  if (el.type === "ellipse" || el.type === "circle") {
+    const { rx, ry } = radii(el);
+    const a = (el.rotation * Math.PI) / 180;
+    const hw = Math.hypot(rx * Math.cos(a), ry * Math.sin(a));
+    const hh = Math.hypot(rx * Math.sin(a), ry * Math.cos(a));
+    return { x: el.cx - hw, y: el.cy - hh, width: hw * 2, height: hh * 2 };
+  }
+  return boundsOf(cornersOf(el));
 }
 
 /**
@@ -373,6 +446,14 @@ export function elementBBox(el: SceneElement): BBox | null {
  * exporter so the two can never drift. `fmt` formats coordinates (identity on canvas,
  * Math.round for export); `text` is present only for `<text>`. Null attributes are dropped.
  */
+/** `rotate(a cx cy)` for a shape that carries an angle, or null when it does not. */
+function rotateAttr(el: SceneElement, fmt: Formatter): string | null {
+  const angle = el.rotation ?? 0;
+  if (!angle) return null;
+  const c = rotationCentre(el);
+  return `rotate(${Math.round(angle * 10) / 10} ${fmt(c.x)} ${fmt(c.y)})`;
+}
+
 export function geometryOf(el: SceneElement, fmt: Formatter = (n) => n): Geometry | null {
   switch (el.type) {
     case "path":
@@ -396,16 +477,26 @@ export function geometryOf(el: SceneElement, fmt: Formatter = (n) => n): Geometr
           rx: rounded ? rx : null,
           // `rx` alone already implies an equal `ry`.
           ry: rounded && ry !== rx ? ry : null,
+          transform: rotateAttr(el, fmt),
         },
       };
     }
     case "circle":
-      return { tag: "circle", attrs: { cx: fmt(el.cx), cy: fmt(el.cy), r: fmt(el.r) } };
-    case "ellipse":
       return {
-        tag: "ellipse",
-        attrs: { cx: fmt(el.cx), cy: fmt(el.cy), rx: fmt(el.rx), ry: fmt(el.ry) },
+        tag: "circle",
+        attrs: { cx: fmt(el.cx), cy: fmt(el.cy), r: fmt(el.r), transform: rotateAttr(el, fmt) },
       };
+    case "ellipse": {
+      const rx = fmt(el.rx);
+      const ry = fmt(el.ry);
+      // An ellipse whose radii have come out equal is a circle, and says so in the markup.
+      // There is no circle tool; the diagonal handle on an ellipse is how you draw one.
+      const transform = rotateAttr(el, fmt);
+      if (rx === ry) {
+        return { tag: "circle", attrs: { cx: fmt(el.cx), cy: fmt(el.cy), r: rx, transform } };
+      }
+      return { tag: "ellipse", attrs: { cx: fmt(el.cx), cy: fmt(el.cy), rx, ry, transform } };
+    }
     case "polyline":
     case "polygon":
       return {
@@ -421,9 +512,7 @@ export function geometryOf(el: SceneElement, fmt: Formatter = (n) => n): Geometr
           "font-family": el.fontFamily || "sans-serif",
           "font-size": fmt(el.fontSize || 48),
           "text-anchor": el.anchor && el.anchor !== "start" ? el.anchor : null,
-          transform: el.rotation
-            ? `rotate(${Math.round(el.rotation * 10) / 10} ${fmt(el.x)} ${fmt(el.y)})`
-            : null,
+          transform: rotateAttr(el, fmt),
         },
         text: el.text || "",
       };
@@ -518,7 +607,7 @@ export function collectAlignPoints(
   return pts;
 }
 
-export interface AlignResult extends Point {
+interface AlignResult extends Point {
   guideX: number | null;
   guideY: number | null;
 }
@@ -599,6 +688,14 @@ function ellipseToPath(
 /** Converts any geometric primitive to an equivalent editable path (same id and style). */
 export function toPathElement(el: SceneElement): SceneElement {
   if (el.type === "path") return el;
+  // A path has no angle to carry, so a stored rotation is baked into the points here.
+  if (el.rotation) {
+    const centre = rotationCentre(el);
+    const upright = deepClone(el);
+    delete upright.rotation;
+    const angle = (el.rotation * Math.PI) / 180;
+    return rotateElementCopy(toPathElement(upright), angle, centre.x, centre.y);
+  }
   const style = { ...styleOf(el), id: el.id };
   const corner = (p: Point) => createPoint(p.x, p.y, false);
   switch (el.type) {
@@ -629,10 +726,11 @@ export function canRotate(el: SceneElement): boolean {
   return el.type !== "circle" && isElementType(el.type);
 }
 
-/** The element to rotate: rects become polygons, ellipses become paths, others are unchanged. */
+/**
+ * The element a rotation drag works from. Shapes that can carry an angle keep their type; a
+ * path or polyline has no angle to carry, and rotating its points loses nothing.
+ */
 export function rotationBase(el: SceneElement): SceneElement {
-  if (el.type === "rect") return simplifyPathIfStraight(toPathElement(el));
-  if (el.type === "ellipse" || el.type === "circle") return toPathElement(el);
   return el;
 }
 
@@ -652,10 +750,15 @@ export function rotateElementCopy(
     p.x = cx + dx * cos - dy * sin;
     p.y = cy + dx * sin + dy * cos;
   };
-  if (c.type === "text") {
-    rot(c);
-    const prev = src.type === "text" ? (src.rotation ?? 0) : 0;
+  if (keepsRotation(c)) {
+    // The angle is stored, so only the centre has to move - and when the drag turns about the
+    // shape's own centre, as the rotate handle does, it does not move at all.
+    const centre = rotationCentre(c);
+    const moved = rotatePoint(centre, cx, cy, (angle * 180) / Math.PI);
+    translateElement(c, moved.x - centre.x, moved.y - centre.y);
+    const prev = src.rotation ?? 0;
     c.rotation = (((prev + (angle * 180) / Math.PI) % 360) + 360) % 360;
+    if (!c.rotation) delete c.rotation;
   } else if (c.type === "line") {
     const a = { x: c.x1, y: c.y1 };
     const b = { x: c.x2, y: c.y2 };

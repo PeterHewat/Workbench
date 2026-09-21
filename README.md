@@ -18,13 +18,22 @@ bun install
 bun run dev
 ```
 
-That serves Vellum. For another app, `bun run --filter @workbench/<slug> dev`.
+`bun run dev` serves **Vellum**, not the index page, because each app is its own Vite root on
+its own port — the index's links point at built paths like `/Workbench/vellum/` and only resolve
+in a built site. So: `bun run dev` for the app you are working on, `bun run dev:home` to work on
+the index page itself, and the build-and-serve below to see the two joined up.
+
+For any other app: `bun run --filter @workbench/<slug> dev`.
 
 To build and preview the whole site, including the index page:
 
 ```bash
 WORKBENCH_BASE=/ bun run build && bunx serve dist
 ```
+
+On Windows, run that from PowerShell (`$env:WORKBENCH_BASE = '/'; bun run build`) or prefix it
+with `MSYS_NO_PATHCONV=1`. Git Bash rewrites the bare `/` into a Windows path and the build bakes
+that in as the base, which fails quietly: the page loads and every asset 404s.
 
 ## Adding a tool
 
@@ -54,14 +63,15 @@ ES modules that will still work off any file server in ten years.
 
 ## Commands
 
-| Command           | What it does                      |
-| ----------------- | --------------------------------- |
-| `bun run dev`     | Serve an app with hot reload      |
-| `bun run check`   | Lint, typecheck and format check  |
-| `bun run test`    | Run the test suites               |
-| `bun run build`   | Build the whole site into `dist/` |
-| `bun run verify`  | `check` + `test` + `build`        |
-| `bun run new-app` | Scaffold a new app                |
+| Command            | What it does                      |
+| ------------------ | --------------------------------- |
+| `bun run dev`      | Serve Vellum with hot reload      |
+| `bun run dev:home` | Serve the index page              |
+| `bun run check`    | Lint, typecheck and format check  |
+| `bun run test`     | Run the test suites               |
+| `bun run build`    | Build the whole site into `dist/` |
+| `bun run verify`   | `check` + `test` + `build`        |
+| `bun run new-app`  | Scaffold a new app                |
 
 ## License
 
