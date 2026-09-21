@@ -1598,6 +1598,26 @@ byId("btn-final").addEventListener("click", () => {
   setState((s) => ({ ...s, finalOnly: !s.finalOnly }));
 });
 
+/**
+ * How much of the canvas the floating toolbars cover. On a phone they sit over it rather than
+ * beside it, so anything that fits the artboard has to know where the free part actually is;
+ * on a wider screen the bars are in the flow, the strips measure zero, and nothing changes.
+ */
+function fitToView(): ReturnType<typeof fitArtboardInView> {
+  const rect = svg.getBoundingClientRect();
+  const strip = (el: HTMLElement, edge: "top" | "bottom"): number => {
+    // Not offsetParent: that is null for a fixed element, which is exactly the case here.
+    if (!el.getClientRects().length) return 0;
+    const r = el.getBoundingClientRect();
+    const covered = edge === "top" ? r.bottom - rect.top : rect.bottom - r.top;
+    return covered <= 0 ? 0 : Math.min(covered + 8, rect.height / 3);
+  };
+  return fitArtboardInView(40, {
+    top: strip(bySelector<HTMLElement>(".top-bar"), "top"),
+    bottom: strip(byId("tool-bar"), "bottom"),
+  });
+}
+
 /** Zoom buttons work on the middle of the canvas, the way the wheel works on the cursor. */
 function zoomByStep(factor: number): void {
   const rect = svg.getBoundingClientRect();
@@ -1607,7 +1627,7 @@ byId("btn-zoom-in").addEventListener("click", () => zoomByStep(1.25));
 byId("btn-zoom-out").addEventListener("click", () => zoomByStep(1 / 1.25));
 
 byId("btn-fit-view").addEventListener("click", () => {
-  setState({ viewport: fitArtboardInView() });
+  setState({ viewport: fitToView() });
 });
 byId("btn-reset-zoom").addEventListener("click", () => {
   const rect = svg.getBoundingClientRect();
@@ -1751,7 +1771,7 @@ window.addEventListener("keyup", (e) => {
 });
 
 renderAll(getState());
-setState({ viewport: fitArtboardInView() });
+setState({ viewport: fitToView() });
 
 /* ---------- Documents: autosaved to browser storage, macOS-style ---------- */
 const LAST_DOC_KEY = "vector-tracer.lastDoc";
@@ -1883,7 +1903,7 @@ async function createBlankDocument(): Promise<void> {
     storageError(err);
   }
   replaceState(createInitialState());
-  setState({ viewport: fitArtboardInView() });
+  setState({ viewport: fitToView() });
   currentDoc = { id: uid("doc"), name: uniqueName("Untitled") };
   afterDocumentReplaced();
   try {

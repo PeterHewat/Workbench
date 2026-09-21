@@ -73,8 +73,8 @@
             d="M4 13l5 5L20 6"
           />
         </symbol>
-        <!-- Each shows the state the button puts the path into, and the difference is the whole
-             base rather than a detail: at 22px a dashed edge and a solid one are the same icon. -->
+        <!-- Each shows the state the button puts the path into: the same three points, the same
+             two sides, and the base there or not. -->
         <symbol id="icon-close-path" viewBox="0 0 24 24">
           <path
             fill="none"
@@ -84,6 +84,9 @@
             stroke-linejoin="round"
             d="M5 19 12 5l7 14z"
           />
+          <circle cx="12" cy="5" r="2.3" fill="currentColor" />
+          <circle cx="5" cy="19" r="2.3" fill="currentColor" />
+          <circle cx="19" cy="19" r="2.3" fill="currentColor" />
         </symbol>
         <symbol id="icon-open-path" viewBox="0 0 24 24">
           <path
@@ -94,8 +97,9 @@
             stroke-linejoin="round"
             d="M5 19 12 5l7 14"
           />
-          <circle cx="5" cy="19" r="2.6" fill="currentColor" />
-          <circle cx="19" cy="19" r="2.6" fill="currentColor" />
+          <circle cx="12" cy="5" r="2.3" fill="currentColor" />
+          <circle cx="5" cy="19" r="2.3" fill="currentColor" />
+          <circle cx="19" cy="19" r="2.3" fill="currentColor" />
         </symbol>
         <symbol id="icon-split" viewBox="0 0 24 24">
           <path
@@ -658,20 +662,21 @@
             >
               <svg class="ui-icon" aria-hidden="true"><use href="#icon-eye" /></svg>
             </button>
-
-            <button
-              type="button"
-              class="tool-btn tool-btn--text"
-              id="btn-help"
-              aria-expanded="false"
-              title="Help — what everything does"
-              aria-label="Help"
-              data-label="Help"
-            >
-              ?
-            </button>
           </div>
         </div>
+
+        <!-- Help sits outside the view menu, last in the bar: on a phone the one button you
+             reach for when you are lost should not itself be behind a menu. -->
+        <button
+          type="button"
+          class="tool-btn tool-btn--text help-btn"
+          id="btn-help"
+          aria-expanded="false"
+          title="Help — what everything does"
+          aria-label="Help"
+        >
+          ?
+        </button>
 
         <p id="cursor-pos" class="cursor-readout mono" aria-live="polite">—</p>
       </header>
@@ -978,9 +983,15 @@
               so they live in the <b>SVG</b> section of the Document panel beside the artboard size.
             </li>
             <li>
-              Fit view, zoom out / 100% / zoom in, the eye button (<b>Final SVG</b>: hides the grid,
-              guides and reference images) and Help. On a narrow screen these fold into one button
-              at the right of the toolbar.
+              Fit view, zoom out / 100% / zoom in and the eye button (<b>Final SVG</b>: hides the
+              grid, guides and reference images). On a narrow screen these fold behind one button
+              near the right of the bar. <b>?</b> stays out of that menu, last in the bar: the one
+              button you reach for when you are lost should not itself be behind a menu.
+            </li>
+            <li data-help="touch">
+              On a phone both bars float over the canvas rather than taking a strip of it, so the
+              artboard keeps the screen. They start below the ruler, and the canvas between the
+              buttons still pans — only the buttons themselves take the touch.
             </li>
           </ul>
 

@@ -64,15 +64,29 @@ export function zoomAt(clientX: number, clientY: number, factor: number): Viewpo
   return { panX: root.x - wx * zoom, panY: root.y - wy * zoom, zoom };
 }
 
-export function fitArtboardInView(padding = 40): Viewport {
+/** Strips of the canvas covered by something floating over it, in screen pixels. */
+export interface ViewInsets {
+  top?: number;
+  bottom?: number;
+}
+
+/**
+ * Fits the artboard in what you can actually see. On a phone the toolbars float over the canvas
+ * rather than taking a strip of it, so "fit" has to leave their height out or the top and bottom
+ * of the artboard land underneath them.
+ */
+export function fitArtboardInView(padding = 40, insets: ViewInsets = {}): Viewport {
   const state = getState();
   const rect = svgEl.getBoundingClientRect();
+  const top = insets.top ?? 0;
+  const bottom = insets.bottom ?? 0;
+  const usableH = Math.max(1, rect.height - top - bottom);
   const aw = state.artboard.width;
   const ah = state.artboard.height;
-  const zoom = Math.min((rect.width - padding * 2) / aw, (rect.height - padding * 2) / ah, 1.6);
+  const zoom = Math.min((rect.width - padding * 2) / aw, (usableH - padding * 2) / ah, 1.6);
   return {
     panX: (rect.width - aw * zoom) / 2,
-    panY: (rect.height - ah * zoom) / 2,
+    panY: top + (usableH - ah * zoom) / 2,
     zoom: clampZoom(zoom),
   };
 }
