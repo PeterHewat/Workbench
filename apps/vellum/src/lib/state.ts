@@ -18,6 +18,9 @@ export function createInitialState(): EditorState {
     // 512 with a step of 16 is 32 cells across: one cell per pixel of a 32px icon, and it
     // halves cleanly all the way down. Both are editable in the Document panel.
     artboard: { width: 512, height: 512 },
+    // Transparent, because that is what an icon is. The canvas shows it as a checkerboard so
+    // transparent and white are told apart, and nothing is exported until a colour is chosen.
+    background: { color: "#ffffff", opacity: 0 },
     grid: { step: 16, visible: true, snap: isCoarsePointer() },
     elements: [],
     images: [],

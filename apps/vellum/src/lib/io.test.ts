@@ -70,6 +70,8 @@ function doc(elements: SceneElement[]) {
   return { artboard: { width: 1000, height: 1000 }, elements };
 }
 
+const OPAQUE_BLUE = { color: "#3355ff", opacity: 1 };
+
 describe("export markup", () => {
   test("coordinates are rounded but style values are not", () => {
     const markup = elementToSvgMarkup(
@@ -128,6 +130,56 @@ describe("export document", () => {
   test("a custom name rides along in the exported id", () => {
     const el = Object.assign(createRect(0, 0, 1, 1), { name: "my shape" });
     expect(formatExportSvg(doc([el]), true)).toContain(`id="${el.id}_my_shape"`);
+  });
+});
+
+describe("background", () => {
+  test("a transparent document exports no background rect at all", () => {
+    const svg = formatExportSvg({ ...doc([]), background: { color: "#ffffff", opacity: 0 } }, true);
+    expect(svg).not.toContain('id="background"');
+  });
+
+  test("a chosen colour is the first thing in the file, at the artboard size", () => {
+    const shape = createRect(0, 0, 9, 9);
+    const svg = formatExportSvg({ ...doc([shape]), background: OPAQUE_BLUE }, true);
+    expect(svg).toContain('<rect id="background" width="1000" height="1000" fill="#3355ff"/>');
+    expect(svg.indexOf('id="background"')).toBeLessThan(svg.indexOf(shape.id));
+  });
+
+  test("a partly transparent background carries its alpha", () => {
+    const svg = formatExportSvg(
+      { ...doc([]), background: { color: "#000000", opacity: 0.5 } },
+      true
+    );
+    expect(svg).toContain('fill="#000000" fill-opacity="0.5"');
+  });
+
+  test("the background comes back on import, and is not mistaken for a shape", () => {
+    const svg = formatExportSvg(
+      { ...doc([createRect(0, 0, 9, 9)]), background: OPAQUE_BLUE },
+      true
+    );
+    const back = importSvgFile(svg, { keepIds: true });
+    expect(back.background).toEqual(OPAQUE_BLUE);
+    expect(back.elements).toHaveLength(1);
+  });
+
+  test("a file without one imports as no background", () => {
+    expect(importSvgFile(formatExportSvg(doc([]), true)).background).toBeNull();
+  });
+
+  test("export -> import -> export is stable with a background", () => {
+    const first = formatExportSvg({ ...doc(sampleElements()), background: OPAQUE_BLUE }, true);
+    const back = importSvgFile(first, { keepIds: true });
+    const second = formatExportSvg(
+      {
+        artboard: back.artboard ?? { width: 1000, height: 1000 },
+        background: back.background,
+        elements: back.elements,
+      },
+      true
+    );
+    expect(second).toBe(first);
   });
 });
 
@@ -325,6 +377,7 @@ describe("project file", () => {
   test("the serialized shape is exactly the documented set of keys", () => {
     expect(Object.keys(serializeProject(createInitialState())).sort()).toEqual([
       "artboard",
+      "background",
       "elements",
       "finalOnly",
       "grid",

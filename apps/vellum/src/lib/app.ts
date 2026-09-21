@@ -116,6 +116,7 @@ const primitiveListEl = byId("primitive-list");
 initPointerKind(() => renderAll(getState()));
 initViewport(svg, camera);
 initRender({
+  artboardChecks: byId<HTMLElement>("artboard-checks-rect") as unknown as SVGRectElement,
   artboardBg: byId<HTMLElement>("artboard-bg") as unknown as SVGRectElement,
   images: byId<HTMLElement>("layer-images") as unknown as SVGGElement,
   grid: byId<HTMLElement>("layer-grid") as unknown as SVGGElement,
@@ -176,6 +177,9 @@ function syncPanel(state: EditorState): void {
   byId<HTMLInputElement>("artboard-width").value = String(state.artboard.width);
   byId<HTMLInputElement>("artboard-height").value = String(state.artboard.height);
   byId<HTMLInputElement>("grid-step").value = String(state.grid.step);
+  const bgSwatch = byId("bg-swatch");
+  bgSwatch.style.setProperty("--c", state.background.color);
+  bgSwatch.style.setProperty("--a", String(state.background.opacity));
   setToggle("btn-grid", state.grid.visible);
   setToggle("btn-final", state.finalOnly);
   setToggle("btn-snap", state.grid.snap);
@@ -382,11 +386,16 @@ function applySvgText(): void {
     return o && sameElement(o, n) ? o : n;
   });
   const artboard = parsed.artboard ? { ...st.artboard, ...parsed.artboard } : st.artboard;
+  // No background rect in the markup means a transparent document; the colour is kept so that
+  // deleting the rect and typing it back does not lose what was chosen.
+  const background = parsed.background ?? { color: st.background.color, opacity: 0 };
   const same =
     next.length === st.elements.length &&
     next.every((e, i) => e === st.elements[i]) &&
     artboard.width === st.artboard.width &&
-    artboard.height === st.artboard.height;
+    artboard.height === st.artboard.height &&
+    background.color === st.background.color &&
+    background.opacity === st.background.opacity;
   if (same) return;
   if (!svgEditUndoPushed) {
     pushUndo();
@@ -397,6 +406,7 @@ function applySvgText(): void {
     ...s,
     elements: next,
     artboard,
+    background,
     selection: selectOnly(s.selection.elementIds.filter((id) => ids.has(id))),
   }));
   noteChange();
@@ -1530,6 +1540,28 @@ bindNumber("artboard-height", (v) =>
 );
 bindNumber("grid-step", (v) => setState((s) => ({ ...s, grid: { ...s.grid, step: v } })));
 
+byId("bg-swatch").addEventListener("click", () => {
+  const swatch = byId("bg-swatch");
+  if (isColorPickerOpenFor(swatch)) {
+    closeColorPicker();
+    return;
+  }
+  const start = getState().background;
+  let pushed = false;
+  openColorPicker({
+    anchor: swatch,
+    color: start.color,
+    alpha: start.opacity,
+    onChange: (color, opacity) => {
+      if (!pushed) {
+        pushUndo();
+        pushed = true;
+      }
+      setState((s) => ({ ...s, background: { color, opacity } }));
+    },
+  });
+});
+
 byId("btn-grid").addEventListener("click", () => {
   setState((s) => ({ ...s, grid: { ...s.grid, visible: !s.grid.visible } }));
 });
@@ -1589,12 +1621,13 @@ byId("input-import-svg").addEventListener("change", async (e) => {
   const file = input.files?.[0];
   input.value = "";
   if (!file) return;
-  const { artboard, elements } = importSvgFile(await file.text());
+  const { artboard, background, elements } = importSvgFile(await file.text());
   pushUndo();
   setState((s) => ({
     ...s,
     elements: [...s.elements, ...elements],
     artboard: artboard ?? s.artboard,
+    background: background ?? s.background,
   }));
   primitiveList.invalidate();
 });

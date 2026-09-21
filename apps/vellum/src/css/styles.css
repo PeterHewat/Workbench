@@ -225,11 +225,17 @@ body {
   touch-action: none;
 }
 
-.artboard-bg {
-  fill: #ffffff;
+/* Two rects: the checkerboard says "nothing here", the paint above it says what was chosen.
+   A fully transparent background leaves the checkerboard showing through. */
+.artboard-checks {
+  fill: url(#artboard-checks);
   stroke: #888;
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
+}
+
+.artboard-bg {
+  stroke: none;
 }
 
 .acc-item.acc-item--hidden .acc-title-input {
@@ -766,10 +772,21 @@ body {
   margin-left: 0;
 }
 
+/* Each group keeps its own width and the row wraps when they no longer fit, rather than the
+   last control being squeezed to nothing. */
+.doc-size-row > .doc-size {
+  flex: 0 0 auto;
+}
+
 .doc-size-row .doc-size input {
   width: 58px;
   height: var(--ctl-h);
   box-sizing: border-box;
+}
+
+.doc-size-row .color-swatch {
+  flex: 0 0 64px;
+  height: var(--ctl-h);
 }
 
 #doc-primitives .doc-section-body {

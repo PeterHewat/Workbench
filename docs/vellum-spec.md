@@ -252,6 +252,10 @@ Live **formatted SVG** text in side panel always reflects exportable document (p
 
 - Artboard width/height.
 - Grid step; grid visible toggle.
+- Background colour with alpha. Alpha 0 is a transparent document: the canvas draws a
+  checkerboard and the export carries no background rect. Above 0 it exports as a full-artboard
+  `<rect id="background">`, which is also how it is read back, so the live SVG panel round-trips
+  it like anything else.
 - Alt-to-align hint (no persistent snap toggle).
 - View: “Final SVG” toggle.
 

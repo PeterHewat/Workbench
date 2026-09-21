@@ -30,6 +30,7 @@ const HIT_R_COARSE = 22;
 let zoom = 1;
 
 export interface RenderTargets {
+  artboardChecks: SVGRectElement;
   artboardBg: SVGRectElement;
   images: SVGGElement;
   grid: SVGGElement;
@@ -521,8 +522,12 @@ function renderOverlay(state: EditorState): void {
 }
 
 export function renderAll(state: EditorState): void {
-  els.artboardBg.setAttribute("width", String(state.artboard.width));
-  els.artboardBg.setAttribute("height", String(state.artboard.height));
+  for (const rect of [els.artboardChecks, els.artboardBg]) {
+    rect.setAttribute("width", String(state.artboard.width));
+    rect.setAttribute("height", String(state.artboard.height));
+  }
+  els.artboardBg.setAttribute("fill", state.background.color);
+  els.artboardBg.setAttribute("fill-opacity", String(state.background.opacity));
   applyCameraTransform();
   renderImages(state);
   renderGrid(state);

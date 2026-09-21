@@ -28,6 +28,7 @@ import {
 import { replaceState, createInitialState, selectOnly } from "./state.js";
 import type {
   Anchor,
+  BackgroundPaint,
   EditorState,
   MarkerShape,
   ProjectFile,
@@ -37,6 +38,13 @@ import type {
 } from "./types.js";
 
 const NS = "http://www.w3.org/2000/svg";
+
+/**
+ * The id the artboard background is exported under. It is a plain `<rect>` so the file opens
+ * anywhere, and the id is what tells the importer - the live SVG panel, mostly - that this rect
+ * is the document's background rather than a shape somebody drew.
+ */
+const BACKGROUND_ID = "background";
 
 /* ---------- Export ---------- */
 
@@ -164,7 +172,12 @@ function exportIds(elements: readonly SceneElement[]): Map<string, string> {
   return out;
 }
 
-function buildSvgLines(state: Pick<EditorState, "artboard" | "elements">): Line[] {
+/** What export needs from the document: no selection, no viewport, nothing live. */
+export type ExportDoc = Pick<EditorState, "artboard" | "elements"> & {
+  background?: BackgroundPaint | null;
+};
+
+function buildSvgLines(state: ExportDoc): Line[] {
   const ids = exportIds(state.elements);
   const width = Math.round(state.artboard.width);
   const height = Math.round(state.artboard.height);
@@ -179,6 +192,14 @@ function buildSvgLines(state: Pick<EditorState, "artboard" | "elements">): Line[
     lines.push({ indent: 1, text: "<defs>" });
     defs.forEach((d) => lines.push({ indent: 2 + d.indent, text: d.text }));
     lines.push({ indent: 1, text: "</defs>" });
+  }
+  const bg = state.background;
+  if (bg && bg.opacity > 0) {
+    const alpha = bg.opacity < 1 ? ` fill-opacity="${n3(bg.opacity)}"` : "";
+    lines.push({
+      indent: 1,
+      text: `<rect id="${BACKGROUND_ID}" width="${width}" height="${height}" fill="${bg.color}"${alpha}/>`,
+    });
   }
   emitRange(state.elements, 0, state.elements.length, 0, 1, lines, ids);
   lines.push({ indent: 0, text: "</svg>" });
@@ -218,10 +239,7 @@ function emitRange(
   }
 }
 
-export function formatExportSvg(
-  state: Pick<EditorState, "artboard" | "elements">,
-  pretty = false
-): string {
+export function formatExportSvg(state: ExportDoc, pretty = false): string {
   const lines = buildSvgLines(state);
   if (pretty) return lines.map((l) => "  ".repeat(l.indent) + l.text).join("\n");
   return lines.map((l) => l.text).join("");
@@ -231,6 +249,7 @@ export function serializeProject(state: EditorState): ProjectFile {
   return {
     version: 2,
     artboard: state.artboard,
+    background: state.background,
     grid: state.grid,
     images: state.images,
     elements: state.elements,
@@ -252,6 +271,7 @@ export function loadProject(json: ProjectFile): void {
   replaceState({
     ...base,
     artboard: json.artboard,
+    background: json.background ?? base.background,
     grid: json.grid,
     images: (json.images || []).map((img) => ({ ...img, visible: img.visible !== false })),
     elements: json.elements || [],
@@ -641,6 +661,8 @@ function toBoundingBoxUnits(el: SceneElement): void {
 
 export interface ImportResult {
   artboard: { width: number; height: number } | null;
+  /** The background rect the file carried, or null when it has none: a transparent document. */
+  background: BackgroundPaint | null;
   elements: SceneElement[];
 }
 
@@ -662,10 +684,23 @@ export function importSvgFile(text: string, { keepIds = false } = {}): ImportRes
   const h = parseFloat(svg.getAttribute("height") ?? "");
   if (!artboard && w && h) artboard = { width: w, height: h };
 
+  // The background is a rect like any other; only its id says it is the document's, and it is
+  // read here rather than swept up as a shape.
+  const bgNode = [...svg.children].find(
+    (c) => c.tagName.toLowerCase() === "rect" && c.getAttribute("id") === BACKGROUND_ID
+  );
+  const background: BackgroundPaint | null = bgNode
+    ? {
+        color: normalizeColor(bgNode.getAttribute("fill")),
+        opacity: parseFractional(bgNode.getAttribute("fill-opacity"), 1),
+      }
+    : null;
+
   const imported: SceneElement[] = [];
   const groupIds = new Map<Element, string>();
   const usedIds = new Set<string>();
   svg.querySelectorAll(ELEMENT_SELECTOR).forEach((node) => {
+    if (node === bgNode) return;
     if (insideNonRendered(node, svg)) return;
     const style = styleFromNode(node, svg);
     const nodeId = node.getAttribute("id");
@@ -688,7 +723,7 @@ export function importSvgFile(text: string, { keepIds = false } = {}): ImportRes
     imported.push(placed);
   });
 
-  return { artboard, elements: normalizeGroups(pruneGroups(imported)) };
+  return { artboard, background, elements: normalizeGroups(pruneGroups(imported)) };
 }
 
 /**

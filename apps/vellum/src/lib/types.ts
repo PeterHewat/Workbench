@@ -40,6 +40,15 @@ export interface BBox {
   height: number;
 }
 
+/**
+ * What the artboard is painted with. An opacity of 0 is the transparent document, which exports
+ * no background at all; the colour is still remembered so the swatch does not forget it.
+ */
+export interface BackgroundPaint {
+  color: string;
+  opacity: number;
+}
+
 /** One colour stop of a gradient. `offset` runs 0..1 along the gradient. */
 export interface GradientStop {
   offset: number;
@@ -239,6 +248,7 @@ export interface Drawing {
 
 export interface EditorState {
   artboard: { width: number; height: number };
+  background: BackgroundPaint;
   grid: { step: number; visible: boolean; snap: boolean };
   elements: SceneElement[];
   images: ReferenceImage[];
@@ -272,6 +282,8 @@ export type StyleCarrier = Partial<StyleProps> & {
 export interface ProjectFile {
   version: 2;
   artboard: EditorState["artboard"];
+  /** Absent in documents saved before backgrounds existed, which means transparent. */
+  background?: BackgroundPaint;
   grid: EditorState["grid"];
   images: ReferenceImage[];
   elements: SceneElement[];

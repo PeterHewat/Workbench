@@ -451,6 +451,19 @@
                       aria-label="Grid step"
                     />
                   </div>
+                  <div class="doc-size">
+                    <span>Background</span>
+                    <button
+                      type="button"
+                      class="color-swatch"
+                      id="bg-swatch"
+                      title="Document background — alpha 0 is a transparent document, which exports no background at all"
+                      aria-label="Document background colour and opacity"
+                      style="--c: #ffffff; --a: 0"
+                    >
+                      <span class="color-swatch-fill"></span>
+                    </button>
+                  </div>
                 </div>
                 <div class="svg-editor">
                   <pre id="svg-preview" class="svg-preview mono" aria-hidden="true"></pre>
@@ -836,15 +849,22 @@
             </li>
             <li>
               <b>SVG</b> — the artboard size (width × height), the grid (its visibility and its step
-              in artboard units), and the live markup, which you can <b>edit directly</b>: changes
-              apply to the drawing after a short pause (an error message appears if the markup is
-              invalid, and nothing is changed until it is valid). Click or move the cursor into a
-              shape's line and that shape is selected, exactly as if you had picked it in
-              Primitives; selected shapes are shown in blue. When a field in a Primitives row has
-              focus, the SVG attribute it edits is highlighted in yellow, even if the shape is not
-              selected. Only shapes the app knows (path, line, rect, circle, ellipse, polyline,
-              polygon, text) are kept. Icons import, export and copy the SVG (coordinates are
-              exported as integers).
+              in artboard units), the background colour, and the live markup, which you can
+              <b>edit directly</b>: changes apply to the drawing after a short pause (an error
+              message appears if the markup is invalid, and nothing is changed until it is valid).
+              Click or move the cursor into a shape's line and that shape is selected, exactly as if
+              you had picked it in Primitives; selected shapes are shown in blue. When a field in a
+              Primitives row has focus, the SVG attribute it edits is highlighted in yellow, even if
+              the shape is not selected. Only shapes the app knows (path, line, rect, circle,
+              ellipse, polyline, polygon, text) are kept. Icons import, export and copy the SVG
+              (coordinates are exported as integers).
+            </li>
+            <li>
+              <b>Background</b> — the swatch beside the grid paints the whole artboard, alpha
+              included. At alpha 0 the document is transparent, shown on the canvas as a
+              checkerboard and exported with no background at all; at anything above 0 it is
+              exported as a full-artboard <code>&lt;rect id="background"&gt;</code>, so what you see
+              is what the file contains.
             </li>
             <li><b>Primitives</b> — one row per shape (see Style).</li>
             <li>
@@ -987,7 +1007,17 @@
       <main class="workspace">
         <section class="canvas-wrap" id="canvas-wrap" aria-label="Artboard">
           <svg id="viewport-svg" class="viewport-svg" tabindex="0" aria-label="Drawing surface">
+            <defs>
+              <!-- What transparent looks like. Deliberately much coarser than the grid: at
+                   grid scale the two patterns blur into each other and neither can be read. -->
+              <pattern id="artboard-checks" width="64" height="64" patternUnits="userSpaceOnUse">
+                <rect width="64" height="64" fill="#ffffff" />
+                <rect width="32" height="32" fill="#e7e9ee" />
+                <rect x="32" y="32" width="32" height="32" fill="#e7e9ee" />
+              </pattern>
+            </defs>
             <g id="camera">
+              <rect id="artboard-checks-rect" class="artboard-checks" x="0" y="0" />
               <rect id="artboard-bg" class="artboard-bg" x="0" y="0" />
               <g id="layer-images"></g>
               <g id="layer-grid"></g>
