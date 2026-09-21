@@ -1068,6 +1068,40 @@ body {
   border-width: 0 0 0 1px;
 }
 
+/* Help answers for one pointer at a time. It is a switch rather than a media query because a
+   laptop with a touch screen is both, and because the other half is often what you want to read. */
+.help-mode {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.help-mode-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.help-mode-btn:hover {
+  border-color: var(--accent);
+}
+
+.help-mode-btn.active {
+  color: var(--text);
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.help-body.help--mouse [data-help="touch"],
+.help-body.help--touch [data-help="mouse"] {
+  display: none;
+}
+
 .help-body {
   flex: 1;
   min-height: 0;

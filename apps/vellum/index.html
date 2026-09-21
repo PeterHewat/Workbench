@@ -684,11 +684,36 @@
       >
         <div class="menu-panel-toolbar">
           <p class="menu-panel-title">Help</p>
+          <div class="help-mode" role="group" aria-label="Show help for">
+            <button type="button" class="help-mode-btn" data-help-mode="mouse">
+              Mouse &amp; keyboard
+            </button>
+            <button type="button" class="help-mode-btn" data-help-mode="touch">Touch</button>
+          </div>
         </div>
-        <div class="help-body">
-          <h3>Tools</h3>
+        <div class="help-body help--mouse" id="help-body">
+          <h3>About</h3>
           <ul>
             <li>
+              <b>What this is</b> — a drawing tool for people who want the SVG itself to be good: a
+              small set of primitives, a live view of the markup, and an export with no editor
+              leftovers in it. It runs entirely in your browser, works offline once loaded, and
+              keeps your documents in this browser rather than on anyone's server.
+            </li>
+            <li>
+              <b>Why "Vellum"</b> — vellum is prepared calfskin, the surface manuscripts were
+              written and painted on for a thousand years, chosen because it was fine, stable and
+              lasted. It was also thin enough to see through, so a scribe could lay it over an
+              exemplar and trace: our tracing paper is its descendant. That is what this app does —
+              a reference image underneath, your drawing on the sheet above it — and it is the other
+              half of the name too, because SVG, like vellum, is meant to still be readable long
+              after the thing that made it is gone.
+            </li>
+          </ul>
+
+          <h3>Tools</h3>
+          <ul>
+            <li data-help="mouse">
               <b>Select (S)</b> — the resting state, with no drawing tool chosen: click a shape to
               select it (thin strokes have a wider invisible click area, and whatever is under the
               cursor shows the outline it would get if you clicked — the whole group, when it is in
@@ -696,96 +721,149 @@
               selection. A shape only starts moving once the pointer has really travelled, so a
               click that selects never nudges anything.
             </li>
-            <li>
-              <b>Panning</b> — hold <kbd>Space</kbd> and drag, or drag with the middle mouse button.
-              On a touch screen, drag on empty canvas with one finger. The mouse wheel zooms, two
-              fingers pinch. There is no separate hand tool to switch to.
+            <li data-help="touch">
+              <b>Select</b> — the resting state, with no drawing tool chosen: tap a shape to select
+              it (thin strokes have a wider invisible target), drag it to move it. A shape only
+              starts moving once your finger has really travelled, so a tap that selects never
+              nudges anything.
             </li>
-            <li>
+            <li data-help="mouse">
+              <b>Panning</b> — hold <kbd>Space</kbd> and drag, or drag with the middle mouse button;
+              the wheel zooms. There is no separate hand tool to switch to.
+            </li>
+            <li data-help="touch">
+              <b>Panning</b> — drag on empty canvas with one finger, or with two fingers anywhere;
+              two fingers also pinch to zoom. Hold still for a moment before dragging on empty
+              canvas and the drag becomes a marquee selection instead. There is no hand tool to
+              switch to.
+            </li>
+            <li data-help="mouse">
               <b>Pen (P)</b> — click for corner points, click-drag for curves. Double-click or
               <kbd>Enter</kbd> finishes; click the start point to close. A path with no curves
               becomes a line, polyline or polygon automatically. <kbd>Esc</kbd> cancels.
             </li>
-            <li>
+            <li data-help="touch">
+              <b>Pen</b> — tap for corner points, drag for curves. The bar beside the path has the
+              three things you need while drawing: take back the last point, close the path and
+              finish, or just finish. Double-tapping finishes too. A path with no curves becomes a
+              line, polyline or polygon automatically.
+            </li>
+            <li data-help="mouse">
               <b>Rectangle (R) / Ellipse (E)</b> — drag, or click twice. <kbd>Shift</kbd> makes a
               square / circle.
             </li>
+            <li data-help="touch">
+              <b>Rectangle / Ellipse</b> — drag one out. To make it exactly square or circular, drag
+              the diagonal handle at its bottom-right corner afterwards: that one keeps both sides
+              equal, so no modifier key is needed.
+            </li>
             <li>
-              <b>Text (T)</b> — click to place, then type in the field that opens in the SVG panel.
+              <b>Text<span data-help="mouse"> (T)</span></b> — <span data-help="mouse">click</span
+              ><span data-help="touch">tap</span> to place, then type where the text sits on the
+              canvas.
             </li>
           </ul>
 
           <h3>Editing shapes</h3>
           <ul>
             <li>
-              <b>Resize</b> — drag the blue handles. Rectangles also have a corner handle just
-              inside the top-right corner; drag it to round the corners, hold <kbd>Alt</kbd> to set
-              horizontal and vertical radii separately. A faint dashed line ties each of these extra
-              handles to the corner it works from.
+              <b>Resize</b> — drag the blue handles; the diagonal one at the bottom-right keeps the
+              shape square or circular. Rectangles also have a corner handle just inside the
+              top-right corner; drag it to round the corners<span data-help="mouse"
+                >, hold <kbd>Alt</kbd> to set horizontal and vertical radii separately</span
+              >. A faint dashed line ties each of these extra handles to the corner it works from.
             </li>
             <li>
-              <b>Rotate</b> — drag the pink handle above a selected shape, or put two fingers on a
-              selected shape and twist. <kbd>Shift</kbd> snaps to 15°. Rectangles, ellipses and text
-              keep their type and carry the angle, exported as <code>transform="rotate()"</code>, so
-              a rotated rectangle is still a rectangle with a width, a height and a corner radius.
-              Paths and polylines have the rotation baked into their points, which loses nothing.
+              <b>Rotate</b> — drag the pink handle above a selected shape<span data-help="touch"
+                >, or put two fingers on it and twist</span
+              >.<span data-help="mouse"> <kbd>Shift</kbd> snaps to 15°.</span> Rectangles, ellipses
+              and text keep their type and carry the angle, exported as
+              <code>transform="rotate()"</code>, so a rotated rectangle is still a rectangle with a
+              width, a height and a corner radius. Paths and polylines have the rotation baked into
+              their points, which loses nothing.
             </li>
-            <li><b>Nudge</b> — arrow keys move by 1 unit, <kbd>Shift</kbd> by 10.</li>
+            <li data-help="mouse">
+              <b>Nudge</b> — arrow keys move by 1 unit, <kbd>Shift</kbd> by 10.
+            </li>
+            <li data-help="touch">
+              <b>Exact numbers</b> — X, Y, W, H and the angle are fields at the top of the shape's
+              row in Primitives. Typing one is the way to be exact that a fingertip cannot manage.
+            </li>
             <li>
               <b>Order</b> — the ▲ ▼ arrows on a Primitives row move a shape among its siblings.
               When it is already at the edge of its group the move widens to the group itself, so a
               group is reordered by pressing the arrow on the row at its edge; the arrow is dimmed
               only when there is genuinely nowhere left to go.
             </li>
-            <li>
+            <li data-help="mouse">
               <b>Align</b> — hold <kbd>Alt</kbd> while drawing or dragging to snap to points that
               line up horizontally or vertically with other shapes (this replaces grid snapping
               while held).
             </li>
             <li>
-              <b>Z-order</b> — <kbd>Ctrl</kbd>+<kbd>[</kbd> / <kbd>]</kbd> sends backward / forward.
-              In the Primitives and Reference images lists, use the ▲ ▼ buttons on a row to move it
-              one step (Shift+click: to the top or bottom).
+              <b>Z-order</b> — the ▲ ▼ buttons on the bar beside the selection, or on a row in
+              Primitives and Reference images, move one step (with <kbd>Shift</kbd>: to the top or
+              bottom).
+              <span data-help="mouse"
+                ><kbd>Ctrl</kbd>+<kbd>[</kbd> / <kbd>]</kbd> does the same from the keyboard.</span
+              >
             </li>
           </ul>
 
           <h3>Paths and curves</h3>
           <ul>
             <li>
-              <b>Add a point</b> — double-click on a segment of the selected shape. Curves are split
-              without changing their shape.
+              <b>Add a point</b> — <span data-help="mouse">double-click</span
+              ><span data-help="touch">double-tap</span> on a segment of the selected shape. Curves
+              are split without changing their shape.
             </li>
-            <li>
+            <li data-help="mouse">
               <b>Remove a point</b> — click it, press <kbd>Delete</kbd>. Its neighbours are joined.
             </li>
-            <li>
-              <b>Smooth ↔ corner</b> — double-click an anchor. Lines, polylines and polygons turn
-              into paths first.
+            <li data-help="touch">
+              <b>Remove a point</b> — tap it, then the bin in the bar that appears beside it. Its
+              neighbours are joined.
             </li>
             <li>
-              <b>Curve handles</b> — the two handles of a smooth point mirror each other. Hold
-              <kbd>Alt</kbd> while dragging one to move it independently; release Alt to mirror
-              again. A cusp is remembered until you drag a handle without Alt.
+              <b>Smooth ↔ corner</b> — <span data-help="mouse">double-click</span
+              ><span data-help="touch">double-tap</span> an anchor. Lines, polylines and polygons
+              turn into paths first.
             </li>
             <li>
-              <b>Join</b> — select two open paths and click <b>Join</b> in the Primitives header (or
-              press <kbd>J</kbd>): they are connected at their closest ends. Or drag an end point
-              onto another path's end point.
+              <b>Curve handles</b> — the two handles of a smooth point mirror each other.
+              <span data-help="mouse"
+                >Hold <kbd>Alt</kbd> while dragging one to move it independently; release Alt to
+                mirror again. A cusp is remembered until you drag a handle without Alt.</span
+              ><span data-help="touch"
+                >To break the pairing, turn the point into a corner by double-tapping it.</span
+              >
             </li>
             <li>
-              <b>Close / open</b> — tick <b>Closed</b> in the shape's row, or drag an end point onto
-              the other end point.
+              <b>Join</b> — select two open paths and use the join button on the bar beside them, or
+              <b>Join</b> in the Primitives header<span data-help="mouse">
+                (or press <kbd>J</kbd>)</span
+              >: they are connected at their closest ends. Or drag an end point onto another path's
+              end point.
             </li>
             <li>
-              <b>Split</b> — select a point and press <kbd>X</kbd>. An open path becomes two paths;
-              a closed one becomes one open path cut at that point.
+              <b>Close / open</b> — the close / open button on the bar beside the shape, the
+              <b>Closed</b> tick in its row, or drag an end point onto the other end point.
+            </li>
+            <li>
+              <b>Split</b> — select a point and use the split button on the bar beside it<span
+                data-help="mouse"
+              >
+                (or press <kbd>X</kbd>)</span
+              >. An open path becomes two paths; a closed one becomes one open path cut at that
+              point.
             </li>
           </ul>
 
           <h3>Style (Primitives list)</h3>
           <ul>
             <li>
-              <b>Stroke / Fill</b> — click a swatch for the color picker (hue, saturation,
+              <b>Stroke / Fill</b> — <span data-help="mouse">click</span
+              ><span data-help="touch">tap</span> a swatch for the colour picker (hue, saturation,
               brightness, hex and alpha). The Fill checkbox turns fill on or off.
             </li>
             <li>
@@ -813,15 +891,18 @@
           <h3>Groups</h3>
           <ul>
             <li>
-              <kbd>Ctrl</kbd>+<kbd>G</kbd> groups the selection,
-              <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> ungroups. Clicking a member selects the
-              whole group; the ◉ / ○ button in the list selects single members. Exported as
-              <code>&lt;g&gt;</code>.
+              The group and ungroup buttons on the bar beside the selection, or in the Primitives
+              header<span data-help="mouse"
+                >, or <kbd>Ctrl</kbd>+<kbd>G</kbd> and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd
+                  >G</kbd
+                ></span
+              >. Selecting a member selects the whole group; the ◉ / ○ button in the list selects
+              single members. Exported as <code>&lt;g&gt;</code>.
             </li>
           </ul>
 
-          <h3>Clipboard</h3>
-          <ul>
+          <h3 data-help="mouse">Clipboard</h3>
+          <ul data-help="mouse">
             <li>
               <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd> copy, cut and paste shapes
               (offset each time). Paste also accepts SVG markup copied from anywhere, and works
@@ -832,8 +913,9 @@
           <h3>History</h3>
           <ul>
             <li>
-              Undo / Redo buttons in the toolbar, or <kbd>Ctrl</kbd>+<kbd>Z</kbd> /
-              <kbd>Ctrl</kbd>+<kbd>Y</kbd>.
+              Undo / Redo buttons in the toolbar<span data-help="mouse"
+                >, or <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></span
+              >.
             </li>
           </ul>
 
@@ -871,25 +953,29 @@
             <li>
               Documents save automatically, like Pages or Notes on macOS — there is no Save button.
               <b>Documents</b> lists everything stored in this browser (reference images included).
-              Click a document to open it; click the name of the open document to rename it in
-              place. Each row carries duplicate ⧉ and delete × (deleting an empty document doesn't
-              ask; others do). <b>+</b> starts a new document (named Untitled, Untitled 2, …; the
-              current one is already saved). The last document reopens when you start the app.
-              Documents live in this browser only, so back them up: the ⬇ / ⬆ buttons in the
-              <b>Documents</b> header export every document to one JSON file and restore them again
-              (restored copies are added alongside your existing ones, never overwriting them). To
-              empty a document, <kbd>Ctrl</kbd>+<kbd>A</kbd> then <kbd>Delete</kbd>.
+              <span data-help="mouse">Click</span><span data-help="touch">Tap</span> a document to
+              open it; <span data-help="mouse">click</span><span data-help="touch">tap</span> the
+              name of the open document to rename it in place. Each row carries duplicate ⧉ and
+              delete × (deleting an empty document doesn't ask; others do). <b>+</b> starts a new
+              document (named Untitled, Untitled 2, …; the current one is already saved). The last
+              document reopens when you start the app. Documents live in this browser only, so back
+              them up: the ⬇ / ⬆ buttons in the <b>Documents</b> header export every document to one
+              JSON file and restore them again (restored copies are added alongside your existing
+              ones, never overwriting them).<span data-help="mouse">
+                To empty a document, <kbd>Ctrl</kbd>+<kbd>A</kbd> then <kbd>Delete</kbd>.</span
+              >
             </li>
           </ul>
 
           <h3>Toolbar: grid and view</h3>
           <ul>
             <li>
-              The magnet (or <kbd>G</kbd>) toggles snap to grid; a marker shows where the point will
-              land. Snapping applies to drawing, dragged handles and moved shapes; hold
-              <kbd>Alt</kbd> to switch to alignment snapping instead. Whether the grid is shown, and
-              how far apart its lines are, belong to the document, so they live in the
-              <b>SVG</b> section of the Document panel beside the artboard size.
+              The magnet<span data-help="mouse"> (or <kbd>G</kbd>)</span> toggles snap to grid; a
+              marker shows where the point will land. Snapping applies to drawing, dragged handles
+              and moved shapes<span data-help="mouse"
+                >; hold <kbd>Alt</kbd> to switch to alignment snapping instead</span
+              >. Whether the grid is shown, and how far apart its lines are, belong to the document,
+              so they live in the <b>SVG</b> section of the Document panel beside the artboard size.
             </li>
             <li>
               Fit view, zoom out / 100% / zoom in, the eye button (<b>Final SVG</b>: hides the grid,
@@ -927,13 +1013,8 @@
             </li>
           </ul>
 
-          <h3>Touch</h3>
-          <ul>
-            <li>
-              One finger drags on empty canvas to pan; hold still for a moment first and the drag
-              becomes a marquee selection instead. Two fingers pinch to zoom and pan. Double-tap
-              finishes a pen path.
-            </li>
+          <h3 data-help="touch">Touch</h3>
+          <ul data-help="touch">
             <li>
               Handles get a finger-sized target on a touch screen, and points that sit close
               together keep smaller ones so neighbours stay reachable. Zoom in where it is tight.
@@ -945,8 +1026,8 @@
             </li>
           </ul>
 
-          <h3>Keyboard summary</h3>
-          <table class="help-keys">
+          <h3 data-help="mouse">Keyboard summary</h3>
+          <table class="help-keys" data-help="mouse">
             <tr>
               <td>G</td>
               <td>Toggle snap to grid (a marker shows where the point will land)</td>

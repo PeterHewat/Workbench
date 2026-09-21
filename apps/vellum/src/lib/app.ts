@@ -83,7 +83,7 @@ import {
   isTextEditing,
   positionTextEditor,
 } from "./textedit.js";
-import { initPointerKind } from "./pointer.js";
+import { initPointerKind, isCoarsePointer } from "./pointer.js";
 import {
   canMoveWithinParent,
   groupsOf,
@@ -1335,6 +1335,31 @@ helpBtn.addEventListener("click", () => {
   closeViewMenu();
   layoutPanels();
 });
+
+/**
+ * Help answers for the pointer you are using. The starting side is the one detected, but it is a
+ * switch rather than a rule: a laptop with a touch screen is both, and the other side is often
+ * exactly what you wanted to read.
+ */
+const helpBody = byId("help-body");
+
+function setHelpMode(mode: "mouse" | "touch"): void {
+  helpBody.classList.toggle("help--mouse", mode === "mouse");
+  helpBody.classList.toggle("help--touch", mode === "touch");
+  helpBody.scrollTop = 0;
+  document.querySelectorAll<HTMLElement>("[data-help-mode]").forEach((btn) => {
+    const on = btn.dataset.helpMode === mode;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", String(on));
+  });
+}
+
+document.querySelectorAll<HTMLElement>("[data-help-mode]").forEach((btn) => {
+  btn.addEventListener("click", () =>
+    setHelpMode(btn.dataset.helpMode === "touch" ? "touch" : "mouse")
+  );
+});
+setHelpMode(isCoarsePointer() ? "touch" : "mouse");
 
 /* Collapsible sections (remembered). */
 const SECTIONS_KEY = "vector-tracer.sections";

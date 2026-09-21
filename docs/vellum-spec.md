@@ -434,6 +434,10 @@ name-in-id export, Help panel (`?` button).
 - **Touch:** one-finger pan, hold-to-marquee, two-finger pinch/pan/rotate, finger-sized handle
   targets, a tool bar under the canvas, a contextual action bar beside the selection, and text
   edited in place instead of in a panel over the artboard.
+- **Document background** with alpha; transparent is the default and exports nothing (§12.1).
+- **Help** opens on the pointer it detects and can be switched between mouse/keyboard and touch,
+  because a laptop with a touch screen is both. It also carries an About section: what the app is,
+  where documents live, and where the name comes from.
 
 **Not implemented:**
 
