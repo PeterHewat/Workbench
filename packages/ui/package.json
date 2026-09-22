@@ -6,7 +6,7 @@
   "description": "Shared browser helpers every Workbench app can use",
   "exports": {
     ".": "./src/index.ts",
-    "./vite": "./src/vite-service-worker.ts"
+    "./vite": "./src/vite.ts"
   },
   "files": [
     "src",
@@ -15,6 +15,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test"
+  },
+  "dependencies": {
+    "@workbench/catalog": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.3",

@@ -2,7 +2,7 @@
  * The app catalog: the single source of truth for what lives in this repo.
  *
  * Adding an app means adding one entry here and one folder under `apps/`.
- * The site index, each app's document head, and the build all read from this —
+ * The site index, each app's document head and manifest, and the build all read from this —
  * nothing about the list is maintained by hand in two places.
  */
 

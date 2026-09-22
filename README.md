@@ -39,9 +39,9 @@ that in as the base, which fails quietly: the page loads and every asset 404s.
 bun run new-app color-forge "Color Forge"
 ```
 
-That scaffolds `apps/color-forge` and prints the entry to add to
+That scaffolds `apps/color-forge` and adds an unlisted entry to
 [`packages/catalog`](./packages/catalog/src/index.ts). The catalog is the only list — the index
-page, the build and the deploy all read from it.
+page, the build, each page's title and manifest, and the deploy all read from it.
 
 ## How it is put together
 

@@ -2,20 +2,20 @@
 /**
  * Scaffolds a new app: `bun run new-app <slug> "Display Name"`.
  *
- * Creates apps/<slug> wired the same way as every other app, then prints the catalog entry to
- * paste into packages/catalog. App #5 stays structured like app #1 because nobody has to
- * remember what app #1 looked like.
+ * Creates apps/<slug> wired the same way as every other app and adds its entry to the catalog.
+ * App #5 stays structured like app #1 because nobody has to remember what app #1 looked like.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
+const CATALOG = join(ROOT, "packages", "catalog", "src", "index.ts");
 
 const [slug, ...nameParts] = Bun.argv.slice(2);
 const name = nameParts.join(" ").trim();
 
-if (!slug || !/^[a-z][a-z0-9-]*$/.test(slug)) {
+if (!slug || !/^[a-z][a-z0-9-]*$/.test(slug) || slug === "home") {
   console.error('Usage: bun run new-app <slug> "Display Name"');
   console.error("  <slug> is lowercase, digits and dashes, e.g. `color-forge`");
   process.exit(1);
@@ -28,13 +28,29 @@ if (existsSync(dir)) {
   process.exit(1);
 }
 
+const catalog = await readFile(CATALOG, "utf8");
+const listEnd = catalog.indexOf("\n];", catalog.indexOf("export const APPS"));
+if (listEnd < 0) {
+  console.error("Could not find the end of APPS in packages/catalog/src/index.ts");
+  process.exit(1);
+}
+const entry = `
+  {
+    slug: ${JSON.stringify(slug)},
+    name: ${JSON.stringify(title)},
+    blurb: "One line about what it does.",
+    icon: "M4 4h16v16H4z",
+    tags: [],
+    status: "experiment",
+    listed: false,
+  },`;
+
 const files: Record<string, string> = {
   "package.json": `{
   "name": "@workbench/${slug}",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "${title}",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -43,7 +59,6 @@ const files: Record<string, string> = {
     "test": "bun test"
   },
   "devDependencies": {
-    "@workbench/catalog": "workspace:*",
     "@workbench/ui": "workspace:*",
     "typescript": "~6.0.3",
     "vite": "^8.3.0"
@@ -59,28 +74,17 @@ const files: Record<string, string> = {
 }
 `,
   "vite.config.ts": `import { defineConfig } from "vite";
-import { appBase } from "@workbench/catalog/site";
-import { workbenchServiceWorker } from "@workbench/ui/vite";
+import { workbenchApp } from "@workbench/ui/vite";
 
-export default defineConfig({
-  plugins: [workbenchServiceWorker()],
-  base: appBase("${slug}"),
-  build: {
-    outDir: "../../dist/${slug}",
-    emptyOutDir: true,
-    target: "es2022",
-  },
-});
+export default defineConfig(workbenchApp("${slug}"));
 `,
+  // Title, description, icon and manifest are added from the catalog at build time.
   "index.html": `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title}</title>
-    <meta name="description" content="${title}" />
     <meta name="color-scheme" content="dark" />
-    <link rel="manifest" href="manifest.webmanifest" />
   </head>
   <body>
     <div id="app"></div>
@@ -95,16 +99,7 @@ if (root) root.textContent = "${title}";
 
 registerServiceWorker();
 `,
-  "public/manifest.webmanifest": `{
-  "name": "${title}",
-  "short_name": "${title}",
-  "start_url": ".",
-  "scope": ".",
-  "display": "standalone",
-  "background_color": "#17181c",
-  "theme_color": "#17181c",
-  "icons": []
-}
+  "public/icon.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#5b8def" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/></svg>
 `,
 };
 
@@ -113,22 +108,12 @@ for (const [rel, body] of Object.entries(files)) {
   await mkdir(join(path, ".."), { recursive: true });
   await writeFile(path, body, "utf8");
 }
+await writeFile(CATALOG, catalog.slice(0, listEnd) + entry + catalog.slice(listEnd), "utf8");
 
-console.log(`Created apps/${slug}
+console.log(`Created apps/${slug} and added it to packages/catalog/src/index.ts (unlisted).
 
 Next:
-  1. Add this to APPS in packages/catalog/src/index.ts:
-
-  {
-    slug: "${slug}",
-    name: "${title}",
-    blurb: "One line about what it does.",
-    icon: "M4 4h16v16H4z",
-    tags: [],
-    status: "experiment",
-    listed: true,
-  },
-
+  1. Fill in its blurb, icon and tags in the catalog; set listed: true when it is ready
   2. bun install
   3. bun run dev ${slug}
 `);

@@ -13,6 +13,8 @@ export const SITE = {
     "A collection of small, dependency-free browser tools. Everything runs client-side; nothing is uploaded.",
   repo: "https://github.com/PeterHewat/Workbench",
   author: "Peter Hewat",
+  /** Page background, for the browser chrome and installed-app splash. Matches the shared CSS. */
+  themeColor: "#17181c",
 } as const;
 
 /** Trailing-slash-terminated base path the whole site is served from. */
