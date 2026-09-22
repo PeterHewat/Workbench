@@ -47,8 +47,10 @@ export function invalidateLists(): void {
 }
 
 interface AccHeaderOptions {
-  on: boolean;
-  dotTitle: string;
+  /** The checkbox at the head of the row, when the row can be selected. */
+  dot?: { on: boolean; title: string };
+  /** The eye, when the row can be shown and hidden. */
+  eye?: { visible: boolean; title: string };
   /** The editable name, unless `titleHtml` replaces the field with something else. */
   name?: string;
   placeholder?: string;
@@ -63,8 +65,8 @@ interface AccHeaderOptions {
 
 /**
  * The dot at the head of a row. A radio where only one thing can be chosen at a time (which
- * document is open), a checkbox where any number can (which shapes are selected, which overlays
- * are shown) - the shape of the control is the rule it obeys.
+ * document is open), a checkbox where any number can (which shapes are selected) - the shape of
+ * the control is the rule it obeys.
  */
 export function rowDotHtml(
   kind: "radio" | "check",
@@ -85,14 +87,29 @@ export function rowDotHtml(
     </button>`;
 }
 
+/**
+ * The eye: whether a thing is drawn. Separate from the checkbox, which says whether it is
+ * selected - one control, one meaning, in every list.
+ */
+export function eyeHtml(
+  visible: boolean,
+  title: string,
+  extra = ' data-action="toggle-eye"'
+): string {
+  return `<button type="button" class="btn-visibility btn-eye${visible ? "" : " is-off"}"${extra} title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}" aria-pressed="${!visible}">
+      <svg class="ui-icon" aria-hidden="true"><use href="#${visible ? "icon-eye" : "icon-eye-off"}" /></svg>
+    </button>`;
+}
+
 export function accHeaderHtml(o: AccHeaderOptions): string {
   return `<div class="acc-header-row">
       <button type="button" class="acc-expand-btn" data-action="toggle-expand" aria-label="Expand" title="Expand / collapse">
         <span class="chevron" aria-hidden="true">▶</span>
       </button>
-      ${rowDotHtml("check", o.on, o.dotTitle, ' data-action="toggle-dot"')}
+      ${o.dot ? rowDotHtml("check", o.dot.on, o.dot.title, ' data-action="toggle-dot"') : ""}
       ${o.titleHtml ?? `<input type="text" class="acc-title-input" data-field="name" value="${escapeAttr(o.name ?? "")}" placeholder="${escapeAttr(o.placeholder ?? "")}" />`}
       ${o.extra ?? ""}
+      ${o.eye ? eyeHtml(o.eye.visible, o.eye.title) : ""}
       <button type="button" class="acc-icon-btn acc-move" data-action="move-up" title="Move up (Shift: to top)" aria-label="Move up"${(o.canUp ?? o.index > 0) ? "" : " disabled"}>▲</button>
       <button type="button" class="acc-icon-btn acc-move" data-action="move-down" title="Move down (Shift: to bottom)" aria-label="Move down"${(o.canDown ?? o.index < o.count - 1) ? "" : " disabled"}>▼</button>
       <button type="button" class="acc-icon-btn acc-trash" data-action="delete" title="Delete" aria-label="Delete">
@@ -103,17 +120,23 @@ export function accHeaderHtml(o: AccHeaderOptions): string {
 
 interface AccHandlers {
   onExpand: () => void;
-  onDot: () => void;
+  onDot?: () => void;
+  onEye?: () => void;
   onDelete: () => void;
   onMove: (dir: number, toEnd: boolean) => void;
 }
 
 export function wireAccRow(li: HTMLElement, h: AccHandlers): void {
   li.querySelector('[data-action="toggle-expand"]')!.addEventListener("click", h.onExpand);
-  li.querySelector('[data-action="toggle-dot"]')!.addEventListener("click", (e) => {
-    e.stopPropagation();
-    h.onDot();
-  });
+  const on = (action: string, fn: (() => void) | undefined) =>
+    li
+      .querySelector(`:scope > .acc-header-row [data-action="${action}"]`)
+      ?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        fn?.();
+      });
+  on("toggle-dot", h.onDot);
+  on("toggle-eye", h.onEye);
   li.querySelector('[data-action="delete"]')!.addEventListener("click", h.onDelete);
   li.querySelector('[data-action="move-up"]')!.addEventListener("click", (e) =>
     h.onMove(-1, (e as MouseEvent).shiftKey)

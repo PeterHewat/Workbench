@@ -35,8 +35,7 @@ function buildImageList(state: EditorState): void {
     li.dataset.imageId = img.id;
     li.innerHTML =
       accHeaderHtml({
-        on: visible,
-        dotTitle: visible ? "Hide overlay" : "Show overlay",
+        eye: { visible, title: visible ? "Hide overlay" : "Show overlay" },
         // A reference image is the file it came from, so the row says which file and lets you
         // swap it. There is nothing to rename: a name of its own would only be a second,
         // less true label for the same thing.
@@ -46,7 +45,7 @@ function buildImageList(state: EditorState): void {
       }) + imageBodyHtml(img);
     wireAccRow(li, {
       onExpand: () => toggleImageExpanded(img.id),
-      onDot: () => toggleImageVisible(img.id),
+      onEye: () => toggleImageVisible(img.id),
       onDelete: () => deleteImage(img.id),
       onMove: (dir, toEnd) => reorder("images", img.id, dir, toEnd),
     });

@@ -172,6 +172,8 @@ function renderDocument(state: EditorState): void {
   }
   const minHit = HIT_MIN_PX / state.viewport.zoom;
   for (const el of state.elements) {
+    // A hidden shape is not drawn, so it cannot be clicked, hovered or selected on the canvas.
+    if (el.hidden) continue;
     // While a text element is being edited in place, the overlay input is what shows its
     // content, so the SVG text itself would only double up half a pixel off.
     if (el.id === state.ui.editingTextId) continue;

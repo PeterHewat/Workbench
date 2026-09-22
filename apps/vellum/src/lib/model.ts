@@ -41,7 +41,7 @@ export const DEFAULT_STROKE: StyleProps = {
 };
 
 /** Keys copied when an element is converted from one type to another: identity plus every style. */
-const STYLE_KEYS: readonly string[] = ["name", "groups", ...Object.keys(DEFAULT_STROKE)];
+const STYLE_KEYS: readonly string[] = ["name", "groups", "hidden", ...Object.keys(DEFAULT_STROKE)];
 
 export function styleOf(el: SceneElement): StyleCarrier {
   const src = el as unknown as Record<string, unknown>;
@@ -536,6 +536,8 @@ export function geometryOf(el: SceneElement, fmt: Formatter = (n) => n): Geometr
  */
 export function styleAttrs(el: SceneElement): AttrMap {
   const attrs: AttrMap = {};
+  // The canvas renders from these same attributes, so this hides it there and in the file alike.
+  if (el.hidden) attrs.display = "none";
   if (el.strokeWidth === 0) {
     attrs.stroke = "none";
   } else {
@@ -608,7 +610,7 @@ export function collectAlignPoints(
 ): Point[] {
   const pts: Point[] = [];
   for (const el of elements) {
-    if (opts.excludeElementIds?.has(el.id)) continue;
+    if (el.hidden || opts.excludeElementIds?.has(el.id)) continue;
     const skip = opts.excludePoint?.elementId === el.id ? opts.excludePoint.index : -1;
     for (const p of geometryPoints(el, skip)) pts.push({ x: p.x, y: p.y });
   }

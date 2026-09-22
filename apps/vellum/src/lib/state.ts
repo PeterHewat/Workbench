@@ -24,6 +24,7 @@ export function createInitialState(): EditorState {
     background: { color: "#ffffff", opacity: 0 },
     grid: { step: 16, visible: true, snap: isCoarsePointer() },
     elements: [],
+    groupNames: {},
     images: [],
     viewport: { panX: 40, panY: 40, zoom: 1 },
     tool: "select",

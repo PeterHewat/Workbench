@@ -24,8 +24,9 @@ agent to build geometry to scale, the file has to say three things that it canno
 
 ### Views
 
-- A view is a named group with a role: `front`, `rear`, `left`, `right`, `top`, `bottom`, or
-  `detail`. Exported as `<g id="view-side" data-vellum-view="left">`.
+- Groups can already be named (`<g id="group-57cc1c37_side_view">`), which is enough to tell an
+  agent which view is which today. A view adds a role to a group: `front`, `rear`, `left`,
+  `right`, `top`, `bottom`, or `detail`, exported as `data-vellum-view="left"` on its `<g>`.
 - Each view has an origin (a point on the artboard) and axes, so "x along the vehicle, z up" means
   the same thing in every view. Exported as `data-vellum-origin="x y"`.
 - A "third-angle layout" preset places front / top / side in the standard arrangement, with guide

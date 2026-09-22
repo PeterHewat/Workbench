@@ -1008,6 +1008,31 @@ body {
   padding: 0;
 }
 
+/* The group's own line: select it whole, name it, show or hide it. The name takes the group's
+   colour, so the label and its bracket read as one thing. */
+.group-head {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  margin-bottom: 2px;
+}
+
+.group-name-input {
+  color: var(--gc, var(--text));
+  font-weight: 600;
+}
+
+.group-name-input::placeholder {
+  color: var(--gc, var(--muted));
+  font-weight: 400;
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.acc-item--hidden .acc-swatch {
+  opacity: 0.35;
+}
+
 /* The bracket supplies the gap under the group, so the last row inside it does not add another. */
 .group-items > :last-child {
   margin-bottom: 0;

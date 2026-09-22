@@ -243,11 +243,12 @@ byId("input-import-svg").addEventListener("change", async (e) => {
     window.alert(`Could not import ${file.name}: ${err instanceof Error ? err.message : err}`);
     return;
   }
-  const { artboard, background, elements } = imported;
+  const { artboard, background, elements, groupNames } = imported;
   pushUndo();
   setState((s) => ({
     ...s,
     elements: [...s.elements, ...elements],
+    groupNames: { ...s.groupNames, ...groupNames },
     artboard: artboard ?? s.artboard,
     background: background ?? s.background,
   }));
@@ -292,7 +293,7 @@ window.addEventListener("keydown", (e) => {
       e.preventDefault();
       setState((s) => ({
         ...s,
-        selection: selectOnly(s.elements.map((el) => el.id)),
+        selection: selectOnly(s.elements.filter((el) => !el.hidden).map((el) => el.id)),
         tool: "select",
       }));
     }

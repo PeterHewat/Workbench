@@ -92,6 +92,11 @@ interface ElementBase extends StyleProps {
    * which loses nothing, and never set this.
    */
   rotation?: number;
+  /**
+   * Hidden in the editor and in the file (`display="none"`), but still part of the document:
+   * the SVG panel re-imports its own output, so a shape left out of it would be deleted.
+   */
+  hidden?: boolean;
 }
 
 export interface PathElement extends ElementBase {
@@ -248,6 +253,11 @@ export interface EditorState {
   background: BackgroundPaint;
   grid: { step: number; visible: boolean; snap: boolean };
   elements: SceneElement[];
+  /**
+   * Names the user gave groups, by group id. A group is only the id its members carry (see
+   * groups.ts), so its name lives here; exported as `<g id="<group id>_<name>">`.
+   */
+  groupNames: Record<string, string>;
   images: ReferenceImage[];
   viewport: Viewport;
   tool: ToolName;
@@ -271,6 +281,7 @@ export type StyleCarrier = Partial<StyleProps> & {
   id?: string;
   name?: string;
   groups?: string[];
+  hidden?: boolean;
   /** Import only: the gradient arrived in artboard units and still has to be converted. */
   gradUserSpace?: boolean;
 };
@@ -284,6 +295,8 @@ export interface ProjectFile {
   grid: EditorState["grid"];
   images: ReferenceImage[];
   elements: SceneElement[];
+  /** Absent when no group has a name. */
+  groupNames?: Record<string, string>;
   viewport: Viewport;
   tool: ToolName;
   finalOnly: boolean;

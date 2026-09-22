@@ -1,4 +1,4 @@
-import { setState, mutate, findElement, selectOnly } from "./state.js";
+import { getState, setState, mutate, findElement, selectOnly } from "./state.js";
 import { setElementClosed } from "./selection-commands.js";
 import { pushUndo } from "./undo.js";
 import {
@@ -17,7 +17,15 @@ import { canMoveWithinParent, childBlocks, groupsOf, type Block } from "./groups
 import { scaleAbout, transformElement } from "./transform.js";
 import { type EditorState, type SceneElement } from "./types.js";
 import { holdSvgFocus, setSvgFocus } from "./svg-source.js";
-import { cachedList, accHeaderHtml, wireAccRow, setField, reorder } from "./accordion.js";
+import {
+  cachedList,
+  accHeaderHtml,
+  eyeHtml,
+  rowDotHtml,
+  wireAccRow,
+  setField,
+  reorder,
+} from "./accordion.js";
 import { byId } from "@workbench/ui";
 
 const primitiveListEl = byId("primitive-list");
@@ -26,15 +34,34 @@ const primitiveListEl = byId("primitive-list");
 
 function primitiveListKeyOf(state: EditorState): string {
   const els = state.elements
-    .map((e) => `${e.id}:${e.type}:${groupsOf(e).join("/")}:${"closed" in e && e.closed ? 1 : 0}`)
+    .map(
+      (e) =>
+        `${e.id}:${e.type}:${groupsOf(e).join("/")}:${"closed" in e && e.closed ? 1 : 0}:${e.hidden ? 1 : 0}`
+    )
     .join(",");
   return `${els}|${state.selection.elementIds.join(",")}|${state.ui.expandedElementId}`;
 }
 
-function groupColor(gid: string): string {
-  let h = 0;
-  for (const ch of gid) h = (h * 31 + ch.charCodeAt(0)) % 360;
-  return `hsl(${h} 65% 60%)`;
+/**
+ * One colour per group, by the order groups appear in the list. Each step turns the hue by the
+ * golden angle, so neighbouring groups - and a group and the one inside it - are always far
+ * apart, and no colour comes back until there are more groups than can be told apart anyway.
+ */
+function groupColors(elements: readonly SceneElement[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const el of elements) {
+    for (const gid of groupsOf(el)) {
+      if (out.has(gid)) continue;
+      const hue = Math.round((210 + out.size * 137.508) % 360);
+      out.set(gid, `hsl(${hue} 65% 62%)`);
+    }
+  }
+  return out;
+}
+
+/** Every element in group `gid`, at any depth. */
+function membersOf(elements: readonly SceneElement[], gid: string): SceneElement[] {
+  return elements.filter((e) => groupsOf(e).includes(gid));
 }
 
 function swatchHtml(kind: string, color: string, alpha: number, title: string): string {
@@ -212,11 +239,18 @@ function buildPrimitiveList(state: EditorState): void {
     primitiveListEl.appendChild(li);
     return;
   }
-  appendBlocks(primitiveListEl, state, { start: 0, end: state.elements.length }, 0);
+  const colors = groupColors(state.elements);
+  appendBlocks(primitiveListEl, state, { start: 0, end: state.elements.length }, 0, colors);
 }
 
 /** One level of the tree: each block is either a nested group or a single row. */
-function appendBlocks(parent: HTMLElement, state: EditorState, range: Block, depth: number): void {
+function appendBlocks(
+  parent: HTMLElement,
+  state: EditorState,
+  range: Block,
+  depth: number,
+  colors: Map<string, string>
+): void {
   for (const block of childBlocks(state.elements, range, depth)) {
     const gid = groupsOf(state.elements[block.start])[depth];
     if (gid == null) {
@@ -226,13 +260,47 @@ function appendBlocks(parent: HTMLElement, state: EditorState, range: Block, dep
     const run = document.createElement("li");
     run.className = "group-run";
     run.dataset.groupId = gid;
-    run.style.setProperty("--gc", groupColor(gid));
+    run.style.setProperty("--gc", colors.get(gid) ?? "var(--accent)");
+    run.appendChild(groupHead(state, gid));
     const inner = document.createElement("ul");
     inner.className = "group-items";
     run.appendChild(inner);
-    appendBlocks(inner, state, block, depth + 1);
+    appendBlocks(inner, state, block, depth + 1, colors);
     parent.appendChild(run);
   }
+}
+
+/**
+ * The head of a group: the checkbox selects the whole group, the name is what `<g id>` carries
+ * after the group's id, and the eye shows or hides every member. A group has no row of its own
+ * otherwise - its bracket is the rows it holds.
+ */
+function groupHead(state: EditorState, gid: string): HTMLElement {
+  const members = membersOf(state.elements, gid);
+  const selected = new Set(state.selection.elementIds);
+  const allSelected = members.every((e) => selected.has(e.id));
+  const allHidden = members.every((e) => e.hidden);
+  const head = document.createElement("div");
+  head.className = "group-head";
+  head.innerHTML = `
+    ${rowDotHtml("check", allSelected, allSelected ? "Deselect the group" : "Select the group", ' data-group-action="select"')}
+    <input type="text" class="acc-title-input group-name-input" data-group-name value="${escapeAttr(state.groupNames[gid] ?? "")}" placeholder="group" aria-label="Group name" title="Group name - exported in the group's id" />
+    ${eyeHtml(!allHidden, allHidden ? "Show the group" : "Hide the group", ' data-group-action="eye"')}`;
+  head
+    .querySelector('[data-group-action="select"]')!
+    .addEventListener("click", () => toggleGroupSelected(gid));
+  head.querySelector('[data-group-action="eye"]')!.addEventListener("click", () =>
+    setHidden(
+      members.map((e) => e.id),
+      !allHidden
+    )
+  );
+  const input = head.querySelector<HTMLInputElement>("[data-group-name]")!;
+  input.addEventListener("change", () => renameGroup(gid, input.value));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") input.blur();
+  });
+  return head;
 }
 
 function primitiveRow(state: EditorState, index: number): HTMLElement {
@@ -243,8 +311,8 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
   li.dataset.elementId = el.id;
   li.innerHTML = `
     ${accHeaderHtml({
-      on: isSelected,
-      dotTitle: isSelected ? "Deselect" : "Select",
+      dot: { on: isSelected, title: isSelected ? "Deselect" : "Select" },
+      eye: { visible: !el.hidden, title: el.hidden ? "Show" : "Hide" },
       name: el.name || "",
       placeholder: el.type,
       extra: `<span class="acc-swatch" style="${headerSwatchStyle(el)}"></span>`,
@@ -256,6 +324,7 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
     <div class="acc-body">${primitiveBodyHtml(el)}</div>
   `;
   li.dataset.filltype = el.fillType || "solid";
+  li.classList.toggle("acc-item--hidden", !!el.hidden);
   li.classList.toggle("acc-item--invisible", isInvisible(el));
   if (isInvisible(el)) {
     const sw = li.querySelector<HTMLElement>(".acc-swatch");
@@ -264,6 +333,7 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
   wireAccRow(li, {
     onExpand: () => toggleElementExpanded(el.id),
     onDot: () => toggleElementSelected(el.id),
+    onEye: () => setHidden([el.id], !el.hidden),
     onDelete: () => deletePrimitive(el.id),
     onMove: (dir, toEnd) => reorder("elements", el.id, dir, toEnd),
   });
@@ -271,6 +341,11 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
 }
 
 function updatePrimitiveListValues(state: EditorState): void {
+  primitiveListEl.querySelectorAll<HTMLElement>(".group-run").forEach((run) => {
+    const input = run.querySelector<HTMLInputElement>(":scope > .group-head [data-group-name]");
+    const gid = run.dataset.groupId;
+    if (input && gid && input !== document.activeElement) input.value = state.groupNames[gid] ?? "";
+  });
   for (const el of state.elements) {
     const li = primitiveListEl.querySelector<HTMLElement>(`[data-element-id="${el.id}"]`);
     if (!li) continue;
@@ -349,6 +424,54 @@ function toggleElementSelected(id: string): void {
       selection: selectOnly(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]),
       tool: "select",
     };
+  });
+}
+
+/** Selects every member of a group, or, when they all are already, none of them. */
+function toggleGroupSelected(gid: string): void {
+  setState((s) => {
+    const ids = membersOf(s.elements, gid).map((e) => e.id);
+    const current = new Set(s.selection.elementIds);
+    const all = ids.every((id) => current.has(id));
+    const next = all
+      ? s.selection.elementIds.filter((id) => !ids.includes(id))
+      : [...new Set([...s.selection.elementIds, ...ids])];
+    return { ...s, selection: selectOnly(next), tool: "select" };
+  });
+}
+
+/**
+ * Shows or hides shapes. A hidden shape leaves the selection, since nothing on the canvas would
+ * show what a drag or a Delete was about to act on.
+ */
+function setHidden(ids: readonly string[], hidden: boolean): void {
+  const wanted = new Set(ids);
+  pushUndo();
+  setState((s) => ({
+    ...s,
+    elements: s.elements.map((e) => {
+      if (!wanted.has(e.id) || !!e.hidden === hidden) return e;
+      const next = { ...e };
+      if (hidden) next.hidden = true;
+      else delete next.hidden;
+      return next;
+    }),
+    selection: hidden
+      ? selectOnly(s.selection.elementIds.filter((id) => !wanted.has(id)))
+      : s.selection,
+  }));
+}
+
+function renameGroup(gid: string, raw: string): void {
+  const name = raw.trim();
+  const st = getState();
+  if ((st.groupNames[gid] ?? "") === name) return;
+  pushUndo();
+  setState((s) => {
+    const groupNames = { ...s.groupNames };
+    if (name) groupNames[gid] = name;
+    else delete groupNames[gid];
+    return { ...s, groupNames };
   });
 }
 

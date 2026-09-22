@@ -98,6 +98,7 @@ function elementsInMarquee(m: Marquee): string[] {
   const y2 = Math.max(m.y1, m.y2);
   const ids: string[] = [];
   for (const el of getState().elements) {
+    if (el.hidden) continue;
     const box = elementBBox(el);
     if (!box) continue;
     const cx = box.x + box.width / 2;

@@ -250,6 +250,16 @@
           />
           <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2" />
         </symbol>
+        <symbol id="icon-eye-off" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM4 4l16 16"
+          />
+        </symbol>
         <symbol id="icon-magnet" viewBox="0 0 24 24">
           <path
             fill="none"
@@ -693,8 +703,8 @@
               after the thing that made it is gone.
             </li>
             <li>
-              <b>Workbench</b> — Vellum is one of a set of small browser tools.
-              <a href="../">See them all</a>.
+              <b>Part of Workbench</b> — Vellum is one of the tools in <a href="../">Workbench</a>,
+              a small set of tools that run entirely in your browser and keep working offline.
             </li>
           </ul>
 
@@ -888,9 +898,15 @@
             </li>
             <li>
               In the Primitives list a group is one coloured line down the left of the rows it
-              holds, and a group inside a group is a line inside a line. Members stay together: the
-              ▲ ▼ arrows reorder a shape among its siblings, and when it is already at the edge the
-              move widens to the group itself.
+              holds, each group in a colour of its own, and a group inside a group is a line inside
+              a line. Members stay together: the ▲ ▼ arrows reorder a shape among its siblings, and
+              when it is already at the edge the move widens to the group itself.
+            </li>
+            <li>
+              <b>Naming a group</b> — the line at the top of a group holds its name. A named group
+              exports as <code>&lt;g id="group-57cc1c37_top_view"&gt;</code>: its id, then the name,
+              with spaces as underscores. The checkbox on that line selects the whole group, and its
+              eye shows or hides every shape in it.
             </li>
             <li>
               <b>A group holds at least two things.</b> A group carries nothing here but its
@@ -929,15 +945,15 @@
               is one scrolling surface: only the SVG source keeps a scrollbar of its own. Every row
               across the lists is built the same way, and the control at its head says which kind of
               choice it is — a round radio where only one thing can be chosen (which document is
-              open), a square checkbox where any number can (which shapes are selected, which
-              overlays are shown).
+              open), a square checkbox where any number can (which shapes are selected). The eye on
+              a row shows or hides that shape or reference image.
             </li>
             <li>
               <b>Reference images</b> — add reference images to trace; each row is the file it came
               from, and <span data-help="mouse">clicking</span
               ><span data-help="touch">tapping</span>
               that file name swaps in a different one. Open the row for position, scale, rotation
-              and opacity; the dot beside it shows the overlay or hides it.
+              and opacity; the eye shows the overlay or hides it.
             </li>
             <li>
               <b>SVG</b> — the artboard size (width × height), the grid (its visibility and its step
@@ -958,7 +974,11 @@
               exported as a full-artboard <code>&lt;rect id="background"&gt;</code>, so what you see
               is what the file contains.
             </li>
-            <li><b>Primitives</b> — one row per shape (see Style).</li>
+            <li>
+              <b>Primitives</b> — one row per shape (see Style). The eye hides a shape: it is not
+              drawn and cannot be clicked, but stays in the document, exported with
+              <code>display="none"</code> so the file still holds it.
+            </li>
             <li>
               Documents save automatically, like Pages or Notes on macOS — there is no Save button.
               <b>Documents</b> lists everything stored in this browser (reference images included).

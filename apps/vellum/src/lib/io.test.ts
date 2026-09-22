@@ -246,6 +246,52 @@ describe("round trip", () => {
     expect(shape?.type === "path" && shape.points).toHaveLength(3);
   });
 
+  test("a group's name rides along in its id, and comes back as its name", () => {
+    const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-57cc1c37"] });
+    const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-57cc1c37"] });
+    const first = formatExportSvg(
+      { ...doc([a, b]), groupNames: { "group-57cc1c37": "top view" } },
+      true
+    );
+    expect(first).toContain('<g id="group-57cc1c37_top_view">');
+    const back = importSvgFile(first, { keepIds: true });
+    expect(back.elements[0]!.groups).toEqual(["group-57cc1c37"]);
+    expect(back.groupNames).toEqual({ "group-57cc1c37": "top_view" });
+    const second = formatExportSvg({ ...doc(back.elements), groupNames: back.groupNames }, true);
+    expect(second).toBe(first);
+  });
+
+  test("a foreign <g id> becomes the group's name", () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg"><g id="wheels">' +
+      '<rect width="1" height="1"/><rect x="2" width="1" height="1"/></g></svg>';
+    const back = importSvgFile(svg);
+    const gid = back.elements[0]!.groups![0]!;
+    expect(gid).toMatch(/^group-/);
+    expect(back.groupNames).toEqual({ [gid]: "wheels" });
+  });
+
+  test("a hidden shape exports as display none and comes back hidden", () => {
+    const el = Object.assign(createRect(0, 0, 10, 10), { hidden: true });
+    const first = formatExportSvg(doc([el]), true);
+    expect(first).toContain('display="none"');
+    const back = importSvgFile(first, { keepIds: true });
+    expect(back.elements[0]!.hidden).toBe(true);
+    expect(formatExportSvg(doc(back.elements), true)).toBe(first);
+  });
+
+  test("a saved project keeps the names of groups that still exist, and only those", () => {
+    const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-aaaa"] });
+    const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-aaaa"] });
+    const saved = serializeProject({
+      ...createInitialState(),
+      elements: [a, b],
+      groupNames: { "group-aaaa": "side view", "group-gone": "old" },
+    });
+    expect(saved.groupNames).toEqual({ "group-aaaa": "side view" });
+    expect(serializeProject(createInitialState()).groupNames).toBeUndefined();
+  });
+
   test("groups survive the trip", () => {
     const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-abc"] });
     const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-abc"] });

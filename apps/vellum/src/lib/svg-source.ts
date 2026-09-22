@@ -173,6 +173,25 @@ function sameElement(a: SceneElement, b: SceneElement): boolean {
   );
 }
 
+/**
+ * Group names from the markup. A name typed with spaces comes back underscored from its id, so
+ * where the markup still says the same thing the name as typed is kept, as shapes' names are.
+ */
+function mergeGroupNames(
+  parsed: Record<string, string>,
+  current: Readonly<Record<string, string>>
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [gid, name] of Object.entries(parsed)) {
+    const typed = current[gid];
+    out[gid] = typed && sanitizeName(typed) === sanitizeName(name) ? typed : name;
+  }
+  return out;
+}
+
+const sameNames = (a: Record<string, string>, b: Record<string, string>) =>
+  Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => a[k] === b[k]);
+
 /** Applies the edited markup. Untouched shapes keep their exact float geometry. */
 function applySvgText(): void {
   svgApplyTimer = null;
@@ -194,7 +213,9 @@ function applySvgText(): void {
   // No background rect in the markup means a transparent document; the colour is kept so that
   // deleting the rect and typing it back does not lose what was chosen.
   const background = parsed.background ?? { color: st.background.color, opacity: 0 };
+  const groupNames = mergeGroupNames(parsed.groupNames, st.groupNames);
   const same =
+    sameNames(groupNames, st.groupNames) &&
     next.length === st.elements.length &&
     next.every((e, i) => e === st.elements[i]) &&
     artboard.width === st.artboard.width &&
@@ -210,6 +231,7 @@ function applySvgText(): void {
   setState((s) => ({
     ...s,
     elements: next,
+    groupNames,
     artboard,
     background,
     selection: selectOnly(s.selection.elementIds.filter((id) => ids.has(id))),
