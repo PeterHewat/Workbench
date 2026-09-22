@@ -149,7 +149,8 @@ export function wireAccRow(li: HTMLElement, h: AccHandlers): void {
 /** Writes a value into a row's field, unless the user is currently typing in it. */
 export function setField(li: HTMLElement, field: string, value: string | number): void {
   const input = li.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-field="${field}"]`);
-  if (input && input !== document.activeElement) input.value = String(value);
+  const text = String(value);
+  if (input && input !== document.activeElement && input.value !== text) input.value = text;
 }
 
 /**

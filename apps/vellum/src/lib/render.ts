@@ -669,6 +669,14 @@ function renderOverlay(state: EditorState): void {
   }
 }
 
+/**
+ * What a pointer-only change needs redrawn: the handles, hover outline and guides. The shapes,
+ * grid and images under them do not move with the pointer.
+ */
+export function renderPointer(state: EditorState): void {
+  renderOverlay(state);
+}
+
 export function renderAll(state: EditorState): void {
   for (const rect of [els.artboardChecks, els.artboardBg]) {
     rect.setAttribute("width", String(state.artboard.width));

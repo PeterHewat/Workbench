@@ -1,6 +1,6 @@
 import { getState, setState, subscribe, selectOnly } from "./state.js";
 import { initViewport } from "./viewport.js";
-import { initRender, renderAll } from "./render.js";
+import { initRender, renderAll, renderPointer } from "./render.js";
 import { bindInteraction, cancelOperation } from "./interaction.js";
 import { setTool, finishPath, closeAndFinishPath, removeLastPenPoint } from "./pen-commands.js";
 import {
@@ -94,7 +94,13 @@ window.addEventListener("resize", () => renderRulers(getState()));
 
 let lastSavedViewport: EditorState["viewport"] | null = null;
 
-subscribe((state) => {
+subscribe((state, { pointerOnly }) => {
+  if (pointerOnly) {
+    renderPointer(state);
+    renderRulers(state);
+    syncCursorReadout(state);
+    return;
+  }
   renderAll(state);
   // Where you are looking belongs to the tab, not to the drawing: kept so a refresh returns it.
   if (state.viewport !== lastSavedViewport) {
@@ -112,6 +118,15 @@ function setToggle(id: string, on: boolean): void {
   const btn = byId(id);
   btn.classList.toggle("active", on);
   btn.setAttribute("aria-pressed", String(on));
+}
+
+function syncCursorReadout(state: EditorState): void {
+  const c = state.cursor;
+  const x = c.snapActive ? c.snapX : c.x;
+  const y = c.snapActive ? c.snapY : c.y;
+  const text = `${Math.round(x)}, ${Math.round(y)}`;
+  const readout = byId("cursor-pos");
+  if (readout.textContent !== text) readout.textContent = text;
 }
 
 function syncPanel(state: EditorState): void {
@@ -132,10 +147,7 @@ function syncPanel(state: EditorState): void {
     btn.parentElement?.setAttribute("aria-selected", String(on));
   });
 
-  const c = state.cursor;
-  const x = c.snapActive ? c.snapX : c.x;
-  const y = c.snapActive ? c.snapY : c.y;
-  byId("cursor-pos").textContent = `${Math.round(x)}, ${Math.round(y)}`;
+  syncCursorReadout(state);
 
   document.querySelectorAll<HTMLElement>(".tool-btn[data-tool]").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tool === state.tool);

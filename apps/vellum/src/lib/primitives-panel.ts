@@ -229,6 +229,7 @@ function headerSwatchStyle(el: SceneElement): string {
  */
 function buildPrimitiveList(state: EditorState): void {
   primitiveListEl.innerHTML = "";
+  rowRefs.clear();
   if (!state.elements.length) {
     const li = document.createElement("li");
     li.className = "primitive-empty muted";
@@ -239,6 +240,13 @@ function buildPrimitiveList(state: EditorState): void {
   const colors = groupColors(state);
   appendBlocks(primitiveListEl, state, { start: 0, end: state.elements.length }, 0, colors);
 }
+
+/**
+ * Each row and its header swatch, by element id, filled in as the list is built. The in-place
+ * update runs on every state change, pointer moves included, and looking each row up with
+ * `querySelector` there cost a scan of the whole list per shape.
+ */
+const rowRefs = new Map<string, { li: HTMLElement; swatch: HTMLElement | null; style: string }>();
 
 /** One level of the tree: each block is either a nested group or a single row. */
 function appendBlocks(
@@ -340,10 +348,9 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
   li.dataset.filltype = el.fillType || "solid";
   li.classList.toggle("acc-item--hidden", !!el.hidden);
   li.classList.toggle("acc-item--invisible", isInvisible(el));
-  if (isInvisible(el)) {
-    const sw = li.querySelector<HTMLElement>(".acc-swatch");
-    if (sw) sw.title = "Invisible: no stroke and no fill";
-  }
+  const swatch = li.querySelector<HTMLElement>(".acc-swatch");
+  if (swatch && isInvisible(el)) swatch.title = "Invisible: no stroke and no fill";
+  rowRefs.set(el.id, { li, swatch, style: headerSwatchStyle(el) });
   wireAccRow(li, {
     onExpand: () => toggleElementExpanded(el.id),
     onDot: () => toggleElementSelected(el.id),
@@ -361,13 +368,19 @@ function updatePrimitiveListValues(state: EditorState): void {
     if (input && gid && input !== document.activeElement) input.value = state.groupNames[gid] ?? "";
   });
   for (const el of state.elements) {
-    const li = primitiveListEl.querySelector<HTMLElement>(`[data-element-id="${el.id}"]`);
-    if (!li) continue;
+    const row = rowRefs.get(el.id);
+    if (!row) continue;
+    const { li } = row;
     setField(li, "name", el.name || "");
-    const swatch = li.querySelector<HTMLElement>(".acc-swatch");
-    if (swatch) swatch.style.cssText = headerSwatchStyle(el);
+    // Only what changed is written: an unchanged write still restyles the row.
+    const style = headerSwatchStyle(el);
+    if (row.swatch && style !== row.style) {
+      row.swatch.style.cssText = style;
+      row.style = style;
+    }
     li.classList.toggle("acc-item--invisible", isInvisible(el));
-    li.dataset.filltype = el.fillType || "solid";
+    const fillType = el.fillType || "solid";
+    if (li.dataset.filltype !== fillType) li.dataset.filltype = fillType;
     if (!li.classList.contains("expanded")) continue;
     const setSwatch = (kind: string, color: string, alpha: number) => {
       const btn = li.querySelector<HTMLElement>(`[data-picker="${kind}"]`);

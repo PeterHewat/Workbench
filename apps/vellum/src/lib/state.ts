@@ -4,7 +4,11 @@ import { assignGroupHuesInPlace, pruneGroupsInPlace } from "./groups.js";
 import type { EditorState, PathEdit, SceneElement, Selection } from "./types.js";
 
 export interface NotifyOptions {
-  full?: boolean;
+  /**
+   * Only the pointer moved: the cursor, the hover target or the alignment guides changed, and
+   * nothing else. The document, the lists and the SVG source can stay as they are.
+   */
+  pointerOnly?: boolean;
 }
 
 type Listener = (state: EditorState, options: NotifyOptions) => void;
@@ -54,10 +58,34 @@ export function subscribe(fn: Listener): () => void {
   };
 }
 
+let pending: NotifyOptions | null = null;
+
+/**
+ * Keeps the model's invariants now, and renders on the next frame.
+ *
+ * A single pointer move can change state two or three times (the cursor, a drag, the hover),
+ * and each change used to redraw everything at once. Deferred, they cost one render per frame
+ * however many there were - and that render is a pointer-only one when all of them were.
+ */
 function notify(options: NotifyOptions): void {
-  ensureDefaultNames(state.elements);
-  pruneGroupsInPlace(state.elements);
-  assignGroupHuesInPlace(state.elements, state.groupHues);
+  if (!options.pointerOnly) {
+    ensureDefaultNames(state.elements);
+    pruneGroupsInPlace(state.elements);
+    assignGroupHuesInPlace(state.elements, state.groupHues);
+  }
+  if (pending) {
+    pending = { pointerOnly: !!pending.pointerOnly && !!options.pointerOnly };
+    return;
+  }
+  pending = { ...options };
+  requestAnimationFrame(flushRender);
+}
+
+/** Renders now whatever is waiting for the next frame, for code that needs the DOM current. */
+export function flushRender(): void {
+  if (!pending) return;
+  const options = pending;
+  pending = null;
   for (const fn of listeners) fn(state, options);
 }
 
@@ -92,10 +120,28 @@ function ensureDefaultNames(elements: SceneElement[]): void {
 
 type StatePatch = Partial<EditorState> | ((current: EditorState) => EditorState);
 
+/** The slices that follow the pointer around without changing the drawing. */
+const POINTER_KEYS: ReadonlySet<string> = new Set(["cursor", "align", "hoverId"]);
+
+/**
+ * Whether going from `prev` to `next` changed pointer slices and nothing else. A change that
+ * touched nothing at all is not one: a caller may have edited in place and wants a full render.
+ */
+function onlyPointerChanged(prev: EditorState, next: EditorState): boolean {
+  let changed = false;
+  for (const key of Object.keys(next) as (keyof EditorState)[]) {
+    if (prev[key] === next[key]) continue;
+    if (!POINTER_KEYS.has(key)) return false;
+    changed = true;
+  }
+  return changed;
+}
+
 /** Replaces state slices. `patch` is an object of slices, or a function returning the next state. */
-export function setState(patch: StatePatch, options: NotifyOptions = {}): void {
+export function setState(patch: StatePatch): void {
+  const prev = state;
   state = typeof patch === "function" ? patch(state) : { ...state, ...patch };
-  notify(options);
+  notify({ pointerOnly: onlyPointerChanged(prev, state) });
 }
 
 /**
@@ -109,7 +155,7 @@ export function mutate(fn: (current: EditorState) => void): void {
 
 export function replaceState(next: EditorState): void {
   state = next;
-  notify({ full: true });
+  notify({});
 }
 
 /**
