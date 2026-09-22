@@ -13,15 +13,8 @@ import {
 } from "./model.js";
 import { escapeAttr } from "./utils.js";
 import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
-import {
-  canMoveGroup,
-  canMoveWithinParent,
-  childBlocks,
-  groupColor,
-  groupsOf,
-  moveGroup,
-  type Block,
-} from "./groups.js";
+import { canMoveGroup, canMoveWithinParent, groupColor, groupsOf, moveGroup } from "./groups.js";
+import { flattenLines, lineOffsets, visibleRange, type ListLine } from "./list-lines.js";
 import { scaleAbout, transformElement } from "./transform.js";
 import { type EditorState, type SceneElement } from "./types.js";
 import { holdSvgFocus, setSvgFocus } from "./svg-source.js";
@@ -222,52 +215,165 @@ function headerSwatchStyle(el: SceneElement): string {
 }
 
 /**
- * The list is a tree, because the document is one. A group is a single bracket drawn down the
- * left of the rows inside it, and a group within a group is a bracket within a bracket - not a
- * list of its own, and not a coloured stripe repeated on every row, which said "these rows are
- * the same kind of thing" rather than "these rows are one thing".
+ * The list is a tree, because the document is one, but only the part of it on screen is built:
+ * `flattenLines` lays it out as lines, and each render draws the lines in view. A group is still
+ * a single bracket down the left of the rows inside it - each line draws its stretch of every
+ * bracket it sits in, and the stretches join up - not a coloured stripe repeated on each row.
  */
+let lines: ListLine[] = [];
+/** Measured heights by line key, gap below included; lines not yet seen are guessed. */
+const lineHeights = new Map<string, number>();
+let typicalHeight = 44;
+/** The lines currently in the DOM, by key. */
+const drawnLines = new Map<string, HTMLElement>();
+let listColors = new Map<string, string>();
+/** Lines drawn beyond the visible part, each way, so a short scroll never shows a gap. */
+const OVERSCAN_PX = 600;
+/** One bracket's width: its 3px line and the space after it. */
+const RAIL_STEP_PX = 11;
+
 function buildPrimitiveList(state: EditorState): void {
   primitiveListEl.innerHTML = "";
+  drawnLines.clear();
+  rowRefs.clear();
+  groupNameInputs.clear();
+  lines = [];
   if (!state.elements.length) {
+    primitiveListEl.style.height = "";
     const li = document.createElement("li");
     li.className = "primitive-empty muted";
     li.textContent = "No primitives yet";
     primitiveListEl.appendChild(li);
     return;
   }
-  const colors = groupColors(state);
-  appendBlocks(primitiveListEl, state, { start: 0, end: state.elements.length }, 0, colors);
+  listColors = groupColors(state);
+  lines = flattenLines(state.elements, collapsedGroups);
+  renderLines(state);
 }
 
-/** One level of the tree: each block is either a nested group or a single row. */
-function appendBlocks(
-  parent: HTMLElement,
-  state: EditorState,
-  range: Block,
-  depth: number,
-  colors: Map<string, string>
-): void {
-  // Back to front: the shape drawn last, on top of the others, heads the list.
-  for (const block of childBlocks(state.elements, range, depth).reverse()) {
-    const gid = groupsOf(state.elements[block.start])[depth];
-    if (gid == null) {
-      parent.appendChild(primitiveRow(state, block.start));
-      continue;
+/** The part of the list the panel shows, in the list's own coordinates. */
+function listViewport(): { top: number; bottom: number } {
+  const scroller = primitiveListEl.closest<HTMLElement>("#menu-document");
+  const list = primitiveListEl.getBoundingClientRect();
+  const view = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+  return { top: view.top - list.top, bottom: view.bottom - list.top };
+}
+
+/**
+ * Draws the lines in view and drops the rest. Heights are measured as lines are drawn, and a
+ * line that turns out taller or shorter than guessed moves everything below it, so the layout
+ * is redone until it holds - in practice once, when an expanded row first comes into view.
+ */
+function renderLines(state: EditorState): void {
+  if (!lines.length) return;
+  for (let pass = 0; pass < 3; pass++) {
+    const offsets = lineOffsets(lines.map((l) => lineHeights.get(l.key) ?? typicalHeight));
+    primitiveListEl.style.height = `${offsets[offsets.length - 1]}px`;
+    const view = listViewport();
+    const { start, end } = visibleRange(offsets, view.top, view.bottom, OVERSCAN_PX);
+    const wanted = new Set<string>();
+    for (let i = start; i < end; i++) wanted.add(lines[i]!.key);
+    // The row being typed in stays, wherever it has scrolled to: dropping it would drop focus.
+    const focused = document.activeElement?.closest<HTMLElement>(".list-line")?.dataset.key;
+    if (focused && lines.some((l) => l.key === focused)) wanted.add(focused);
+
+    for (const [key, node] of drawnLines) {
+      if (wanted.has(key)) continue;
+      node.remove();
+      drawnLines.delete(key);
+      forgetRefs(node);
     }
-    const run = document.createElement("li");
-    run.className = "group-run";
-    run.dataset.groupId = gid;
-    run.style.setProperty("--gc", colors.get(gid) ?? "var(--accent)");
-    run.classList.toggle("collapsed", collapsedGroups.has(gid));
-    run.appendChild(groupHead(state, gid));
-    const inner = document.createElement("ul");
-    inner.className = "group-items";
-    run.appendChild(inner);
-    appendBlocks(inner, state, block, depth + 1, colors);
-    parent.appendChild(run);
+    lines.forEach((line, i) => {
+      if (!wanted.has(line.key)) return;
+      let node = drawnLines.get(line.key);
+      if (!node) {
+        node = drawLine(state, line);
+        drawnLines.set(line.key, node);
+        primitiveListEl.appendChild(node);
+      }
+      const top = `${offsets[i]}px`;
+      if (node.style.top !== top) node.style.top = top;
+    });
+
+    let changed = false;
+    for (const [key, node] of drawnLines) {
+      const h = node.offsetHeight;
+      if (!h || lineHeights.get(key) === h) continue;
+      lineHeights.set(key, h);
+      if (!node.querySelector(".acc-item.expanded")) typicalHeight = h;
+      changed = true;
+    }
+    if (!changed) return;
   }
 }
+
+/** One line: its stretch of each bracket it sits in, then its row, indented past them. */
+function drawLine(state: EditorState, line: ListLine): HTMLElement {
+  const li = document.createElement("li");
+  li.className = "list-line";
+  li.dataset.key = line.key;
+  li.style.paddingLeft = `${line.rails.length * RAIL_STEP_PX}px`;
+  line.rails.forEach((rail, depth) => {
+    const span = document.createElement("span");
+    span.className = `list-rail${rail.first ? " first" : ""}${rail.last ? " last" : ""}`;
+    span.style.left = `${depth * RAIL_STEP_PX}px`;
+    span.style.setProperty("--gc", listColors.get(rail.gid) ?? "var(--accent)");
+    li.appendChild(span);
+  });
+  if (line.kind === "group") {
+    li.style.setProperty("--gc", listColors.get(line.gid) ?? "var(--accent)");
+    li.appendChild(groupHead(state, line.gid));
+  } else {
+    li.appendChild(primitiveRow(state, line.index));
+  }
+  return li;
+}
+
+/** Drops the update's references into a line that has left the DOM. */
+function forgetRefs(node: HTMLElement): void {
+  const id = node.querySelector<HTMLElement>("[data-element-id]")?.dataset.elementId;
+  if (id) rowRefs.delete(id);
+  const gid = node.querySelector<HTMLElement>("[data-group-id]")?.dataset.groupId;
+  if (gid) groupNameInputs.delete(gid);
+}
+
+let renderQueued = false;
+/** Scrolling or resizing the panel brings other lines into view: drawn on the next frame. */
+function queueRenderLines(): void {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    renderLines(getState());
+  });
+}
+primitiveListEl.closest("#menu-document")?.addEventListener("scroll", queueRenderLines, {
+  passive: true,
+});
+// Opening the panel or the section, or changing its width, changes what is in view.
+// So does folding a section above the list, which moves it without scrolling anything.
+{
+  const observer = new ResizeObserver(queueRenderLines);
+  const panel = primitiveListEl.closest("#menu-document");
+  if (panel) {
+    observer.observe(panel);
+    panel.querySelectorAll(".doc-section").forEach((section) => observer.observe(section));
+  }
+}
+
+/**
+ * Each row, with the parts of it the in-place update writes to, by element id, filled in as
+ * rows are drawn. That update runs on every change, every frame of a drag included.
+ */
+interface RowRefs {
+  li: HTMLElement;
+  name: HTMLInputElement | null;
+  swatch: HTMLElement | null;
+  style: string;
+}
+const rowRefs = new Map<string, RowRefs>();
+/** The name field of each drawn group head, by group id. */
+const groupNameInputs = new Map<string, HTMLInputElement>();
 
 /**
  * Groups folded shut in the list. Where you are looking, not part of the drawing: not saved,
@@ -287,7 +393,8 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
   const allSelected = members.every((e) => selected.has(e.id));
   const allHidden = members.every((e) => e.hidden);
   const head = document.createElement("div");
-  head.className = "acc-item group-head";
+  head.className = `acc-item group-head${collapsedGroups.has(gid) ? "" : " open"}`;
+  head.dataset.groupId = gid;
   head.innerHTML = accHeaderHtml({
     dot: { on: allSelected, title: allSelected ? "Deselect the group" : "Select the group" },
     eye: { visible: !allHidden, title: allHidden ? "Show the group" : "Hide the group" },
@@ -310,6 +417,7 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
     onMove: (dir, toEnd) => moveGroupBy(gid, towardFront(dir), toEnd),
   });
   const input = head.querySelector<HTMLInputElement>("[data-group-name]")!;
+  groupNameInputs.set(gid, input);
   input.addEventListener("input", () => renameGroup(gid, input.value));
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") input.blur();
@@ -320,7 +428,7 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
 function primitiveRow(state: EditorState, index: number): HTMLElement {
   const el = state.elements[index]!;
   const isSelected = state.selection.elementIds.includes(el.id);
-  const li = document.createElement("li");
+  const li = document.createElement("div");
   li.className = `acc-item${state.ui.expandedElementId === el.id ? " expanded" : ""}`;
   li.dataset.elementId = el.id;
   li.innerHTML = `
@@ -340,10 +448,10 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
   li.dataset.filltype = el.fillType || "solid";
   li.classList.toggle("acc-item--hidden", !!el.hidden);
   li.classList.toggle("acc-item--invisible", isInvisible(el));
-  if (isInvisible(el)) {
-    const sw = li.querySelector<HTMLElement>(".acc-swatch");
-    if (sw) sw.title = "Invisible: no stroke and no fill";
-  }
+  const swatch = li.querySelector<HTMLElement>(".acc-swatch");
+  if (swatch && isInvisible(el)) swatch.title = "Invisible: no stroke and no fill";
+  const name = li.querySelector<HTMLInputElement>('[data-field="name"]');
+  rowRefs.set(el.id, { li, name, swatch, style: headerSwatchStyle(el) });
   wireAccRow(li, {
     onExpand: () => toggleElementExpanded(el.id),
     onDot: () => toggleElementSelected(el.id),
@@ -355,19 +463,25 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
 }
 
 function updatePrimitiveListValues(state: EditorState): void {
-  primitiveListEl.querySelectorAll<HTMLElement>(".group-run").forEach((run) => {
-    const input = run.querySelector<HTMLInputElement>(":scope > .group-head [data-group-name]");
-    const gid = run.dataset.groupId;
-    if (input && gid && input !== document.activeElement) input.value = state.groupNames[gid] ?? "";
-  });
+  for (const [gid, input] of groupNameInputs) {
+    const value = state.groupNames[gid] ?? "";
+    if (input !== document.activeElement && input.value !== value) input.value = value;
+  }
   for (const el of state.elements) {
-    const li = primitiveListEl.querySelector<HTMLElement>(`[data-element-id="${el.id}"]`);
-    if (!li) continue;
-    setField(li, "name", el.name || "");
-    const swatch = li.querySelector<HTMLElement>(".acc-swatch");
-    if (swatch) swatch.style.cssText = headerSwatchStyle(el);
+    const row = rowRefs.get(el.id);
+    if (!row) continue;
+    const { li, name } = row;
+    const label = el.name || "";
+    if (name && name !== document.activeElement && name.value !== label) name.value = label;
+    // Only what changed is written: an unchanged write still restyles the row.
+    const style = headerSwatchStyle(el);
+    if (row.swatch && style !== row.style) {
+      row.swatch.style.cssText = style;
+      row.style = style;
+    }
     li.classList.toggle("acc-item--invisible", isInvisible(el));
-    li.dataset.filltype = el.fillType || "solid";
+    const fillType = el.fillType || "solid";
+    if (li.dataset.filltype !== fillType) li.dataset.filltype = fillType;
     if (!li.classList.contains("expanded")) continue;
     const setSwatch = (kind: string, color: string, alpha: number) => {
       const btn = li.querySelector<HTMLElement>(`[data-picker="${kind}"]`);
@@ -415,6 +529,10 @@ function updatePrimitiveListValues(state: EditorState): void {
       fillCheckbox.checked = !!el.fillEnabled;
     }
   }
+  // An open row grows and shrinks with what it shows - a gradient's stops, say - and the lines
+  // below it have to move with it.
+  const open = state.ui.expandedElementId;
+  if (open && rowRefs.has(open)) renderLines(state);
 }
 
 export const primitiveList = cachedList(

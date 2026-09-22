@@ -1,6 +1,6 @@
 import { getState, setState, subscribe, selectOnly } from "./state.js";
 import { initViewport } from "./viewport.js";
-import { initRender, renderAll } from "./render.js";
+import { initRender, renderAll, renderPointer } from "./render.js";
 import { bindInteraction, cancelOperation } from "./interaction.js";
 import { setTool, finishPath, closeAndFinishPath, removeLastPenPoint } from "./pen-commands.js";
 import {
@@ -9,6 +9,7 @@ import {
   nudgeSelection,
   moveZOrder,
   groupSelection,
+  mergeSelection,
   ungroupSelection,
   splitAtSelectedPoint,
   joinSelected,
@@ -31,7 +32,7 @@ import {
 } from "./textedit.js";
 import { initPointerKind } from "./pointer.js";
 import { writeSessionView } from "./session.js";
-import { groupsOf, outerGroup } from "./groups.js";
+import { canMergeGroups, groupsOf, outerGroup } from "./groups.js";
 import { type EditorState } from "./types.js";
 import { restoreLayout } from "./layout.js";
 import { zoomBtn, zoomMenu, fitToView } from "./zoom.js";
@@ -54,6 +55,7 @@ initRender({
   grid: byId<HTMLElement>("layer-grid") as unknown as SVGGElement,
   document: byId<HTMLElement>("layer-document") as unknown as SVGGElement,
   overlay: byId<HTMLElement>("layer-overlay") as unknown as SVGGElement,
+  pointer: byId<HTMLElement>("layer-pointer") as unknown as SVGGElement,
 });
 
 initTextEdit(wrap, () => primitiveList.invalidate());
@@ -67,6 +69,7 @@ initActionBar(byId("action-bar"), {
     primitiveList.invalidate();
   },
   group: () => groupSelection(),
+  merge: () => mergeSelection(),
   ungroup: () => ungroupSelection(),
   splitPoint: () => splitAtSelectedPoint(),
   join: () => joinSelected(),
@@ -92,7 +95,13 @@ window.addEventListener("resize", () => renderRulers(getState()));
 
 let lastSavedViewport: EditorState["viewport"] | null = null;
 
-subscribe((state) => {
+subscribe((state, { pointerOnly }) => {
+  if (pointerOnly) {
+    renderPointer(state);
+    renderRulers(state);
+    syncCursorReadout(state);
+    return;
+  }
   renderAll(state);
   // Where you are looking belongs to the tab, not to the drawing: kept so a refresh returns it.
   if (state.viewport !== lastSavedViewport) {
@@ -110,6 +119,15 @@ function setToggle(id: string, on: boolean): void {
   const btn = byId(id);
   btn.classList.toggle("active", on);
   btn.setAttribute("aria-pressed", String(on));
+}
+
+function syncCursorReadout(state: EditorState): void {
+  const c = state.cursor;
+  const x = c.snapActive ? c.snapX : c.x;
+  const y = c.snapActive ? c.snapY : c.y;
+  const text = `${Math.round(x)}, ${Math.round(y)}`;
+  const readout = byId("cursor-pos");
+  if (readout.textContent !== text) readout.textContent = text;
 }
 
 function syncPanel(state: EditorState): void {
@@ -130,10 +148,7 @@ function syncPanel(state: EditorState): void {
     btn.parentElement?.setAttribute("aria-selected", String(on));
   });
 
-  const c = state.cursor;
-  const x = c.snapActive ? c.snapX : c.x;
-  const y = c.snapActive ? c.snapY : c.y;
-  byId("cursor-pos").textContent = `${Math.round(x)}, ${Math.round(y)}`;
+  syncCursorReadout(state);
 
   document.querySelectorAll<HTMLElement>(".tool-btn[data-tool]").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tool === state.tool);
@@ -150,13 +165,14 @@ function syncPanel(state: EditorState): void {
   syncGroupButtons(state);
 }
 
-/** Group / Ungroup / Join are only enabled when they would actually do something. */
+/** Group / Merge / Ungroup / Join are only enabled when they would actually do something. */
 function syncGroupButtons(state: EditorState): void {
   const ids = new Set(state.selection.elementIds);
   const sel = state.elements.filter((e) => ids.has(e.id));
   const groups = new Set(sel.map((e) => outerGroup(e) ?? ""));
   const allInOneGroup = groups.size === 1 && !groups.has("");
   byId<HTMLButtonElement>("btn-group").disabled = sel.length < 2 || allInOneGroup;
+  byId<HTMLButtonElement>("btn-merge").disabled = !canMergeGroups(state.elements, ids);
   byId<HTMLButtonElement>("btn-ungroup").disabled = !sel.some((e) => groupsOf(e).length);
   byId<HTMLButtonElement>("btn-join").disabled = !(sel.length === 2 && sel.every(canJoin));
 }
@@ -297,7 +313,11 @@ window.addEventListener("keydown", (e) => {
         tool: "select",
       }));
     }
-    if (key === "g") {
+    // By code, not key: Option+G on a Mac types a character rather than "g".
+    if (e.altKey && e.code === "KeyG") {
+      e.preventDefault();
+      mergeSelection();
+    } else if (key === "g") {
       e.preventDefault();
       if (e.shiftKey) ungroupSelection();
       else groupSelection();

@@ -21,7 +21,7 @@ import {
   localBBox,
   toWorldPoint,
 } from "./model.js";
-import { canMoveSelectionZ, groupsOf, outerGroup } from "./groups.js";
+import { canMergeGroups, canMoveSelectionZ, groupsOf, outerGroup } from "./groups.js";
 import { worldToScreen } from "./viewport.js";
 import { HANDLE_EXTENT, outerHandlePoints } from "./render.js";
 import type { EditorState, SceneElement } from "./types.js";
@@ -33,6 +33,7 @@ export interface ActionBarHandlers {
   back: () => void;
   toggleClosed: (id: string, closed: boolean) => void;
   group: () => void;
+  merge: () => void;
   ungroup: () => void;
   splitPoint: () => void;
   join: () => void;
@@ -166,6 +167,14 @@ function selectionActions(state: EditorState): Action[] {
   const groups = new Set(sel.map((e) => outerGroup(e) ?? ""));
   if (sel.length > 1 && !(groups.size === 1 && !groups.has(""))) {
     out.push({ key: "group", label: "Group", icon: "icon-group", run: handlers.group });
+  }
+  if (canMergeGroups(state.elements, new Set(state.selection.elementIds))) {
+    out.push({
+      key: "merge",
+      label: "Merge into one group",
+      icon: "icon-merge",
+      run: handlers.merge,
+    });
   }
   if (sel.some((e) => groupsOf(e).length)) {
     out.push({ key: "ungroup", label: "Ungroup", icon: "icon-ungroup", run: handlers.ungroup });

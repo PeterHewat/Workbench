@@ -10,7 +10,7 @@
  * to the element on every keystroke.
  */
 
-import { findElement, getState, mutate, setState } from "./state.js";
+import { findElement, flushRender, getState, mutate, setState } from "./state.js";
 import { elementBBox } from "./model.js";
 import { worldToScreen } from "./viewport.js";
 import { pushUndo } from "./undo.js";
@@ -121,6 +121,7 @@ export function beginTextEdit(id: string): void {
   node.value = el.text;
   node.classList.add("visible");
   setState((s) => ({ ...s, ui: { ...s.ui, editingTextId: id } }));
+  flushRender();
   positionTextEditor();
   // After the state render, so the field is not taken over by the re-render that follows it.
   setTimeout(() => {

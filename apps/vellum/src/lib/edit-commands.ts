@@ -1,6 +1,11 @@
 import { getState } from "./state.js";
 import { setTool } from "./pen-commands.js";
-import { groupSelection, ungroupSelection, joinSelected } from "./selection-commands.js";
+import {
+  groupSelection,
+  mergeSelection,
+  ungroupSelection,
+  joinSelected,
+} from "./selection-commands.js";
 import { copySelectionText, cutSelection, pasteFromText } from "./clipboard.js";
 import { undo, redo } from "./undo.js";
 import { beginTextEdit, endTextEdit, isTextEditing } from "./textedit.js";
@@ -59,6 +64,7 @@ byId("btn-redo").addEventListener("click", doRedo);
 
 byId("btn-join").addEventListener("click", () => joinSelected());
 byId("btn-group").addEventListener("click", () => groupSelection());
+byId("btn-merge").addEventListener("click", () => mergeSelection());
 byId("btn-ungroup").addEventListener("click", () => ungroupSelection());
 
 // A new (or double-clicked) text element is edited where it sits, not in the panel.
