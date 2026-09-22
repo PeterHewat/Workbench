@@ -11,15 +11,14 @@ import {
   type DocumentMeta,
 } from "./storage.js";
 import { serializeProject, loadProject } from "./io.js";
-import { deepClone, downloadText, escapeAttr, uid } from "./utils.js";
-import { registerServiceWorker } from "@workbench/ui";
+import { deepClone, escapeAttr, uid } from "./utils.js";
+import { byId, downloadText, registerServiceWorker } from "@workbench/ui";
 import { type ProjectFile } from "./types.js";
 import { savedView } from "./session.js";
 import { setSectionOpen } from "./layout.js";
 import { fitToView } from "./zoom.js";
 import { invalidateLists, rowDotHtml } from "./accordion.js";
 import { hydrateImageDimensions } from "./images-panel.js";
-import { byId } from "./dom.js";
 
 /** The document on the canvas. Read by the rest of the app; only this module replaces it. */
 export let currentDoc: { id: string | null; name: string } = { id: null, name: "" };

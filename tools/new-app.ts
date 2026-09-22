@@ -87,17 +87,24 @@ export default defineConfig(workbenchApp("${slug}"));
     <meta name="color-scheme" content="dark" />
   </head>
   <body>
-    <div id="app"></div>
+    <header class="wb-header">
+      <a class="wb-home" href="../">← Workbench</a>
+      <h1>${title}</h1>
+    </header>
+    <main class="wb-main" id="app"></main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
 `,
-  "src/main.ts": `import { registerServiceWorker } from "@workbench/ui";
+  "src/main.ts": `import { byId, registerServiceWorker } from "@workbench/ui";
+import "@workbench/ui/base.css";
+import "./styles.css";
 
-const root = document.getElementById("app");
-if (root) root.textContent = "${title}";
+byId("app").textContent = "Nothing here yet.";
 
 registerServiceWorker();
+`,
+  "src/styles.css": `/* ${title}'s own layout. Tokens and controls come from @workbench/ui/base.css. */
 `,
   "public/icon.svg": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#5b8def" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/></svg>
 `,

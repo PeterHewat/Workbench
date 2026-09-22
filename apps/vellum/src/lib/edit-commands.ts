@@ -6,7 +6,7 @@ import { undo, redo } from "./undo.js";
 import { beginTextEdit, endTextEdit, isTextEditing } from "./textedit.js";
 import { type EditorState } from "./types.js";
 import { invalidateLists } from "./accordion.js";
-import { byId } from "./dom.js";
+import { byId } from "@workbench/ui";
 
 const svg = byId<HTMLElement>("viewport-svg");
 

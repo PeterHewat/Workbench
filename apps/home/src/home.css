@@ -1,27 +1,6 @@
-:root {
-  --bg: #17181c;
-  --panel: #1f2126;
-  --border: #33363d;
-  --text: #e6e8ec;
-  --muted: #9aa0ab;
-  --accent: #5b8def;
-  color-scheme: dark;
-}
-
-* {
-  box-sizing: border-box;
-}
-
 body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font:
-    16px/1.55 system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
+  font-size: 16px;
+  line-height: 1.55;
 }
 
 #app {
@@ -84,7 +63,7 @@ body {
   width: 44px;
   height: 44px;
   border-radius: 10px;
-  background: #262931;
+  background: var(--panel-2);
 }
 
 .card-body {
@@ -153,10 +132,6 @@ footer {
   border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: 0.88rem;
-}
-
-footer a {
-  color: var(--accent);
 }
 
 @media (max-width: 520px) {

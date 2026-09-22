@@ -1,6 +1,6 @@
 import { getState, setState } from "./state.js";
 import { fitArtboardInView, zoomAt } from "./viewport.js";
-import { byId, bySelector } from "./dom.js";
+import { byId, bySelector } from "@workbench/ui";
 
 /**
  * Zoom is one control: it says what the zoom is, and opens a list to set it.

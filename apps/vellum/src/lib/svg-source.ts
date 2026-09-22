@@ -11,7 +11,7 @@ import {
 import { escapeXml } from "./utils.js";
 import { groupsOf } from "./groups.js";
 import { type EditorState, type SceneElement } from "./types.js";
-import { byId } from "./dom.js";
+import { byId } from "@workbench/ui";
 import { noteChange } from "./documents.js";
 
 /* ---------- SVG source: editable, highlighted, synced with the selection ---------- */

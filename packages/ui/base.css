@@ -1,0 +1,198 @@
+/*
+ * The look every Workbench page shares: colour tokens, a reset, and the handful of controls a
+ * small tool needs. An app imports it once (`import "@workbench/ui/base.css"`) and adds its own
+ * layout on top. Classes are prefixed `wb-` so they never collide with an app's own.
+ *
+ * `--bg` must match SITE.themeColor in packages/catalog/src/site.ts.
+ */
+
+:root {
+  --bg: #17181c;
+  --panel: #1f2126;
+  --panel-2: #262931;
+  --border: #33363d;
+  --text: #e6e8ec;
+  --muted: #9aa0ab;
+  --accent: #5b8def;
+  --accent-dim: #3d5a9e;
+  --danger: #e85d5d;
+  --ok: #5fbf7f;
+  --warn: #e0b050;
+  --radius: 8px;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    15px/1.5 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* ---------- Page header: back to the index, then the app's name ---------- */
+
+.wb-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.wb-header h1 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.wb-home {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.wb-home:hover,
+.wb-home:focus-visible {
+  color: var(--text);
+}
+
+.wb-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* ---------- Controls ---------- */
+
+.wb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.wb-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.wb-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.wb-btn--primary {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.wb-btn.copied {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.wb-input,
+.wb-select,
+.wb-code {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.wb-input:focus,
+.wb-select:focus,
+.wb-code:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.wb-code {
+  display: block;
+  width: 100%;
+  min-height: 12rem;
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  tab-size: 2;
+  white-space: pre;
+}
+
+pre.wb-code {
+  margin: 0;
+  overflow: auto;
+}
+
+.wb-code.dragging {
+  border-style: dashed;
+  border-color: var(--accent);
+}
+
+/* ---------- Layout pieces ---------- */
+
+.wb-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 12px;
+}
+
+.wb-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.wb-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.wb-status {
+  margin: 8px 0 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.wb-status--error {
+  color: var(--danger);
+}
+
+.wb-status--ok {
+  color: var(--ok);
+}
+
+.wb-mono {
+  font-family: var(--mono);
+}
+
+.hidden {
+  display: none !important;
+}

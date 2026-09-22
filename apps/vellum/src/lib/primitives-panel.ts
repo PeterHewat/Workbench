@@ -18,7 +18,7 @@ import { scaleAbout, transformElement } from "./transform.js";
 import { type EditorState, type SceneElement } from "./types.js";
 import { holdSvgFocus, setSvgFocus } from "./svg-source.js";
 import { cachedList, accHeaderHtml, wireAccRow, setField, reorder } from "./accordion.js";
-import { byId } from "./dom.js";
+import { byId } from "@workbench/ui";
 
 const primitiveListEl = byId("primitive-list");
 

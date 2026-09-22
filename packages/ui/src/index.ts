@@ -1,5 +1,7 @@
 /** Browser helpers shared by every Workbench app. */
 
+export * from "./dom.js";
+
 /**
  * Registers the app's service worker so it keeps working offline.
  *

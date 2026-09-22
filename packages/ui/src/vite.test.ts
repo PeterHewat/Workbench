@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { findApp } from "@workbench/catalog";
+import { SITE } from "@workbench/catalog/site";
 import { headTags, manifestFor, workbenchApp } from "./vite.js";
 
 const vellum = findApp("vellum")!;
@@ -38,5 +39,12 @@ describe("manifest", () => {
     expect(m.name).toBe("Vellum");
     expect(m.start_url).toBe(".");
     expect(m.scope).toBe(".");
+  });
+});
+
+describe("base.css", () => {
+  test("the page background is the theme colour the head and manifest announce", async () => {
+    const css = await Bun.file(new URL("../base.css", import.meta.url)).text();
+    expect(css).toContain(`--bg: ${SITE.themeColor};`);
   });
 });

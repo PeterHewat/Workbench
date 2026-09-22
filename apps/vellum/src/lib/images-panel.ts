@@ -5,7 +5,7 @@ import { escapeAttr, escapeXml } from "./utils.js";
 import { type EditorState, type ReferenceImage } from "./types.js";
 import { setSectionOpen } from "./layout.js";
 import { cachedList, accHeaderHtml, wireAccRow, setField, reorder } from "./accordion.js";
-import { byId } from "./dom.js";
+import { byId } from "@workbench/ui";
 
 const imageListEl = byId("image-list");
 

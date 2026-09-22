@@ -17,7 +17,7 @@ import {
 import { pushUndo, canUndo, canRedo } from "./undo.js";
 import { formatExportSvg, importSvgFile } from "./io.js";
 import { canJoin } from "./model.js";
-import { downloadText } from "./utils.js";
+import { byId, copyText, downloadText } from "@workbench/ui";
 import { bindTouch, setTouchFinishPathHandler } from "./touch.js";
 import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
 import { initRulers, renderRulers } from "./rulers.js";
@@ -39,7 +39,6 @@ import { doUndo, doRedo } from "./edit-commands.js";
 import { imageList } from "./images-panel.js";
 import { primitiveList } from "./primitives-panel.js";
 import { syncSvgEditor } from "./svg-source.js";
-import { byId } from "./dom.js";
 import { currentDoc, saveNow, startDocuments } from "./documents.js";
 
 const svg = byId<HTMLElement>("viewport-svg") as unknown as SVGSVGElement;
@@ -218,15 +217,9 @@ byId("btn-save-svg").addEventListener("click", () => {
 byId("btn-copy-svg").addEventListener("click", async (e) => {
   e.stopPropagation();
   const text = formatExportSvg(getState(), true);
-  const btn = byId("btn-copy-svg");
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
+  if (!(await copyText(text, byId("btn-copy-svg")))) {
     downloadText("document.svg", text, "image/svg+xml");
-    return;
   }
-  btn.classList.add("copied");
-  setTimeout(() => btn.classList.remove("copied"), 1000);
 });
 byId("btn-import-svg").addEventListener("click", () => {
   byId<HTMLInputElement>("input-import-svg").click();
