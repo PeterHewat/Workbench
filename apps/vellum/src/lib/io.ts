@@ -265,10 +265,21 @@ export function serializeProject(state: EditorState): ProjectFile {
     images: state.images,
     elements: state.elements,
     ...namesInUse(state.elements, state.groupNames),
+    ...huesInUse(state.elements, state.groupHues),
     viewport: state.viewport,
     tool: state.tool,
     finalOnly: state.finalOnly,
   };
+}
+
+/** The colours of groups that still exist, as the project file's optional `groupHues`. */
+function huesInUse(
+  elements: readonly SceneElement[],
+  hues: Readonly<Record<string, number>>
+): { groupHues?: Record<string, number> } {
+  const used = new Set(elements.flatMap((e) => groupsOf(e)));
+  const kept = Object.entries(hues).filter(([gid]) => used.has(gid));
+  return kept.length ? { groupHues: Object.fromEntries(kept) } : {};
 }
 
 /** The names of groups that still exist, as the project file's optional `groupNames`. */
@@ -298,6 +309,7 @@ export function loadProject(json: ProjectFile): void {
     images: (json.images || []).map((img) => ({ ...img, visible: img.visible !== false })),
     elements: json.elements || [],
     groupNames: json.groupNames ?? {},
+    groupHues: json.groupHues ?? {},
     viewport: json.viewport || base.viewport,
     tool: json.tool || "select",
     finalOnly: json.finalOnly || false,

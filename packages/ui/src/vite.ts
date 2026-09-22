@@ -65,7 +65,7 @@ export function manifestFor(app: WorkbenchApp): Record<string, unknown> {
 export function headTags(app: WorkbenchApp | null): HtmlTagDescriptor[] {
   const title = app
     ? `${app.name} — ${SITE.name}`
-    : `${SITE.name} — ${SITE.tagline.replace(/.$/, "")}`;
+    : `${SITE.name} — ${SITE.tagline.replace(/\.$/, "")}`;
   const description = app ? (app.description ?? app.blurb) : SITE.description;
   const tags: HtmlTagDescriptor[] = [
     { tag: "title", children: title },

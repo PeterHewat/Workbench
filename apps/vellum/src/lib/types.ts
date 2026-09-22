@@ -258,6 +258,11 @@ export interface EditorState {
    * groups.ts), so its name lives here; exported as `<g id="<group id>_<name>">`.
    */
   groupNames: Record<string, string>;
+  /**
+   * Each group's colour in the Primitives list, by group id, given once when the group appears
+   * so it does not change as groups move. Editor-only: never exported to the SVG.
+   */
+  groupHues: Record<string, number>;
   images: ReferenceImage[];
   viewport: Viewport;
   tool: ToolName;
@@ -297,6 +302,8 @@ export interface ProjectFile {
   elements: SceneElement[];
   /** Absent when no group has a name. */
   groupNames?: Record<string, string>;
+  /** Absent when there are no groups. */
+  groupHues?: Record<string, number>;
   viewport: Viewport;
   tool: ToolName;
   finalOnly: boolean;

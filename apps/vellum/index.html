@@ -94,7 +94,7 @@
           <circle cx="19" cy="19" r="2.3" fill="currentColor" />
         </symbol>
         <!-- The dot in a row says what kind of choice it is: a radio where only one can be
-             chosen (documents), a checkbox where any number can (primitives, reference images). -->
+             chosen (documents), a checkbox where any number can (primitives and groups). -->
         <symbol id="icon-radio-on" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2" />
           <circle cx="12" cy="12" r="4" fill="currentColor" />
@@ -787,10 +787,9 @@
               row in Primitives. Typing one is the way to be exact that a fingertip cannot manage.
             </li>
             <li>
-              <b>Order</b> — the ▲ ▼ arrows on a Primitives row move a shape among its siblings.
-              When it is already at the edge of its group the move widens to the group itself, so a
-              group is reordered by pressing the arrow on the row at its edge; the arrow is dimmed
-              only when there is genuinely nowhere left to go.
+              <b>Order</b> — the ▲ ▼ arrows on a Primitives row move a shape among its siblings, and
+              never out of its group: at the edge of the group the arrow is dimmed. To move the
+              whole group, use the arrows on the group's own row.
             </li>
             <li data-help="mouse">
               <b>Align</b> — hold <kbd>Alt</kbd> while drawing or dragging to snap to points that
@@ -898,9 +897,9 @@
             </li>
             <li>
               In the Primitives list a group is one coloured line down the left of the rows it
-              holds, each group in a colour of its own, and a group inside a group is a line inside
-              a line. Members stay together: the ▲ ▼ arrows reorder a shape among its siblings, and
-              when it is already at the edge the move widens to the group itself.
+              holds, and a group inside a group is a line inside a line. Each group gets a colour of
+              its own when it is made and keeps it wherever it moves. Members stay together: the ▲ ▼
+              arrows reorder a shape among its siblings and stop at the edge of its group.
             </li>
             <li>
               <b>The group's row</b> — a group has a row of its own at the top of its bracket, with

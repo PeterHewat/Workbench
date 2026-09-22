@@ -1,6 +1,6 @@
 import { AUTO_NAME_RE, deepClone } from "./utils.js";
 import { isCoarsePointer } from "./pointer.js";
-import { pruneGroupsInPlace } from "./groups.js";
+import { assignGroupHuesInPlace, pruneGroupsInPlace } from "./groups.js";
 import type { EditorState, PathEdit, SceneElement, Selection } from "./types.js";
 
 export interface NotifyOptions {
@@ -25,6 +25,7 @@ export function createInitialState(): EditorState {
     grid: { step: 16, visible: true, snap: isCoarsePointer() },
     elements: [],
     groupNames: {},
+    groupHues: {},
     images: [],
     viewport: { panX: 40, panY: 40, zoom: 1 },
     tool: "select",
@@ -56,6 +57,7 @@ export function subscribe(fn: Listener): () => void {
 function notify(options: NotifyOptions): void {
   ensureDefaultNames(state.elements);
   pruneGroupsInPlace(state.elements);
+  assignGroupHuesInPlace(state.elements, state.groupHues);
   for (const fn of listeners) fn(state, options);
 }
 

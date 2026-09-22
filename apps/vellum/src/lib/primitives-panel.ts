@@ -41,20 +41,10 @@ function primitiveListKeyOf(state: EditorState): string {
   return `${els}|${state.selection.elementIds.join(",")}|${state.ui.expandedElementId}`;
 }
 
-/**
- * One colour per group, by the order groups appear in the list. Each step turns the hue by the
- * golden angle, so neighbouring groups - and a group and the one inside it - are always far
- * apart, and no colour comes back until there are more groups than can be told apart anyway.
- */
-function groupColors(elements: readonly SceneElement[]): Map<string, string> {
+/** Each group's colour, from the hue it was given when it appeared (see `groupHues`). */
+function groupColors(state: EditorState): Map<string, string> {
   const out = new Map<string, string>();
-  for (const el of elements) {
-    for (const gid of groupsOf(el)) {
-      if (out.has(gid)) continue;
-      const hue = Math.round((210 + out.size * 137.508) % 360);
-      out.set(gid, `hsl(${hue} 65% 62%)`);
-    }
-  }
+  for (const [gid, hue] of Object.entries(state.groupHues)) out.set(gid, `hsl(${hue} 65% 62%)`);
   return out;
 }
 
@@ -238,7 +228,7 @@ function buildPrimitiveList(state: EditorState): void {
     primitiveListEl.appendChild(li);
     return;
   }
-  const colors = groupColors(state.elements);
+  const colors = groupColors(state);
   appendBlocks(primitiveListEl, state, { start: 0, end: state.elements.length }, 0, colors);
 }
 

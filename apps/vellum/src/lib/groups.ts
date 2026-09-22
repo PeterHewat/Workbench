@@ -120,29 +120,59 @@ export function moveSelectionZ(
   return flatten(elements, reorderBlocks(blocks, picked, direction));
 }
 
-/** The widening blocks around an element: itself, then the group holding it, and so on out. */
-function blockLadder(
+/**
+ * The level a block moves within: the siblings of the block that holds `index` at `depth` -
+ * the element itself when `depth` is its whole chain, or one of its groups when it is less.
+ */
+function siblingsAt(
   elements: readonly SceneElement[],
-  index: number
-): { depth: number; range: Block; blocks: Block[]; at: number }[] {
-  const out: { depth: number; range: Block; blocks: Block[]; at: number }[] = [];
-  for (let depth = groupsOf(elements[index]).length; depth >= 0; depth--) {
-    const range = groupRange(elements, index, depth);
-    const blocks = childBlocks(elements, range, depth);
-    const at = blocks.findIndex((b) => index >= b.start && index < b.end);
-    if (at >= 0) out.push({ depth, range, blocks, at });
-  }
-  return out;
+  index: number,
+  depth: number
+): { range: Block; blocks: Block[]; at: number } {
+  const range = groupRange(elements, index, depth);
+  const blocks = childBlocks(elements, range, depth);
+  return { range, blocks, at: blocks.findIndex((b) => index >= b.start && index < b.end) };
+}
+
+function hasRoom(blocks: readonly Block[], at: number, dir: -1 | 1): boolean {
+  return at >= 0 && (dir < 0 ? at > 0 : at < blocks.length - 1);
+}
+
+function moveFrom(
+  elements: readonly SceneElement[],
+  index: number,
+  depth: number,
+  dir: -1 | 1,
+  toEnd: boolean
+): SceneElement[] {
+  const { range, blocks, at } = siblingsAt(elements, index, depth);
+  if (!hasRoom(blocks, at, dir)) return [...elements];
+  const direction: ZDirection = toEnd
+    ? dir < 0
+      ? "backmost"
+      : "front"
+    : dir < 0
+      ? "back"
+      : "forward";
+  const picked = blocks.map((_, i) => i === at);
+  const moved = flatten(elements, reorderBlocks(blocks, picked, direction));
+  return [...elements.slice(0, range.start), ...moved, ...elements.slice(range.end)];
+}
+
+function canMoveFrom(
+  elements: readonly SceneElement[],
+  index: number,
+  depth: number,
+  dir: -1 | 1
+): boolean {
+  const { blocks, at } = siblingsAt(elements, index, depth);
+  return hasRoom(blocks, at, dir);
 }
 
 /**
  * Moves one element among its siblings - the other members of the group that directly contains
- * it, with a nested group counting as one sibling. An element never leaves its group this way.
- *
- * When it is already at the edge of its group there is nowhere left to go at that level, so the
- * move widens: the group itself steps past whatever is beyond it, and so on outwards. That keeps
- * the arrows from going dead while there is still somewhere to move, and it is the only way to
- * reorder a group, since the list has rows for elements rather than for groups.
+ * it, with a nested group counting as one sibling. An element never leaves its group this way,
+ * and at the edge of its group it stays put: the group has a row of its own to move it by.
  */
 export function moveWithinParent(
   elements: readonly SceneElement[],
@@ -155,6 +185,17 @@ export function moveWithinParent(
   return moveFrom(elements, index, groupsOf(elements[index]).length, dir, toEnd);
 }
 
+/** Whether `moveWithinParent` would change anything, so the arrow can be disabled when not. */
+export function canMoveWithinParent(
+  elements: readonly SceneElement[],
+  id: string,
+  dir: -1 | 1
+): boolean {
+  const index = elements.findIndex((e) => e.id === id);
+  if (index < 0) return false;
+  return canMoveFrom(elements, index, groupsOf(elements[index]).length, dir);
+}
+
 /** Where a group starts in the list, and how deep it sits: its place in its members' chains. */
 function groupAt(elements: readonly SceneElement[], gid: string): { index: number; depth: number } {
   const index = elements.findIndex((e) => groupsOf(e).includes(gid));
@@ -162,8 +203,8 @@ function groupAt(elements: readonly SceneElement[], gid: string): { index: numbe
 }
 
 /**
- * Moves a whole group among its siblings, the same way an element moves: one step past its
- * neighbour, widening to the group that holds it once it reaches the edge.
+ * Moves a whole group among its siblings as one block, by the same rule as an element: it stays
+ * inside the group that holds it, and stops at that group's edge.
  */
 export function moveGroup(
   elements: readonly SceneElement[],
@@ -179,58 +220,6 @@ export function moveGroup(
 export function canMoveGroup(elements: readonly SceneElement[], gid: string, dir: -1 | 1): boolean {
   const { index, depth } = groupAt(elements, gid);
   return index >= 0 && canMoveFrom(elements, index, depth, dir);
-}
-
-/**
- * The move itself, for whatever block contains `index` at `maxDepth`: the element itself when
- * that is its full chain length, or one of its groups when it is less.
- */
-function moveFrom(
-  elements: readonly SceneElement[],
-  index: number,
-  maxDepth: number,
-  dir: -1 | 1,
-  toEnd: boolean
-): SceneElement[] {
-  const direction: ZDirection = toEnd
-    ? dir < 0
-      ? "backmost"
-      : "front"
-    : dir < 0
-      ? "back"
-      : "forward";
-  for (const level of blockLadder(elements, index)) {
-    if (level.depth > maxDepth) continue;
-    const room = dir < 0 ? level.at > 0 : level.at < level.blocks.length - 1;
-    if (!room) continue;
-    const picked = level.blocks.map((_, i) => i === level.at);
-    const moved = flatten(elements, reorderBlocks(level.blocks, picked, direction));
-    return [...elements.slice(0, level.range.start), ...moved, ...elements.slice(level.range.end)];
-  }
-  return [...elements];
-}
-
-/** Whether `moveWithinParent` would change anything, so the arrow can be disabled when not. */
-export function canMoveWithinParent(
-  elements: readonly SceneElement[],
-  id: string,
-  dir: -1 | 1
-): boolean {
-  const index = elements.findIndex((e) => e.id === id);
-  if (index < 0) return false;
-  return canMoveFrom(elements, index, groupsOf(elements[index]).length, dir);
-}
-
-function canMoveFrom(
-  elements: readonly SceneElement[],
-  index: number,
-  maxDepth: number,
-  dir: -1 | 1
-): boolean {
-  return blockLadder(elements, index).some(
-    (level) =>
-      level.depth <= maxDepth && (dir < 0 ? level.at > 0 : level.at < level.blocks.length - 1)
-  );
 }
 
 /** Whether the selection has anywhere to go in z-order, for the same reason. */
@@ -352,4 +341,52 @@ export function expandToGroups(
     }
   }
   return [...out];
+}
+
+/** Closest two group hues may be, in degrees, before they read as the same colour. */
+const HUE_GAP = 30;
+
+function hueDistance(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360;
+  return Math.min(d, 360 - d);
+}
+
+/**
+ * The hue for a new group: the first step of the golden-angle sequence that is at least
+ * `HUE_GAP` from every hue already in use, or, when none is left that far away, the one that
+ * stands furthest from its nearest neighbour.
+ */
+export function nextGroupHue(taken: readonly number[]): number {
+  let best = 210;
+  let bestGap = -1;
+  for (let k = 0; k < 64; k++) {
+    const hue = Math.round((210 + k * 137.508) % 360);
+    const gap = taken.length ? Math.min(...taken.map((t) => hueDistance(t, hue))) : 360;
+    if (gap >= HUE_GAP) return hue;
+    if (gap > bestGap) {
+      best = hue;
+      bestGap = gap;
+    }
+  }
+  return best;
+}
+
+/**
+ * Gives every group in `elements` a hue of its own, in place, and leaves the ones it has alone:
+ * a group keeps its colour wherever it moves, and only a group new to the document gets one.
+ * Runs on every state change, like `pruneGroupsInPlace`, so no command has to remember it.
+ */
+export function assignGroupHuesInPlace(
+  elements: readonly SceneElement[],
+  hues: Record<string, number>
+): void {
+  const live = new Set(elements.flatMap((e) => groupsOf(e)));
+  const missing = [...live].filter((gid) => hues[gid] == null);
+  if (!missing.length) return;
+  const taken = [...live].filter((gid) => hues[gid] != null).map((gid) => hues[gid]!);
+  for (const gid of missing) {
+    const hue = nextGroupHue(taken);
+    hues[gid] = hue;
+    taken.push(hue);
+  }
 }
