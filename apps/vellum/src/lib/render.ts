@@ -23,7 +23,7 @@ import {
   ROTATE_REACH_FINE,
 } from "./pointer.js";
 import { buildDefsMarkup } from "./io.js";
-import { expandToGroups } from "./groups.js";
+import { expandToGroups, groupColor, groupsOf, outerGroup } from "./groups.js";
 import type {
   BBox,
   EditorState,
@@ -460,26 +460,96 @@ function renderGradientHandles(parent: Element, el: SceneElement): void {
   }
 }
 
-function renderSelectionBox(el: SceneElement, cls = "selection-box"): void {
+/**
+ * An outline drawn twice: a pale halo under a coloured line, so it reads on the dark canvas and
+ * on a white artboard alike. `color` replaces the accent - a group's own colour, for its box.
+ */
+function outline(
+  tag: "rect" | "polygon",
+  geometry: AttrMap,
+  cls: string,
+  color: string | null = null
+): void {
+  const style = color ? `--sel: ${color}` : null;
+  add(els.overlay, tag, { ...geometry, class: `selection-halo ${cls}`, style });
+  add(els.overlay, tag, { ...geometry, class: cls, style });
+}
+
+function boxGeometry(box: BBox, pad = 0): AttrMap {
+  return {
+    x: box.x - pad,
+    y: box.y - pad,
+    width: box.width + pad * 2,
+    height: box.height + pad * 2,
+  };
+}
+
+function renderSelectionBox(
+  el: SceneElement,
+  cls = "selection-box",
+  color: string | null = null
+): void {
   const box = localBBox(el);
   if (!box) return;
   if (!el.rotation) {
-    add(els.overlay, "rect", {
-      class: cls,
-      x: box.x,
-      y: box.y,
-      width: box.width,
-      height: box.height,
-    });
+    outline("rect", boxGeometry(box), cls, color);
     return;
   }
   // Rotated: draw the turned box itself rather than the larger upright one around it.
-  add(els.overlay, "polygon", {
-    class: cls,
-    points: cornersOf(el)
-      .map((p) => `${p.x},${p.y}`)
-      .join(" "),
-  });
+  const points = cornersOf(el)
+    .map((p) => `${p.x},${p.y}`)
+    .join(" ");
+  outline("polygon", { points }, cls, color);
+}
+
+function unionOf(elements: readonly SceneElement[]): BBox | null {
+  let box: BBox | null = null;
+  for (const el of elements) {
+    const b = elementBBox(el);
+    if (b) box = box ? union(box, b) : b;
+  }
+  return box;
+}
+
+/** Groups whose every member is selected: the ones a group box is drawn around. */
+function wholeGroups(
+  state: EditorState,
+  selected: ReadonlySet<string>
+): Map<string, SceneElement[]> {
+  const members = new Map<string, SceneElement[]>();
+  for (const el of state.elements) {
+    for (const gid of groupsOf(el)) {
+      const list = members.get(gid);
+      if (list) list.push(el);
+      else members.set(gid, [el]);
+    }
+  }
+  for (const [gid, list] of members) {
+    if (!list.every((e) => selected.has(e.id))) members.delete(gid);
+  }
+  return members;
+}
+
+/**
+ * One box around each selected group, in that group's colour, standing a little off its
+ * members. A group that holds other groups stands further off than they do, so nested boxes
+ * never sit on top of each other.
+ */
+function renderGroupBoxes(state: EditorState, groups: Map<string, SceneElement[]>): void {
+  for (const [gid, members] of groups) {
+    const box = unionOf(members);
+    if (!box) continue;
+    const depth = groupsOf(members[0]).indexOf(gid);
+    const inner = Math.max(...members.map((e) => groupsOf(e).length - 1 - depth));
+    const pad = (5 + 5 * inner) / zoom;
+    const hue = state.groupHues[gid];
+    outline(
+      "rect",
+      boxGeometry(box, pad),
+      "selection-box group-box",
+      hue == null ? null : groupColor(hue)
+    );
+  }
 }
 
 /**
@@ -500,21 +570,17 @@ function renderHover(state: EditorState): void {
     if (el) renderSelectionBox(el, "selection-box hover-box");
     return;
   }
-  let box: BBox | null = null;
-  for (const el of state.elements) {
-    if (!ids.includes(el.id)) continue;
-    const b = elementBBox(el);
-    if (!b) continue;
-    box = box ? union(box, b) : b;
-  }
+  // A grouped shape: the click will select the group, so the hover shows the group's box.
+  const gid = outerGroup(findElement(hoverId));
+  const hue = gid ? state.groupHues[gid] : undefined;
+  const box = unionOf(state.elements.filter((e) => ids.includes(e.id)));
   if (!box) return;
-  add(els.overlay, "rect", {
-    class: "selection-box hover-box",
-    x: box.x,
-    y: box.y,
-    width: box.width,
-    height: box.height,
-  });
+  outline(
+    "rect",
+    boxGeometry(box, 5 / zoom),
+    "selection-box group-box hover-box",
+    hue == null ? null : groupColor(hue)
+  );
 }
 
 function union(a: BBox, b: BBox): BBox {
@@ -540,14 +606,19 @@ function renderOverlay(state: EditorState): void {
   }
 
   const sel = selectedElements();
+  const groups = wholeGroups(state, new Set(sel.map((e) => e.id)));
+  renderGroupBoxes(state, groups);
+  // Inside a selected group, each member's own box steps back so the group's box leads.
+  const boxClass = (el: SceneElement) =>
+    groupsOf(el).some((gid) => groups.has(gid)) ? "selection-box member-box" : "selection-box";
   for (const el of sel) {
     if (el.id === activePathId) continue;
     if (el.type === "path") {
       renderPathHandles(els.overlay, el, state);
-      renderSelectionBox(el);
+      renderSelectionBox(el, boxClass(el));
       continue;
     }
-    renderSelectionBox(el);
+    renderSelectionBox(el, boxClass(el));
     if (sel.length === 1) {
       renderPrimitiveHandles(els.overlay, el, state.selection.pathEdit);
     }

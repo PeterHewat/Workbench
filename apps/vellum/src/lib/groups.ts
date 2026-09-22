@@ -390,3 +390,8 @@ export function assignGroupHuesInPlace(
     taken.push(hue);
   }
 }
+
+/** A group's colour, from its hue: the same in the Primitives list and on the canvas. */
+export function groupColor(hue: number): string {
+  return `hsl(${hue} 65% 62%)`;
+}

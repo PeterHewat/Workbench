@@ -17,6 +17,7 @@ import {
   canMoveGroup,
   canMoveWithinParent,
   childBlocks,
+  groupColor,
   groupsOf,
   moveGroup,
   type Block,
@@ -44,7 +45,7 @@ function primitiveListKeyOf(state: EditorState): string {
 /** Each group's colour, from the hue it was given when it appeared (see `groupHues`). */
 function groupColors(state: EditorState): Map<string, string> {
   const out = new Map<string, string>();
-  for (const [gid, hue] of Object.entries(state.groupHues)) out.set(gid, `hsl(${hue} 65% 62%)`);
+  for (const [gid, hue] of Object.entries(state.groupHues)) out.set(gid, groupColor(hue));
   return out;
 }
 
