@@ -242,11 +242,17 @@ function buildPrimitiveList(state: EditorState): void {
 }
 
 /**
- * Each row and its header swatch, by element id, filled in as the list is built. The in-place
- * update runs on every state change, pointer moves included, and looking each row up with
- * `querySelector` there cost a scan of the whole list per shape.
+ * Each row, with the parts of it the in-place update writes to, by element id, filled in as the
+ * list is built. That update runs on every change, every frame of a drag included, and looking
+ * each row up with `querySelector` there cost a scan of the whole list per shape.
  */
-const rowRefs = new Map<string, { li: HTMLElement; swatch: HTMLElement | null; style: string }>();
+interface RowRefs {
+  li: HTMLElement;
+  name: HTMLInputElement | null;
+  swatch: HTMLElement | null;
+  style: string;
+}
+const rowRefs = new Map<string, RowRefs>();
 
 /** One level of the tree: each block is either a nested group or a single row. */
 function appendBlocks(
@@ -350,7 +356,8 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
   li.classList.toggle("acc-item--invisible", isInvisible(el));
   const swatch = li.querySelector<HTMLElement>(".acc-swatch");
   if (swatch && isInvisible(el)) swatch.title = "Invisible: no stroke and no fill";
-  rowRefs.set(el.id, { li, swatch, style: headerSwatchStyle(el) });
+  const name = li.querySelector<HTMLInputElement>('[data-field="name"]');
+  rowRefs.set(el.id, { li, name, swatch, style: headerSwatchStyle(el) });
   wireAccRow(li, {
     onExpand: () => toggleElementExpanded(el.id),
     onDot: () => toggleElementSelected(el.id),
@@ -370,8 +377,9 @@ function updatePrimitiveListValues(state: EditorState): void {
   for (const el of state.elements) {
     const row = rowRefs.get(el.id);
     if (!row) continue;
-    const { li } = row;
-    setField(li, "name", el.name || "");
+    const { li, name } = row;
+    const label = el.name || "";
+    if (name && name !== document.activeElement && name.value !== label) name.value = label;
     // Only what changed is written: an unchanged write still restyles the row.
     const style = headerSwatchStyle(el);
     if (row.swatch && style !== row.style) {

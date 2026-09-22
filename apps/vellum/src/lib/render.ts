@@ -55,6 +55,8 @@ export interface RenderTargets {
   grid: SVGGElement;
   document: SVGGElement;
   overlay: SVGGElement;
+  /** Above the overlay: what follows the pointer (hover outline, snap mark, guides). */
+  pointer: SVGGElement;
 }
 
 let els: RenderTargets;
@@ -96,11 +98,17 @@ function draftStroke(preview: Preview): AttrMap {
   };
 }
 
+let gridKey = "";
+
 function renderGrid(state: EditorState): void {
-  clearChildren(els.grid);
   const step = state.grid.step;
-  if (!state.grid.visible || state.finalOnly || step <= 1) return;
   const { width, height } = state.artboard;
+  const shown = state.grid.visible && !state.finalOnly && step > 1;
+  const key = shown ? `${step}|${width}|${height}` : "";
+  if (key === gridKey) return;
+  gridKey = key;
+  clearChildren(els.grid);
+  if (!shown) return;
   for (let x = 0; x <= width; x += step) {
     add(els.grid, "line", { class: "grid-line", x1: x, y1: 0, x2: x, y2: height });
   }
@@ -109,26 +117,56 @@ function renderGrid(state: EditorState): void {
   }
 }
 
+/**
+ * Reference images, kept from one render to the next. A data URL runs to megabytes, and handing
+ * it to the `<image>` again on every render made the browser take it in again each time.
+ */
+const drawnImages = new Map<string, { g: SVGGElement; image: SVGImageElement; dataUrl: string }>();
+
 function renderImages(state: EditorState): void {
-  clearChildren(els.images);
-  if (state.finalOnly) return;
-  for (const img of state.images) {
-    if (img.visible === false) continue;
-    const g = add(els.images, "g", {
-      "data-image-id": img.id,
+  const wanted = state.finalOnly ? [] : state.images.filter((img) => img.visible !== false);
+  const nodes: Node[] = [];
+  const live = new Set<string>();
+  for (const img of wanted) {
+    live.add(img.id);
+    let drawn = drawnImages.get(img.id);
+    if (!drawn) {
+      const g = document.createElementNS(NS, "g");
+      g.setAttribute("data-image-id", img.id);
+      const image = add(g, "image", {
+        x: 0,
+        y: 0,
+        preserveAspectRatio: "none",
+        "pointer-events": "none",
+      });
+      drawn = { g, image, dataUrl: "" };
+      drawnImages.set(img.id, drawn);
+    }
+    setChangedAttrs(drawn.g, {
       transform: `translate(${img.x} ${img.y}) rotate(${img.rotation}) scale(${img.scaleX} ${img.scaleY})`,
     });
-    const image = add(g, "image", {
-      href: img.dataUrl,
+    setChangedAttrs(drawn.image, {
       opacity: img.opacity,
-      x: 0,
-      y: 0,
       width: img.naturalWidth || 200,
       height: img.naturalHeight || 200,
-      preserveAspectRatio: "none",
-      "pointer-events": "none",
     });
-    image.setAttributeNS("http://www.w3.org/1999/xlink", "href", img.dataUrl);
+    if (drawn.dataUrl !== img.dataUrl) {
+      drawn.image.setAttribute("href", img.dataUrl);
+      drawn.image.setAttributeNS("http://www.w3.org/1999/xlink", "href", img.dataUrl);
+      drawn.dataUrl = img.dataUrl;
+    }
+    nodes.push(drawn.g);
+  }
+  for (const id of drawnImages.keys()) if (!live.has(id)) drawnImages.delete(id);
+  placeChildren(els.images, nodes);
+}
+
+/** Sets only the attributes whose value differs, so an unchanged node is left untouched. */
+function setChangedAttrs(node: Element, attrs: AttrMap): void {
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null) continue;
+    const value = String(v);
+    if (node.getAttribute(k) !== value) node.setAttribute(k, value);
   }
 }
 
@@ -162,34 +200,82 @@ function outlineNode(el: SceneElement, attrs: AttrMap): SVGElement | null {
   return node;
 }
 
+/**
+ * The nodes drawn for each element, with a key made of everything they were drawn from. A render
+ * reuses them while the key still matches and redraws only the elements that changed: rebuilding
+ * every node on every change was most of the cost of a drag in a large document, both in making
+ * the nodes and in the browser styling them all again.
+ */
+const drawnElements = new Map<string, { key: string; nodes: SVGElement[] }>();
+let drawnDefs: { markup: string; node: SVGDefsElement } | null = null;
+
+function drawElement(el: SceneElement, minHit: number): SVGElement[] {
+  const node = renderElement(el);
+  if (!node) return [];
+  if (el.type === "text") return [node];
+  // Transparent, wider copy of the outline so thin strokes are easy to click.
+  const hit = outlineNode(el, {
+    stroke: "transparent",
+    "stroke-width": Math.max(el.strokeWidth || 0, minHit),
+    class: "hit-area",
+    "pointer-events": "stroke",
+    "data-element-id": el.id,
+  });
+  return hit ? [node, hit] : [node];
+}
+
+/** Everything `drawElement` reads, as one string: equal keys draw identical nodes. */
+function elementKey(el: SceneElement, minHit: number): string {
+  const g = geometryOf(el);
+  if (!g) return "";
+  const hitWidth = el.type === "text" ? 0 : Math.max(el.strokeWidth || 0, minHit);
+  return `${g.tag}|${JSON.stringify({ ...styleAttrs(el), ...g.attrs })}|${g.text ?? ""}|${hitWidth}`;
+}
+
 function renderDocument(state: EditorState): void {
-  clearChildren(els.document);
+  const nodes: Node[] = [];
   const defsMarkup = buildDefsMarkup(state.elements);
-  if (defsMarkup) {
-    const defs = document.createElementNS(NS, "defs");
-    defs.innerHTML = defsMarkup;
-    els.document.appendChild(defs);
+  if (!defsMarkup) drawnDefs = null;
+  else if (drawnDefs?.markup !== defsMarkup) {
+    const node = document.createElementNS(NS, "defs");
+    node.innerHTML = defsMarkup;
+    drawnDefs = { markup: defsMarkup, node };
   }
+  if (drawnDefs) nodes.push(drawnDefs.node);
+
   const minHit = HIT_MIN_PX / state.viewport.zoom;
+  const live = new Set<string>();
   for (const el of state.elements) {
     // A hidden shape is not drawn, so it cannot be clicked, hovered or selected on the canvas.
     if (el.hidden) continue;
     // While a text element is being edited in place, the overlay input is what shows its
     // content, so the SVG text itself would only double up half a pixel off.
     if (el.id === state.ui.editingTextId) continue;
-    const node = renderElement(el);
-    if (!node) continue;
-    els.document.appendChild(node);
-    if (el.type === "text") continue;
-    // Transparent, wider copy of the outline so thin strokes are easy to click.
-    const hit = outlineNode(el, {
-      stroke: "transparent",
-      "stroke-width": Math.max(el.strokeWidth || 0, minHit),
-      class: "hit-area",
-      "pointer-events": "stroke",
-      "data-element-id": el.id,
-    });
-    if (hit) els.document.appendChild(hit);
+    live.add(el.id);
+    const key = elementKey(el, minHit);
+    let drawn = drawnElements.get(el.id);
+    if (!drawn || drawn.key !== key) {
+      drawn = { key, nodes: drawElement(el, minHit) };
+      drawnElements.set(el.id, drawn);
+    }
+    nodes.push(...drawn.nodes);
+  }
+  for (const id of drawnElements.keys()) if (!live.has(id)) drawnElements.delete(id);
+  placeChildren(els.document, nodes);
+}
+
+/**
+ * Makes `parent`'s children exactly `wanted`, in order, touching only what is out of place:
+ * the nodes no longer wanted go first, then each wanted node moves only if it is not already
+ * where it belongs.
+ */
+function placeChildren(parent: Element, wanted: readonly Node[]): void {
+  const keep = new Set(wanted);
+  for (const child of [...parent.childNodes]) if (!keep.has(child)) child.remove();
+  let at: ChildNode | null = parent.firstChild;
+  for (const node of wanted) {
+    if (node === at) at = at.nextSibling;
+    else parent.insertBefore(node, at);
   }
 }
 
@@ -465,14 +551,15 @@ function renderGradientHandles(parent: Element, el: SceneElement): void {
  * on a white artboard alike. `color` replaces the accent - a group's own colour, for its box.
  */
 function outline(
+  parent: Element,
   tag: "rect" | "polygon",
   geometry: AttrMap,
   cls: string,
   color: string | null = null
 ): void {
   const style = color ? `--sel: ${color}` : null;
-  add(els.overlay, tag, { ...geometry, class: `selection-halo ${cls}`, style });
-  add(els.overlay, tag, { ...geometry, class: cls, style });
+  add(parent, tag, { ...geometry, class: `selection-halo ${cls}`, style });
+  add(parent, tag, { ...geometry, class: cls, style });
 }
 
 function boxGeometry(box: BBox, pad = 0): AttrMap {
@@ -485,6 +572,7 @@ function boxGeometry(box: BBox, pad = 0): AttrMap {
 }
 
 function renderSelectionBox(
+  parent: Element,
   el: SceneElement,
   cls = "selection-box",
   color: string | null = null
@@ -492,14 +580,14 @@ function renderSelectionBox(
   const box = localBBox(el);
   if (!box) return;
   if (!el.rotation) {
-    outline("rect", boxGeometry(box), cls, color);
+    outline(parent, "rect", boxGeometry(box), cls, color);
     return;
   }
   // Rotated: draw the turned box itself rather than the larger upright one around it.
   const points = cornersOf(el)
     .map((p) => `${p.x},${p.y}`)
     .join(" ");
-  outline("polygon", { points }, cls, color);
+  outline(parent, "polygon", { points }, cls, color);
 }
 
 function unionOf(elements: readonly SceneElement[]): BBox | null {
@@ -525,6 +613,7 @@ function renderGroupBoxes(state: EditorState, groups: Map<string, SceneElement[]
     const pad = (5 + 5 * inner) / zoom;
     const hue = state.groupHues[gid];
     outline(
+      els.overlay,
       "rect",
       boxGeometry(box, pad),
       "selection-box group-box",
@@ -548,7 +637,7 @@ function renderHover(state: EditorState): void {
   if (ids.some((id) => state.selection.elementIds.includes(id))) return;
   if (ids.length === 1) {
     const el = findElement(hoverId);
-    if (el) renderSelectionBox(el, "selection-box hover-box");
+    if (el) renderSelectionBox(els.pointer, el, "selection-box hover-box");
     return;
   }
   // A grouped shape: the click will select the group, so the hover shows the group's box.
@@ -557,6 +646,7 @@ function renderHover(state: EditorState): void {
   const box = unionOf(state.elements.filter((e) => ids.includes(e.id)));
   if (!box) return;
   outline(
+    els.pointer,
     "rect",
     boxGeometry(box, 5 / zoom),
     "selection-box group-box hover-box",
@@ -596,10 +686,10 @@ function renderOverlay(state: EditorState): void {
     if (el.id === activePathId) continue;
     if (el.type === "path") {
       renderPathHandles(els.overlay, el, state);
-      renderSelectionBox(el, boxClass(el));
+      renderSelectionBox(els.overlay, el, boxClass(el));
       continue;
     }
-    renderSelectionBox(el, boxClass(el));
+    renderSelectionBox(els.overlay, el, boxClass(el));
     if (sel.length === 1) {
       renderPrimitiveHandles(els.overlay, el, state.selection.pathEdit);
     }
@@ -638,13 +728,23 @@ function renderOverlay(state: EditorState): void {
       height: Math.abs(m.y2 - m.y1),
     });
   }
+}
 
+/**
+ * The part of the overlay that follows the pointer. A pointer move redraws only this: with a
+ * large selection, the handles in the layer below run to thousands of nodes, and none of them
+ * move with the pointer.
+ */
+function renderPointerLayer(state: EditorState): void {
+  clearChildren(els.pointer);
+  zoom = state.viewport.zoom;
+  if (state.finalOnly) return;
   renderHover(state);
 
   const cur = state.cursor;
   if (cur.snapActive && !state.drawing?.rotateHandle) {
     const r = 6 / state.viewport.zoom;
-    const g = add(els.overlay, "g", { class: "snap-indicator", "pointer-events": "none" });
+    const g = add(els.pointer, "g", { class: "snap-indicator", "pointer-events": "none" });
     add(g, "circle", { cx: cur.snapX, cy: cur.snapY, r });
     add(g, "line", {
       x1: cur.snapX - r * 1.6,
@@ -662,19 +762,16 @@ function renderOverlay(state: EditorState): void {
 
   const align = state.align;
   if (align.x != null) {
-    add(els.overlay, "line", { class: "align-guide", x1: align.x, y1: -1e5, x2: align.x, y2: 1e5 });
+    add(els.pointer, "line", { class: "align-guide", x1: align.x, y1: -1e5, x2: align.x, y2: 1e5 });
   }
   if (align.y != null) {
-    add(els.overlay, "line", { class: "align-guide", x1: -1e5, y1: align.y, x2: 1e5, y2: align.y });
+    add(els.pointer, "line", { class: "align-guide", x1: -1e5, y1: align.y, x2: 1e5, y2: align.y });
   }
 }
 
-/**
- * What a pointer-only change needs redrawn: the handles, hover outline and guides. The shapes,
- * grid and images under them do not move with the pointer.
- */
+/** What a pointer-only change needs redrawn: the hover outline, snap mark and guides. */
 export function renderPointer(state: EditorState): void {
-  renderOverlay(state);
+  renderPointerLayer(state);
 }
 
 export function renderAll(state: EditorState): void {
@@ -689,4 +786,5 @@ export function renderAll(state: EditorState): void {
   renderGrid(state);
   renderDocument(state);
   renderOverlay(state);
+  renderPointerLayer(state);
 }

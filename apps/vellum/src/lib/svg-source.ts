@@ -23,6 +23,8 @@ const primitiveListEl = byId("primitive-list");
 let svgEditUndoPushed = false;
 let svgApplyTimer: ReturnType<typeof setTimeout> | null = null;
 let lastSelectionKey = "";
+/** What the highlighted copy was last built from; see `refreshSvgHighlight`. */
+let highlightKey = "";
 
 // Primitive-row field that has keyboard focus -> the SVG attribute(s) it edits.
 const FIELD_ATTRS: Record<string, string[]> = {
@@ -71,6 +73,14 @@ function highlightAttrs(esc: string, field: string): string {
 
 /** Colored copy of the textarea's text: selected shapes blue, the focused attribute highlighted. */
 function refreshSvgHighlight(selectedIds: readonly string[]): void {
+  // The copy is rebuilt only when what it shows changed: on a drag, the text changes every frame
+  // but on a pointer move or a click elsewhere it rarely does, and a rebuild re-lays the panel.
+  const key = `${svgInput.value}\0${selectedIds.join(",")}\0${svgFocus?.id}:${svgFocus?.field}`;
+  if (key === highlightKey) {
+    svgPre.scrollTop = svgInput.scrollTop;
+    return;
+  }
+  highlightKey = key;
   const sel = new Set(selectedIds);
   // A group counts as selected when all of it is; its <g> and its </g> are highlighted then.
   const groups = selectedGroups(getState().elements, sel);
@@ -143,7 +153,50 @@ primitiveListEl.addEventListener("focusout", () => {
   if (!pickerHold) setSvgFocus(null);
 });
 
+/**
+ * How often, at most, the panel follows a stream of changes. Keeping it current means exporting
+ * the whole document, which on a large one is most of the cost of each frame of a drag; a few
+ * updates a second read as live, and the last change always lands.
+ */
+const SYNC_INTERVAL_MS = 120;
+let lastSyncAt = -Infinity;
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+/** Changes were skipped while the panel was not on screen. */
+let stale = false;
+
+function onScreen(): boolean {
+  return typeof svgInput.checkVisibility === "function" ? svgInput.checkVisibility() : true;
+}
+
+// Opening the section or the panel lays the field out again, and that is when it catches up.
+new ResizeObserver(() => {
+  if (stale && onScreen()) syncSvgEditorNow(getState());
+}).observe(svgInput);
+
+/** Keeps the panel in step with the document: at once when it can, soon after when it cannot. */
 export function syncSvgEditor(state: EditorState): void {
+  if (!onScreen()) {
+    stale = true;
+    return;
+  }
+  const wait = lastSyncAt + SYNC_INTERVAL_MS - performance.now();
+  if (wait <= 0) {
+    syncSvgEditorNow(state);
+    return;
+  }
+  syncTimer ??= setTimeout(() => {
+    syncTimer = null;
+    syncSvgEditorNow(getState());
+  }, wait);
+}
+
+function syncSvgEditorNow(state: EditorState): void {
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
+  lastSyncAt = performance.now();
+  stale = false;
   const focused = document.activeElement === svgInput;
   if (!focused) {
     const text = formatExportSvg(state, true);

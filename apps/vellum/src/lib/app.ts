@@ -55,6 +55,7 @@ initRender({
   grid: byId<HTMLElement>("layer-grid") as unknown as SVGGElement,
   document: byId<HTMLElement>("layer-document") as unknown as SVGGElement,
   overlay: byId<HTMLElement>("layer-overlay") as unknown as SVGGElement,
+  pointer: byId<HTMLElement>("layer-pointer") as unknown as SVGGElement,
 });
 
 initTextEdit(wrap, () => primitiveList.invalidate());
