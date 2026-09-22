@@ -49,7 +49,8 @@ page, the build, each page's title and manifest, and the deploy all read from it
 apps/          one folder per tool, plus `home` (the index page)
 packages/
   catalog/     which apps exist, and where the site is deployed
-  ui/          shared browser helpers and the offline service worker
+  ui/          shared styles, browser helpers, build wiring and the offline service worker
+  codec/       pure encoding helpers: base64, hex, UTF-8, JSON with error positions
   tsconfig/    shared TypeScript config
 tools/         build and scaffold scripts
 docs/          decisions, reference and plans

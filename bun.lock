@@ -46,6 +46,13 @@
         "typescript": "~6.0.3",
       },
     },
+    "packages/codec": {
+      "name": "@workbench/codec",
+      "version": "0.0.0",
+      "devDependencies": {
+        "typescript": "~6.0.3",
+      },
+    },
     "packages/tsconfig": {
       "name": "@workbench/tsconfig",
       "version": "0.0.0",
@@ -170,6 +177,8 @@
     "@typescript-eslint/visitor-keys": ["@typescript-eslint/visitor-keys@8.70.0", "", { "dependencies": { "@typescript-eslint/types": "8.70.0", "eslint-visitor-keys": "^5.0.0" } }, "sha512-BoC8PiO4Hkdo0TVJh9Ntxr5MxPDI7/oFsrygN5ADelFSeXG/qgNuucIGA+L5Z6JpPTE/uRfcTWtscjbUaufepQ=="],
 
     "@workbench/catalog": ["@workbench/catalog@workspace:packages/catalog"],
+
+    "@workbench/codec": ["@workbench/codec@workspace:packages/codec"],
 
     "@workbench/home": ["@workbench/home@workspace:apps/home"],
 
