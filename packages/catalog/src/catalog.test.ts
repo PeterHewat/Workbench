@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { APPS, findApp, listedApps } from "./index.js";
 import { appBase, siteBase } from "./site.js";
 
@@ -23,6 +25,16 @@ describe("catalog", () => {
   test("findApp resolves by slug", () => {
     expect(findApp("vellum")?.name).toBe("Vellum");
     expect(findApp("nope")).toBeUndefined();
+  });
+
+  test("every folder under apps/ is in the catalog, and the other way round", () => {
+    // The build only builds what the catalog lists, so an unlisted folder would vanish quietly.
+    const dir = join(import.meta.dir, "..", "..", "..", "apps");
+    const folders = readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && d.name !== "home")
+      .map((d) => d.name)
+      .sort();
+    expect(folders).toEqual(APPS.map((a) => a.slug).sort());
   });
 
   test("listedApps is a subset of APPS", () => {

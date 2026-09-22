@@ -1,10 +1,9 @@
 {
   "extends": "./packages/tsconfig/base.json",
-  "files": [],
-  "references": [
-    { "path": "packages/catalog" },
-    { "path": "packages/ui" },
-    { "path": "apps/vellum" },
-    { "path": "apps/home" }
-  ]
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["bun"]
+  },
+  "include": ["tools/**/*.ts"]
 }

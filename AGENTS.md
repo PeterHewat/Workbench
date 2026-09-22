@@ -49,7 +49,7 @@ Pass explicit paths for the files you changed, not a blind repo-wide format.
 
 ## Running it
 
-Do not start `bun run dev` — it is probably already running. Use `bun run build` to validate.
+Do not start `bun run dev <slug>` — it is probably already running. Use `bun run build` to validate.
 To preview the built site locally, build with the base at the root:
 
 ```bash

@@ -10,7 +10,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-const ROOT = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+const ROOT = join(import.meta.dir, "..");
 
 const [slug, ...nameParts] = Bun.argv.slice(2);
 const name = nameParts.join(" ").trim();
@@ -130,5 +130,5 @@ Next:
   },
 
   2. bun install
-  3. bun run --filter @workbench/${slug} dev
+  3. bun run dev ${slug}
 `);

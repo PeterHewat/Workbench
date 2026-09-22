@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { APPS } from "../packages/catalog/src/index.ts";
 import { siteBase } from "../packages/catalog/src/site.ts";
 
-const ROOT = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+const ROOT = join(import.meta.dir, "..");
 const DIST = join(ROOT, "dist");
 
 async function run(cmd: string[], cwd: string): Promise<void> {
