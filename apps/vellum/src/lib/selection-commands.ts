@@ -12,8 +12,10 @@ import {
   canJoin,
 } from "./model.js";
 import {
+  canMergeGroups,
   expandToGroups,
   groupsOf,
+  mergeGroups,
   moveSelectionZ,
   normalizeGroups,
   outerGroup,
@@ -60,6 +62,21 @@ export function groupSelection(): void {
       ...s,
       elements: normalizeGroups([...rest.slice(0, before), ...grouped, ...rest.slice(before)]),
     };
+  });
+}
+
+/**
+ * Puts the selection into one group without nesting: loose shapes join the selected group, and
+ * several selected groups become one. The counterpart to `groupSelection`, which adds a level.
+ */
+export function mergeSelection(): void {
+  const st = getState();
+  const ids = new Set(st.selection.elementIds);
+  if (!canMergeGroups(st.elements, ids)) return;
+  pushUndo();
+  setState((s) => {
+    const elements = mergeGroups(s.elements, ids, s.groupNames);
+    return { ...s, elements, selection: selectOnly(expandToGroups(elements, [...ids])) };
   });
 }
 

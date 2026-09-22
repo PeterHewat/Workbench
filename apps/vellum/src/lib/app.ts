@@ -9,6 +9,7 @@ import {
   nudgeSelection,
   moveZOrder,
   groupSelection,
+  mergeSelection,
   ungroupSelection,
   splitAtSelectedPoint,
   joinSelected,
@@ -31,7 +32,7 @@ import {
 } from "./textedit.js";
 import { initPointerKind } from "./pointer.js";
 import { writeSessionView } from "./session.js";
-import { groupsOf, outerGroup } from "./groups.js";
+import { canMergeGroups, groupsOf, outerGroup } from "./groups.js";
 import { type EditorState } from "./types.js";
 import { restoreLayout } from "./layout.js";
 import { zoomBtn, zoomMenu, fitToView } from "./zoom.js";
@@ -67,6 +68,7 @@ initActionBar(byId("action-bar"), {
     primitiveList.invalidate();
   },
   group: () => groupSelection(),
+  merge: () => mergeSelection(),
   ungroup: () => ungroupSelection(),
   splitPoint: () => splitAtSelectedPoint(),
   join: () => joinSelected(),
@@ -150,13 +152,14 @@ function syncPanel(state: EditorState): void {
   syncGroupButtons(state);
 }
 
-/** Group / Ungroup / Join are only enabled when they would actually do something. */
+/** Group / Merge / Ungroup / Join are only enabled when they would actually do something. */
 function syncGroupButtons(state: EditorState): void {
   const ids = new Set(state.selection.elementIds);
   const sel = state.elements.filter((e) => ids.has(e.id));
   const groups = new Set(sel.map((e) => outerGroup(e) ?? ""));
   const allInOneGroup = groups.size === 1 && !groups.has("");
   byId<HTMLButtonElement>("btn-group").disabled = sel.length < 2 || allInOneGroup;
+  byId<HTMLButtonElement>("btn-merge").disabled = !canMergeGroups(state.elements, ids);
   byId<HTMLButtonElement>("btn-ungroup").disabled = !sel.some((e) => groupsOf(e).length);
   byId<HTMLButtonElement>("btn-join").disabled = !(sel.length === 2 && sel.every(canJoin));
 }
@@ -297,7 +300,11 @@ window.addEventListener("keydown", (e) => {
         tool: "select",
       }));
     }
-    if (key === "g") {
+    // By code, not key: Option+G on a Mac types a character rather than "g".
+    if (e.altKey && e.code === "KeyG") {
+      e.preventDefault();
+      mergeSelection();
+    } else if (key === "g") {
       e.preventDefault();
       if (e.shiftKey) ungroupSelection();
       else groupSelection();

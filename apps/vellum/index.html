@@ -165,6 +165,12 @@
             <path stroke-dasharray="3 2" d="M3 3h18v18H3z" />
           </g>
         </symbol>
+        <symbol id="icon-merge" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+            <path stroke-dasharray="3 2" d="M2 2h12v12H2zM10 10h12v12H10z" />
+            <rect x="11" y="3" width="3" height="3" fill="currentColor" stroke="none" />
+          </g>
+        </symbol>
         <symbol id="icon-ungroup" viewBox="0 0 24 24">
           <g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
             <rect x="2" y="2" width="8" height="8" rx="1" />
@@ -515,6 +521,13 @@
                 <div class="btn-row btn-row--inline">
                   <button type="button" id="btn-group" title="Group selected (Ctrl+G)">
                     Group
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-merge"
+                    title="Merge the selection into one group, without nesting (Ctrl+Alt+G)"
+                  >
+                    Merge
                   </button>
                   <button type="button" id="btn-ungroup" title="Ungroup selected (Ctrl+Shift+G)">
                     Ungroup
@@ -898,6 +911,16 @@
               selects single members. Exported as <code>&lt;g&gt;</code>.
             </li>
             <li>
+              <b>Merge</b> puts the selection into one group without adding a level<span
+                data-help="mouse"
+              >
+                (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd>)</span
+              >: select a group and a new shape to add the shape to it, or several groups to make
+              them one. Groups nested inside them stay as they are, and the merged group keeps the
+              name of the backmost named one. Group, by contrast, wraps the selection in a new group
+              around it.
+            </li>
+            <li>
               In the Primitives list a group is one coloured line down the left of the rows it
               holds, and a group inside a group is a line inside a line. Each group gets a colour of
               its own when it is made and keeps it wherever it moves. Members stay together: the ▲ ▼
@@ -1047,8 +1070,8 @@
             <li>
               Select a shape and a small bar appears next to it with what applies: delete,
               duplicate, send backward / bring forward (dimmed when there is nowhere to go), close
-              or open a path, join two paths, group and ungroup, and edit text. It is the same set
-              the keyboard shortcuts reach, within reach of a thumb.
+              or open a path, join two paths, group, merge and ungroup, and edit text. It is the
+              same set the keyboard shortcuts reach, within reach of a thumb.
             </li>
             <li>
               Select one <em>point</em> of a path and the bar narrows to that point: split the path
@@ -1121,6 +1144,10 @@
             <tr>
               <td>Ctrl+G / Ctrl+Shift+G</td>
               <td>Group / ungroup</td>
+            </tr>
+            <tr>
+              <td>Ctrl+Alt+G</td>
+              <td>Merge into one group</td>
             </tr>
             <tr>
               <td>Ctrl+A</td>

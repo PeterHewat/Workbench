@@ -343,6 +343,71 @@ export function expandToGroups(
   return [...out];
 }
 
+/**
+ * What a merge would act on: the selected elements plus the rest of their outermost groups, and
+ * those groups. A merge takes whole groups, so a member picked alone from the list brings its
+ * group along rather than splitting it.
+ */
+function mergeScope(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>
+): { merging: string[]; involved: (el: SceneElement) => boolean; blocks: number } {
+  const merging = [
+    ...new Set(
+      elements
+        .filter((e) => selected.has(e.id))
+        .map(outerGroup)
+        .filter((g): g is string => !!g)
+    ),
+  ];
+  const outer = new Set(merging);
+  const involved = (el: SceneElement) => selected.has(el.id) || outer.has(outerGroup(el) ?? "");
+  const keys = new Set(elements.filter(involved).map((e) => outerGroup(e) ?? `el:${e.id}`));
+  return { merging, involved, blocks: keys.size };
+}
+
+/** Whether `mergeGroups` would change anything: a group, and at least one other thing with it. */
+export function canMergeGroups(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>
+): boolean {
+  const { merging, blocks } = mergeScope(elements, selected);
+  return merging.length > 0 && blocks > 1;
+}
+
+/**
+ * Puts everything selected into one group, without adding a level: loose shapes join the group,
+ * and several groups become one. Only the outermost level merges - groups nested inside the
+ * merged ones stay as they were.
+ *
+ * The surviving group is the backmost named one, so a name is not lost to an unnamed group, or
+ * else simply the backmost. The result sits where the frontmost selected thing was, as a new
+ * group does, since its members must end up contiguous and anything unselected between them has
+ * to land on one side.
+ */
+export function mergeGroups(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>,
+  groupNames: Readonly<Record<string, string>> = {}
+): SceneElement[] {
+  const { merging, involved, blocks } = mergeScope(elements, selected);
+  if (!merging.length || blocks < 2) return [...elements];
+  const target = merging.find((gid) => groupNames[gid]) ?? merging[0]!;
+  const outer = new Set(merging);
+  let last = -1;
+  elements.forEach((e, i) => {
+    if (involved(e)) last = i;
+  });
+  const rest = elements.filter((e) => !involved(e));
+  const before = elements.slice(0, last + 1).filter((e) => !involved(e)).length;
+  const merged = elements.filter(involved).map((e) => {
+    const chain = groupsOf(e);
+    const inner = chain.length && outer.has(chain[0]!) ? chain.slice(1) : chain;
+    return { ...e, groups: [target, ...inner] };
+  });
+  return normalizeGroups([...rest.slice(0, before), ...merged, ...rest.slice(before)]);
+}
+
 /** Closest two group hues may be, in degrees, before they read as the same colour. */
 const HUE_GAP = 30;
 

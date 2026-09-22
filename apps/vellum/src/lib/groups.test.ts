@@ -10,6 +10,8 @@ import {
   moveGroup,
   moveSelectionZ,
   moveWithinParent,
+  canMergeGroups,
+  mergeGroups,
   normalizeGroups,
   pruneGroups,
   pruneGroupsInPlace,
@@ -250,6 +252,60 @@ describe("group colours", () => {
     // The first hue in the sequence is taken, so the next group must not reuse it.
     const first = nextGroupHue([]);
     expect(nextGroupHue([first])).not.toBe(first);
+  });
+});
+
+describe("mergeGroups", () => {
+  const chains = (list: readonly SceneElement[]) => list.map((e) => e.groups ?? []);
+
+  test("a loose shape joins the group, without a new level", () => {
+    const list = [el("a", "g1"), el("b", "g1"), el("c")];
+    const out = mergeGroups(list, new Set(["a", "b", "c"]));
+    expect(ids(out)).toBe("a b c");
+    expect(chains(out)).toEqual([["g1"], ["g1"], ["g1"]]);
+  });
+
+  test("several groups become one, and nested groups inside them survive", () => {
+    const list = [
+      el("a", "g1"),
+      el("b", "g1"),
+      el("c", "g2", "g3"),
+      el("d", "g2", "g3"),
+      el("e", "g2"),
+    ];
+    const out = mergeGroups(list, new Set(["a", "b", "c", "d", "e"]));
+    expect(chains(out)).toEqual([["g1"], ["g1"], ["g1", "g3"], ["g1", "g3"], ["g1"]]);
+  });
+
+  test("the backmost named group is the one that stays", () => {
+    const list = [el("a", "g1"), el("b", "g1"), el("c", "g2"), el("d", "g2")];
+    const out = mergeGroups(list, new Set(["a", "b", "c", "d"]), { g2: "Named" });
+    expect(new Set(out.map((e) => e.groups![0]))).toEqual(new Set(["g2"]));
+  });
+
+  test("picking one member from the list brings its whole group", () => {
+    const list = [el("a", "g1"), el("b", "g1"), el("c")];
+    const out = mergeGroups(list, new Set(["a", "c"]));
+    expect(chains(out)).toEqual([["g1"], ["g1"], ["g1"]]);
+  });
+
+  test("the merged group sits where the frontmost selected thing was", () => {
+    const list = [el("a", "g1"), el("b", "g1"), el("x"), el("c")];
+    expect(ids(mergeGroups(list, new Set(["a", "b", "c"])))).toBe("x a b c");
+  });
+
+  test("unselected shapes keep their groups", () => {
+    const list = [el("a", "g1"), el("b", "g1"), el("c"), el("d", "g2"), el("e", "g2")];
+    const out = mergeGroups(list, new Set(["a", "b", "c"]));
+    expect(chains(out)).toEqual([["g1"], ["g1"], ["g1"], ["g2"], ["g2"]]);
+  });
+
+  test("needs a group and something else to merge it with", () => {
+    const list = [el("a", "g1"), el("b", "g1"), el("c"), el("d")];
+    expect(canMergeGroups(list, new Set(["a", "b"]))).toBe(false);
+    expect(canMergeGroups(list, new Set(["c", "d"]))).toBe(false);
+    expect(canMergeGroups(list, new Set(["a", "b", "c"]))).toBe(true);
+    expect(ids(mergeGroups(list, new Set(["c", "d"])))).toBe("a b c d");
   });
 });
 
