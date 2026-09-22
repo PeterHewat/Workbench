@@ -5,11 +5,12 @@ import {
   buildDefsMarkup,
   sanitizeName,
   elementIdFromSvgId,
+  groupIdFromSvgId,
   formatExportSvg,
   importSvgFile,
 } from "./io.js";
 import { escapeXml } from "./utils.js";
-import { groupsOf } from "./groups.js";
+import { groupsOf, selectedGroups } from "./groups.js";
 import { type EditorState, type SceneElement } from "./types.js";
 import { byId } from "@workbench/ui";
 import { noteChange } from "./documents.js";
@@ -71,6 +72,10 @@ function highlightAttrs(esc: string, field: string): string {
 /** Colored copy of the textarea's text: selected shapes blue, the focused attribute highlighted. */
 function refreshSvgHighlight(selectedIds: readonly string[]): void {
   const sel = new Set(selectedIds);
+  // A group counts as selected when all of it is; its <g> and its </g> are highlighted then.
+  const groups = selectedGroups(getState().elements, sel);
+  // One entry per <g> still open, saying whether its </g> should be highlighted too.
+  const open: boolean[] = [];
   const focus = svgFocus;
   const block = focus ? FIELD_BLOCKS[focus.field] : undefined;
   let inBlock = false;
@@ -82,8 +87,15 @@ function refreshSvgHighlight(selectedIds: readonly string[]): void {
       const svgId = m ? m[1]! : "";
       const elId = m ? elementIdFromSvgId(svgId) : null;
       if (focus && elId === focus.id) esc = highlightAttrs(esc, focus.field);
-      let out =
-        elId && sel.has(elId) ? `<span class="svg-line svg-line--selected">${esc}</span>` : esc;
+      let selected = !!elId && sel.has(elId);
+      if (/^\s*<g[\s>]/.test(line) && !/\/>\s*$/.test(line)) {
+        const gid = groupIdFromSvgId(svgId);
+        selected = !!gid && groups.has(gid);
+        open.push(selected);
+      } else if (/^\s*<\/g>/.test(line)) {
+        selected = open.pop() ?? false;
+      }
+      let out = selected ? `<span class="svg-line svg-line--selected">${esc}</span>` : esc;
       if (block && focus) {
         if (svgId.startsWith(block[0] + focus.id) && (!block[1] || svgId.endsWith(block[1]))) {
           inBlock = true;

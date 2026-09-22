@@ -23,7 +23,7 @@ import {
   ROTATE_REACH_FINE,
 } from "./pointer.js";
 import { buildDefsMarkup } from "./io.js";
-import { expandToGroups, groupColor, groupsOf, outerGroup } from "./groups.js";
+import { expandToGroups, groupColor, groupsOf, outerGroup, selectedGroups } from "./groups.js";
 import type {
   BBox,
   EditorState,
@@ -511,25 +511,6 @@ function unionOf(elements: readonly SceneElement[]): BBox | null {
   return box;
 }
 
-/** Groups whose every member is selected: the ones a group box is drawn around. */
-function wholeGroups(
-  state: EditorState,
-  selected: ReadonlySet<string>
-): Map<string, SceneElement[]> {
-  const members = new Map<string, SceneElement[]>();
-  for (const el of state.elements) {
-    for (const gid of groupsOf(el)) {
-      const list = members.get(gid);
-      if (list) list.push(el);
-      else members.set(gid, [el]);
-    }
-  }
-  for (const [gid, list] of members) {
-    if (!list.every((e) => selected.has(e.id))) members.delete(gid);
-  }
-  return members;
-}
-
 /**
  * One box around each selected group, in that group's colour, standing a little off its
  * members. A group that holds other groups stands further off than they do, so nested boxes
@@ -606,7 +587,7 @@ function renderOverlay(state: EditorState): void {
   }
 
   const sel = selectedElements();
-  const groups = wholeGroups(state, new Set(sel.map((e) => e.id)));
+  const groups = selectedGroups(state.elements, new Set(sel.map((e) => e.id)));
   renderGroupBoxes(state, groups);
   // Inside a selected group, each member's own box steps back so the group's box leads.
   const boxClass = (el: SceneElement) =>

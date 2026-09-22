@@ -395,3 +395,25 @@ export function assignGroupHuesInPlace(
 export function groupColor(hue: number): string {
   return `hsl(${hue} 65% 62%)`;
 }
+
+/**
+ * The groups every member of which is selected, with their members: what the canvas draws a
+ * group box around and the SVG panel highlights a `<g>` for.
+ */
+export function selectedGroups(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>
+): Map<string, SceneElement[]> {
+  const members = new Map<string, SceneElement[]>();
+  for (const el of elements) {
+    for (const gid of groupsOf(el)) {
+      const list = members.get(gid);
+      if (list) list.push(el);
+      else members.set(gid, [el]);
+    }
+  }
+  for (const [gid, list] of members) {
+    if (!list.every((e) => selected.has(e.id))) members.delete(gid);
+  }
+  return members;
+}

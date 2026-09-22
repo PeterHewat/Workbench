@@ -187,6 +187,11 @@ export function groupExportId(gid: string, names: Readonly<Record<string, string
 /** A group id as Vellum writes it, optionally followed by "_" and the group's name. */
 const GROUP_ID = /^(group-[A-Za-z0-9-]+)(?:_(.+))?$/;
 
+/** The group id in an exported `<g id>` (`group-57cc1c37_top_view` -> `group-57cc1c37`). */
+export function groupIdFromSvgId(svgId: string | null | undefined): string | null {
+  return (svgId || "").match(GROUP_ID)?.[1] ?? null;
+}
+
 function buildSvgLines(state: ExportDoc): Line[] {
   const ids = exportIds(state.elements);
   const width = Math.round(state.artboard.width);

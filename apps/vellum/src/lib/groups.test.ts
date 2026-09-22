@@ -3,6 +3,7 @@ import { createRect } from "./model.js";
 import {
   assignGroupHuesInPlace,
   nextGroupHue,
+  selectedGroups,
   canMoveSelectionZ,
   canMoveGroup,
   canMoveWithinParent,
@@ -249,5 +250,14 @@ describe("group colours", () => {
     // The first hue in the sequence is taken, so the next group must not reuse it.
     const first = nextGroupHue([]);
     expect(nextGroupHue([first])).not.toBe(first);
+  });
+});
+
+describe("selectedGroups", () => {
+  test("a group counts only when every member is selected, nested ones included", () => {
+    const list = [el("a", "g1"), el("b", "g1", "g2"), el("c", "g1", "g2"), el("d")];
+    expect([...selectedGroups(list, new Set(["b", "c"])).keys()]).toEqual(["g2"]);
+    expect([...selectedGroups(list, new Set(["a", "b", "c"])).keys()].sort()).toEqual(["g1", "g2"]);
+    expect(selectedGroups(list, new Set(["a", "b"])).size).toBe(0);
   });
 });

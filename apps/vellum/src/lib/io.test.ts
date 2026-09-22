@@ -3,6 +3,7 @@ import {
   elementIdFromSvgId,
   elementToSvgMarkup,
   formatExportSvg,
+  groupIdFromSvgId,
   importSvgFile,
   sanitizeName,
   serializeProject,
@@ -259,6 +260,12 @@ describe("round trip", () => {
     expect(back.groupNames).toEqual({ "group-57cc1c37": "top_view" });
     const second = formatExportSvg({ ...doc(back.elements), groupNames: back.groupNames }, true);
     expect(second).toBe(first);
+  });
+
+  test("the group id is read back out of a named <g id>", () => {
+    expect(groupIdFromSvgId("group-79acbec9_2222")).toBe("group-79acbec9");
+    expect(groupIdFromSvgId("group-79acbec9")).toBe("group-79acbec9");
+    expect(groupIdFromSvgId("wheels")).toBeNull();
   });
 
   test("a foreign <g id> becomes the group's name", () => {
