@@ -1026,31 +1026,52 @@ body {
   display: none;
 }
 
-/* A group is one bracket down the left of the rows it holds, not a stripe repeated on each of
-   them: the line says "these rows are one thing" rather than "these rows are alike". A group
-   inside a group nests the brackets, which is what nesting looks like. */
-.group-run {
-  margin: 0 0 6px;
-  padding-left: 8px;
-  border-left: 3px solid var(--gc, var(--accent));
-  border-radius: 7px 0 0 7px;
+/* The list draws only the lines in view, each placed where it falls in the whole list, so the
+   list is as tall as all of them and every line sits at its own offset. */
+#primitive-list {
+  position: relative;
 }
 
-.group-items {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.list-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  padding-bottom: 6px;
+}
+
+.list-line > .acc-item {
+  margin-bottom: 0;
+}
+
+/* A group is one bracket down the left of the rows it holds, not a stripe repeated on each of
+   them: the line says "these rows are one thing" rather than "these rows are alike". A group
+   inside a group nests the brackets, which is what nesting looks like. Each line draws its own
+   stretch of every bracket it sits in, through the gap below it, so the stretches join into one
+   line - rounded where the group starts and where it ends. */
+.list-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  border-left: 3px solid var(--gc, var(--accent));
+  pointer-events: none;
+}
+
+.list-rail.first {
+  border-top-left-radius: 7px;
+}
+
+.list-rail.last {
+  bottom: 6px;
+  border-bottom-left-radius: 7px;
 }
 
 /* The group's own row is a shape's row, so its buttons line up with theirs. The name and the
    count take the group's colour, so the row and its bracket read as one thing. The chevron
    points down while the group is open, and folding it hides its members. */
-.group-run:not(.collapsed) > .group-head .chevron {
+.group-head.open .chevron {
   transform: rotate(90deg);
-}
-
-.group-run.collapsed > .group-items {
-  display: none;
 }
 
 .group-count {
@@ -1077,11 +1098,6 @@ body {
 
 .acc-item--hidden .acc-swatch {
   opacity: 0.35;
-}
-
-/* The bracket supplies the gap under the group, so the last row inside it does not add another. */
-.group-items > :last-child {
-  margin-bottom: 0;
 }
 
 .acc-body .field-row select {
