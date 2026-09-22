@@ -26,17 +26,15 @@ Workbench fit: client-only, offline, static output. No "save online", no fetchin
 | 7   | `diff`       | Diff       | Compare two texts, or two JSON documents structurally.       | Line diff side-by-side or unified; JSON mode compares parsed values (key order ignored). Handy for two Vellum SVG exports too.                                                                    |
 | 8   | `time`       | Time       | Unix timestamps ⇄ dates, across time zones.                  | Seconds or milliseconds auto-detected; ISO 8601; relative ("in 3 h"). Small, and pairs with JWT's claims.                                                                                         |
 
-## Considered and dropped
+## Out of scope
 
-The "Vellum companions" (Measure, Outline, Refine, Nest, Toolpath, Vellum View) target laser
-cutting and plotting. Vellum's job here is different: blueprints and icon sketches handed to an
-agent. What that job needs goes into Vellum itself — see
-[vellum-blueprints.md](vellum-blueprints.md).
-
-Comparing a Blender render with its blueprint needs no tool: render the same orthographic views
-to PNG and load them as reference images in Vellum, under the drawing.
-
-Palette, gradient, slicer, stipple and specimen tools stay out until a real need shows up.
+- **Separate SVG tools around Vellum.** Vellum draws blueprints and icon sketches to hand to an
+  agent; what that needs belongs in Vellum itself — see
+  [vellum-blueprints.md](vellum-blueprints.md). Tools for cutting and plotting (nesting parts on a
+  sheet, stroke-to-outline, toolpath previews) serve a different workflow.
+- **Comparing a Blender render with its blueprint.** Render the same orthographic views to PNG
+  and load them as reference images in Vellum, under the drawing.
+- **Design utilities** (palettes, gradients, sprite slicing) until a real need shows up.
 
 ## Naming
 

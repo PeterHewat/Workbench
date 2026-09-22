@@ -20,4 +20,7 @@ Four kinds of document. The kind tells you how much to trust it, and when it get
 ## Conventions
 
 - **Reference docs describe the present tense only.** Aspirations belong in a plan.
+- **No history in docs.** Say what is and what is intended, not what was tried, renamed or
+  discarded along the way — that is what git history is for. Scope a plan with "out of scope",
+  not with a list of abandoned ideas.
 - **When a doc and the code disagree, the code wins** — then fix the doc.
