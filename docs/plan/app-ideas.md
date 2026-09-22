@@ -1,89 +1,45 @@
 # App ideas (plan)
 
-Intent only — nothing here is built unless it appears in the catalog. Slugs are suggestions for `bun run new-app`; names are display titles.
+Intent only — nothing here is built unless it appears in the catalog. Slugs are suggestions for
+`bun run new-app`.
 
-Workbench fit: client-only, offline-friendly, static output, no “save online” or load-arbitrary-URL unless we explicitly decide otherwise.
+Workbench fit: client-only, offline, static output. No "save online", no fetching arbitrary URLs.
 
----
+## Shared groundwork (done)
 
-## Daily drivers (replace sites you already use)
+- `@workbench/codec` — base64 / base64url, hex, UTF-8, and JSON parsing with a line and column
+  for the first error. Pure and tested; JSON, JWT, Codec and Digests all build on it.
+- `@workbench/ui` — `base.css` (tokens, header with a link back to the index, buttons, inputs,
+  code areas), DOM helpers (`copyText`, `downloadText`, `pickFiles`, `onFileDrop`), and
+  `workbenchApp(slug)` for the Vite config.
 
-| Slug   | Name | Blurb (draft)                                                | MVP notes                                                                                                                                                                           |
-| ------ | ---- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `json` | JSON | Format, minify, and validate JSON in the browser.            | Paste + open file; pretty/minify; parse errors with position; optional read-only tree. Skip: hosted save/share, URL fetch (CORS). Later: key sort, schema validate.                 |
-| `jwt`  | JWT  | Decode and verify JSON Web Tokens without sending them away. | Split token; base64url decode; human dates for `exp` / `iat` / `nbf`; pretty payload (reuse JSON helpers). v1 verify/sign: HS256 family; later RS256 + PEM. Dev-only warning in UI. |
+## Build order
 
-Inspired by [jsonbeautifier.org](https://jsonbeautifier.org/) and [jwt.io](https://www.jwt.io/) — same jobs, local and offline.
+| #   | Slug         | Name       | What it does                                                 | MVP notes                                                                                                                                                                                         |
+| --- | ------------ | ---------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `json`       | JSON       | Format, minify and validate JSON.                            | Paste or drop a file; pretty / minify / sort keys; error with a caret at line and column (`parseJson`). Later: collapsible tree, JSON Pointer of the caret.                                       |
+| 2   | `jwt`        | JWT        | Decode and verify JSON Web Tokens without sending them away. | Split and base64url-decode; readable `exp` / `iat` / `nbf` with "expires in"; pretty header and payload. Verify HS256/384/512 via Web Crypto; later RS/ES with a PEM or JWK. "Dev use only" note. |
+| 3   | `codec`      | Codec      | Base64, base64url, URL encoding, hex and UTF-8 inspection.   | Two panes, pick the transform each way; show bytes (hex) under the text so invisible characters are visible.                                                                                      |
+| 4   | `digests`    | Digests    | Hash text and files with Web Crypto.                         | SHA-256/384/512 and SHA-1 (flagged as legacy); hex and base64; file drop hashes in the browser. HMAC with a key lives here, not in JWT.                                                           |
+| 5   | `icon-check` | Icon Check | See an SVG icon at the sizes it will actually be used at.    | Paste or drop an SVG; render at 16/24/32/48/64 px on light and dark, with a pixel grid option to catch half-pixel strokes. Later: PNG / favicon export via canvas.                                |
+| 6   | `codes`      | Codes      | QR codes as clean SVG.                                       | Text, URL, Wi-Fi presets; EC level and margin; SVG and PNG export. Write the encoder in-repo (the spec is fixed and it is testable) rather than bundling one. Code 128 later if needed.           |
+| 7   | `diff`       | Diff       | Compare two texts, or two JSON documents structurally.       | Line diff side-by-side or unified; JSON mode compares parsed values (key order ignored). Handy for two Vellum SVG exports too.                                                                    |
+| 8   | `time`       | Time       | Unix timestamps ⇄ dates, across time zones.                  | Seconds or milliseconds auto-detected; ISO 8601; relative ("in 3 h"). Small, and pairs with JWT's claims.                                                                                         |
 
----
+## Considered and dropped
 
-## Crypto & codes
+The "Vellum companions" (Measure, Outline, Refine, Nest, Toolpath, Vellum View) target laser
+cutting and plotting. Vellum's job here is different: blueprints and icon sketches handed to an
+agent. What that job needs goes into Vellum itself — see
+[vellum-blueprints.md](vellum-blueprints.md).
 
-| Slug      | Name    | Blurb (draft)                                | MVP notes                                                                                                                                      |
-| --------- | ------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `digests` | Digests | Hash files and text with the Web Crypto API. | SHA-256/384/512; hex + base64; text + file drop. Later: HMAC, PBKDF2 demo.                                                                     |
-| `codes`   | Codes   | QR and barcodes as clean SVG.                | QR presets (text, URL, Wi‑Fi); one 1D symbology (e.g. Code 128); margin + EC level; export SVG. Small bundled encoder at build time if needed. |
+Comparing a Blender render with its blueprint needs no tool: render the same orthographic views
+to PNG and load them as reference images in Vellum, under the drawing.
 
----
+Palette, gradient, slicer, stipple and specimen tools stay out until a real need shows up.
 
-## Vellum companions (same maker / SVG audience)
+## Naming
 
-| Slug          | Name        | Blurb (draft)                                           | MVP notes                                                                      |
-| ------------- | ----------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `measure`     | Measure     | Path length and area from SVG.                          | Drop/paste SVG; bbox; closed area; scale mm/in/px @ DPI.                       |
-| `outline`     | Outline     | Turn strokes into filled outlines for export.           | Offset stroke → filled paths; miter/round.                                     |
-| `refine`      | Refine      | Tidy SVG: round coords, strip noise, normalize viewBox. | Pairs with Vellum export; golden tests on round-trip stability where relevant. |
-| `nest`        | Nest        | Tile parts on a sheet with margins.                     | One or many copies; sheet size; combined SVG out.                              |
-| `toolpath`    | Toolpath    | Preview cut order along paths (visual only).            | 2D pen/laser path animation; no machine control.                               |
-| `vellum-view` | Vellum View | Inspect a `.vellum.json` project without the editor.    | Read-only element list, stats, export preview.                                 |
-
----
-
-## Small second apps (stress-test `new-app` + catalog)
-
-| Slug          | Name        | Blurb (draft)                                   | MVP notes                                    |
-| ------------- | ----------- | ----------------------------------------------- | -------------------------------------------- |
-| `color-forge` | Color Forge | Palettes, contrast, and CSS-ready color export. | Already the scaffold example in AGENTS.md.   |
-| `swatch`      | Swatch      | Extract a palette from a reference image.       | N colors; copy hex; optional harmony tweaks. |
-| `gradient`    | Gradient    | Build SVG and CSS gradients; copy markup.       | Multi-stop; live preview.                    |
-| `units`       | Units       | mm, inches, points, and px at a chosen DPI.     | Maker-oriented; artboard presets.            |
-| `curves`      | Curves      | Play with Bézier handles and path length.       | May share path math with Vellum over time.   |
-| `slicer`      | Slicer      | Cut a sprite sheet on a grid.                   | Export cells; all client-side.               |
-| `favicon`     | Favicon     | One square SVG → common icon sizes.             | PNG via canvas export where needed.          |
-
----
-
-## Offline utilities (broader, still on-brand)
-
-| Slug    | Name  | Blurb (draft)                       | MVP notes                    |
-| ------- | ----- | ----------------------------------- | ---------------------------- |
-| `regex` | Regex | Test patterns on sample text.       | Match highlights; no upload. |
-| `cron`  | Cron  | Cron expressions in plain language. | Next run times in local TZ.  |
-| `diff`  | Diff  | Compare two pasted texts or files.  | Side-by-side or unified.     |
-
----
-
-## Later / heavier
-
-| Slug       | Name     | Blurb (draft)                             | Notes                    |
-| ---------- | -------- | ----------------------------------------- | ------------------------ |
-| `stipple`  | Stipple  | Reference image → engraving-friendly SVG. | Algorithm-heavy.         |
-| `specimen` | Specimen | Type samples and size grids.              | Print CSS or SVG export. |
-
----
-
-## Naming notes
-
-- Catalog slugs stay **kebab-case**, lowercase, match the folder under `apps/`.
-- Prefer short, tool-like names (`json`, `jwt`, `codes`, `nest`) or evocative ones (`vellum`, `color-forge`) — avoid a repeated suffix like `-bench`.
-- One app per catalog entry; shared helpers live in `packages/` only when two apps need them (e.g. base64url + pretty JSON for `jwt` and `json`).
-
----
-
-## Suggested build order (personal utility)
-
-1. `json` — daily use, small surface.
-2. `jwt` — shares JSON presentation; replaces jwt.io for decode/verify habits.
-3. `digests` — when you want file hashes without opening a shell.
-4. `codes` — different UI, SVG-native output.
-5. First Vellum companion (`measure` or `refine`) when the editor workflow hurts without it.
+- Slugs are lowercase kebab-case and match the folder under `apps/`.
+- Short, tool-like names (`json`, `jwt`, `codes`) or evocative ones (`vellum`); no repeated suffix.
+- Shared code moves into `packages/` only once two apps need it.

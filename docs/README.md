@@ -15,6 +15,7 @@ Four kinds of document. The kind tells you how much to trust it, and when it get
 | [adr/002-catalog-drives-the-site.md](adr/002-catalog-drives-the-site.md)   | Decision  | Adding an app, or changing the deploy path         |
 | [vellum-spec.md](vellum-spec.md)                                           | Reference | Working on Vellum                                  |
 | [plan/app-ideas.md](plan/app-ideas.md)                                     | Plan      | Browsing or prioritizing future Workbench apps     |
+| [plan/vellum-blueprints.md](plan/vellum-blueprints.md)                     | Plan      | Adding scale, views or dimensions to Vellum        |
 
 ## Conventions
 
