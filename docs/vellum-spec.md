@@ -277,7 +277,7 @@ Live **formatted SVG** text in side panel always reflects exportable document (p
 ### 12.4 Actions
 
 - Save SVG, Save project, Load project, Import SVG (see §13–§14).
-- Export/download naming: suggest `document.svg` / `project.json`.
+- Export/download naming: the document's name, as `Name.svg` / `Name.vellum.json` (`document` when it has none).
 
 ---
 
