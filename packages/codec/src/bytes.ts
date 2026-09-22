@@ -68,7 +68,11 @@ function encode64(bytes: Uint8Array, alphabet: string, pad: boolean): string {
 
 function decode64(text: string, alphabet: string, name: string): Uint8Array {
   const clean = text.replace(/\s/g, "");
-  const body = clean.replace(/=+$/, "");
+  // Trailing padding stripped by hand: /=+$/ backtracks quadratically on a long run of "="
+  // that is not at the end, and this runs on whatever gets pasted.
+  let end = clean.length;
+  while (end > 0 && clean[end - 1] === "=") end--;
+  const body = clean.slice(0, end);
   const lookup = new Map([...alphabet].map((c, i) => [c, i]));
   for (let i = 0; i < body.length; i++) {
     if (!lookup.has(body[i])) throw new CodecError(`Not a ${name} character: "${body[i]}"`, i);

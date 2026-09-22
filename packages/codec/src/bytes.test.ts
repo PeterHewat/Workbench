@@ -48,6 +48,13 @@ describe("base64", () => {
     }
   });
 
+  test("a long run of '=' before a bad character fails fast, not in quadratic time", () => {
+    const hostile = "=".repeat(200_000) + "!";
+    const start = performance.now();
+    expect(() => base64ToBytes(hostile)).toThrow(CodecError);
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+
   test("decoding rejects an impossible length", () => {
     expect(() => base64ToBytes("Zm9vY")).toThrow(/too long/);
   });
