@@ -17,6 +17,7 @@ import {
   nearestOnElement,
   rotateElementCopy,
   canRotate,
+  closeByMerge,
   setClosed,
   simplifyPathIfStraight,
   splitAt,
@@ -267,6 +268,35 @@ describe("point editing", () => {
 });
 
 describe("topology", () => {
+  // The user's case: three anchors, and dragging the last onto the first should give a heart -
+  // two anchors, two curves.
+  const heartHalf = () =>
+    createPath(
+      [
+        anchor(192, 288, null, { x: 240, y: 256 }),
+        anchor(176, 224, { x: 224, y: 160 }, { x: 128, y: 160 }),
+        anchor(192, 288, { x: 112, y: 256 }, null),
+      ],
+      false
+    );
+
+  test("closing by merging the ends of a three-anchor curve keeps both curves", () => {
+    const heart = closeByMerge(heartHalf(), 2, 1) as PathElement;
+    expect(heart.closed).toBe(true);
+    expect(heart.points).toHaveLength(2);
+    expect(geometryOf(heart)!.attrs.d).toBe(
+      "M 192 288 C 240 256 224 160 176 224 C 128 160 112 256 192 288 Z"
+    );
+  });
+
+  test("a two-anchor closed path can be hit on its closing curve and split there", () => {
+    const heart = closeByMerge(heartHalf(), 2, 1) as PathElement;
+    // A point on the closing curve, well away from the first one.
+    expect(nearestOnElement(heart, { x: 140, y: 230 })!.index).toBe(1);
+    const [open] = splitAt(heart, 1)!;
+    expect(open!.type === "path" && open.points).toHaveLength(3);
+  });
+
   test("closing a polyline makes a polygon and back again", () => {
     const pl = createPolyline([
       { x: 0, y: 0 },

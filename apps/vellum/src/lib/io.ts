@@ -408,8 +408,15 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
       cx = x;
       cy = y;
     } else if (c === "Z") {
-      if (subStart && points.length > 2) {
-        const first = points[0]!;
+      const first = points[0];
+      const end = last();
+      if (subStart && first && end && end !== first && end.x === first.x && end.y === first.y) {
+        // A closing curve drawn back onto the start ends on the first anchor. It is that anchor,
+        // arriving: keep its incoming handle and drop the copy, or every re-import grows one.
+        first.hIn = end.hIn;
+        first.smooth = first.smooth || end.smooth;
+        points.pop();
+      } else if (subStart && first && points.length > 2) {
         if (first.x !== cx || first.y !== cy) corner(first.x, first.y);
       }
       cx = subStart?.x ?? cx;

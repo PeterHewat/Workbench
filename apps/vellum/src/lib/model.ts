@@ -282,12 +282,20 @@ function segmentInfo(a: Anchor, b: Anchor): SegmentInfo {
   return { curved: off(a.hOut, a) || off(b.hIn, b), c1: a.hOut ?? a, c2: b.hIn ?? b };
 }
 
+/**
+ * Whether a path draws a segment from its last anchor back to its first. Two anchors are
+ * enough: two curves between the same two points is how a heart or a lens is drawn.
+ */
+function closesBack(path: PathElement): boolean {
+  return path.closed && path.points.length >= 2;
+}
+
 /** Anchor pairs for every drawn segment, including the closing one on a closed path. */
 function pathSegments(path: PathElement): [Anchor, Anchor][] {
   const pts = path.points;
   const segs: [Anchor, Anchor][] = [];
   for (let i = 0; i < pts.length - 1; i++) segs.push([pts[i]!, pts[i + 1]!]);
-  if (path.closed && pts.length > 2) segs.push([pts[pts.length - 1]!, pts[0]!]);
+  if (closesBack(path)) segs.push([pts[pts.length - 1]!, pts[0]!]);
   return segs;
 }
 
@@ -305,7 +313,7 @@ function pathToD(path: PathElement, fmt: Formatter = (n) => n): string {
   };
   let d = `M ${fmt(pts[0]!.x)} ${fmt(pts[0]!.y)}`;
   for (let i = 0; i < pts.length - 1; i++) d += draw(pts[i]!, pts[i + 1]!);
-  if (path.closed && pts.length > 2) {
+  if (closesBack(path)) {
     const last = pts[pts.length - 1]!;
     // A straight closing segment is implied by Z; only a curved one needs its own command.
     if (segmentInfo(last, pts[0]!).curved) d += draw(last, pts[0]!);
@@ -803,7 +811,7 @@ export function nearestOnElement(el: SceneElement, p: Point): NearestHit | null 
     const pts: Point[] = el.points;
     const n = pts.length;
     for (let i = 0; i < n - 1; i++) segs.push({ i, a: pts[i]!, b: pts[i + 1]! });
-    const closed = el.type === "polygon" || (el.type === "path" && el.closed && n > 2);
+    const closed = el.type === "polygon" || (el.type === "path" && closesBack(el));
     if (closed && n > 1) segs.push({ i: n - 1, a: pts[n - 1]!, b: pts[0]! });
   }
   let best: NearestHit | null = null;
@@ -910,7 +918,7 @@ export function togglePointSmooth(path: SceneElement, i: number): void {
     return;
   }
   const n = path.points.length;
-  const closed = path.closed && n > 2;
+  const closed = closesBack(path);
   const prev = path.points[i - 1] ?? (closed ? path.points[n - 1] : undefined);
   const next = path.points[i + 1] ?? (closed ? path.points[0] : undefined);
   let tx: number;
@@ -1013,7 +1021,7 @@ export function splitAt(el: SceneElement, i: number): SceneElement[] | null {
   const path = el.type === "path" ? el : (toPathElement(el) as PathElement);
   const pts = path.points;
   const n = pts.length;
-  const closed = !!path.closed && n > 2;
+  const closed = closesBack(path);
   const style = { ...styleOf(path) };
   const copy = (p: Anchor, hIn: Point | null, hOut: Point | null): Anchor => ({
     x: p.x,

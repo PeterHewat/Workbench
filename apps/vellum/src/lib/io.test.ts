@@ -224,6 +224,28 @@ describe("round trip", () => {
     expect(back.elements[0]!.name).toBe("outline");
   });
 
+  test("a closed path of two curved anchors keeps both curves (a heart)", () => {
+    // Dragging one end of a three-anchor curve onto the other leaves two anchors and two
+    // curves; the curve back to the start must be drawn, and must survive the trip.
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">' +
+      '<path d="M 176 224 C 128 160 112 256 160 288 C 208 256 224 160 176 224 Z"/></svg>';
+    const [heart] = importSvgFile(svg).elements;
+    expect(heart?.type === "path" && heart.points).toHaveLength(2);
+    const first = formatExportSvg(doc([heart!]), true);
+    expect(first.match(/ C /g)).toHaveLength(2);
+    const back = importSvgFile(first, { keepIds: true });
+    expect(formatExportSvg(doc(back.elements), true)).toBe(first);
+  });
+
+  test("a closing curve does not come back as an extra anchor on top of the first", () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<path d="M 10 10 C 40 0 60 0 90 10 L 50 90 C 20 80 0 40 10 10 Z"/></svg>';
+    const [shape] = importSvgFile(svg).elements;
+    expect(shape?.type === "path" && shape.points).toHaveLength(3);
+  });
+
   test("groups survive the trip", () => {
     const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-abc"] });
     const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-abc"] });
