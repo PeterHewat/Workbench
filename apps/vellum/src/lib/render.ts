@@ -665,6 +665,26 @@ function union(a: BBox, b: BBox): BBox {
   };
 }
 
+/**
+ * The most anchors a selection of several paths shows. Every anchor is a few nodes redrawn on
+ * every frame of a drag, so a large selection - a thousand traced shapes, say - spent most of
+ * each frame on points nobody could pick out at that scale. Past this, a multi-selection shows
+ * boxes only; one selected path always shows all of its points, however many, since editing
+ * them is the reason to select it alone.
+ */
+const MULTI_ANCHOR_BUDGET = 400;
+
+function showsAnchors(sel: readonly SceneElement[]): boolean {
+  if (sel.length <= 1) return true;
+  let anchors = 0;
+  for (const el of sel) {
+    if (el.type !== "path") continue;
+    anchors += el.points.length;
+    if (anchors > MULTI_ANCHOR_BUDGET) return false;
+  }
+  return true;
+}
+
 function renderOverlay(state: EditorState): void {
   clearChildren(els.overlay);
   zoom = state.viewport.zoom;
@@ -682,10 +702,14 @@ function renderOverlay(state: EditorState): void {
   // Inside a selected group, each member's own box steps back so the group's box leads.
   const boxClass = (el: SceneElement) =>
     groupsOf(el).some((gid) => groups.has(gid)) ? "selection-box member-box" : "selection-box";
+  const anchors = showsAnchors(sel);
   for (const el of sel) {
     if (el.id === activePathId) continue;
     if (el.type === "path") {
-      renderPathHandles(els.overlay, el, state);
+      // A path with a point picked keeps its points in view, whatever else is selected.
+      if (anchors || state.selection.pathEdit?.pathId === el.id) {
+        renderPathHandles(els.overlay, el, state);
+      }
       renderSelectionBox(els.overlay, el, boxClass(el));
       continue;
     }
