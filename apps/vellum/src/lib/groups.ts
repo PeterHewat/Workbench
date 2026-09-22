@@ -152,6 +152,46 @@ export function moveWithinParent(
 ): SceneElement[] {
   const index = elements.findIndex((e) => e.id === id);
   if (index < 0) return [...elements];
+  return moveFrom(elements, index, groupsOf(elements[index]).length, dir, toEnd);
+}
+
+/** Where a group starts in the list, and how deep it sits: its place in its members' chains. */
+function groupAt(elements: readonly SceneElement[], gid: string): { index: number; depth: number } {
+  const index = elements.findIndex((e) => groupsOf(e).includes(gid));
+  return { index, depth: index < 0 ? -1 : groupsOf(elements[index]).indexOf(gid) };
+}
+
+/**
+ * Moves a whole group among its siblings, the same way an element moves: one step past its
+ * neighbour, widening to the group that holds it once it reaches the edge.
+ */
+export function moveGroup(
+  elements: readonly SceneElement[],
+  gid: string,
+  dir: -1 | 1,
+  toEnd: boolean
+): SceneElement[] {
+  const { index, depth } = groupAt(elements, gid);
+  if (index < 0) return [...elements];
+  return moveFrom(elements, index, depth, dir, toEnd);
+}
+
+export function canMoveGroup(elements: readonly SceneElement[], gid: string, dir: -1 | 1): boolean {
+  const { index, depth } = groupAt(elements, gid);
+  return index >= 0 && canMoveFrom(elements, index, depth, dir);
+}
+
+/**
+ * The move itself, for whatever block contains `index` at `maxDepth`: the element itself when
+ * that is its full chain length, or one of its groups when it is less.
+ */
+function moveFrom(
+  elements: readonly SceneElement[],
+  index: number,
+  maxDepth: number,
+  dir: -1 | 1,
+  toEnd: boolean
+): SceneElement[] {
   const direction: ZDirection = toEnd
     ? dir < 0
       ? "backmost"
@@ -160,6 +200,7 @@ export function moveWithinParent(
       ? "back"
       : "forward";
   for (const level of blockLadder(elements, index)) {
+    if (level.depth > maxDepth) continue;
     const room = dir < 0 ? level.at > 0 : level.at < level.blocks.length - 1;
     if (!room) continue;
     const picked = level.blocks.map((_, i) => i === level.at);
@@ -177,8 +218,18 @@ export function canMoveWithinParent(
 ): boolean {
   const index = elements.findIndex((e) => e.id === id);
   if (index < 0) return false;
-  return blockLadder(elements, index).some((level) =>
-    dir < 0 ? level.at > 0 : level.at < level.blocks.length - 1
+  return canMoveFrom(elements, index, groupsOf(elements[index]).length, dir);
+}
+
+function canMoveFrom(
+  elements: readonly SceneElement[],
+  index: number,
+  maxDepth: number,
+  dir: -1 | 1
+): boolean {
+  return blockLadder(elements, index).some(
+    (level) =>
+      level.depth <= maxDepth && (dir < 0 ? level.at > 0 : level.at < level.blocks.length - 1)
   );
 }
 

@@ -1008,13 +1008,25 @@ body {
   padding: 0;
 }
 
-/* The group's own line: select it whole, name it, show or hide it. The name takes the group's
-   colour, so the label and its bracket read as one thing. */
-.group-head {
+/* The group's own row is a shape's row, so its buttons line up with theirs. The name and the
+   count take the group's colour, so the row and its bracket read as one thing. The chevron
+   points down while the group is open, and folding it hides its members. */
+.group-run:not(.collapsed) > .group-head .chevron {
+  transform: rotate(90deg);
+}
+
+.group-run.collapsed > .group-items {
+  display: none;
+}
+
+.group-count {
   display: flex;
   align-items: center;
-  min-height: 32px;
-  margin-bottom: 2px;
+  justify-content: center;
+  border-color: var(--gc, var(--border));
+  color: var(--gc, var(--muted));
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .group-name-input {

@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { createRect } from "./model.js";
 import {
   canMoveSelectionZ,
+  canMoveGroup,
   canMoveWithinParent,
+  moveGroup,
   moveSelectionZ,
   moveWithinParent,
   normalizeGroups,
@@ -71,6 +73,33 @@ describe("moveWithinParent", () => {
   test("a nested group moves as one sibling", () => {
     const list = [el("a", "g1"), el("b", "g1", "g2"), el("c", "g1", "g2"), el("d", "g1")];
     expect(ids(moveWithinParent(list, "a", 1, false))).toBe("b c a d");
+  });
+});
+
+describe("moveGroup", () => {
+  test("a top-level group steps over its neighbour as one block", () => {
+    const list = [el("a"), el("b", "g1"), el("c", "g1"), el("d")];
+    expect(ids(moveGroup(list, "g1", 1, false))).toBe("a d b c");
+    expect(ids(moveGroup(list, "g1", -1, false))).toBe("b c a d");
+  });
+
+  test("Shift sends it to the end", () => {
+    const list = [el("a"), el("b"), el("c", "g1"), el("d", "g1")];
+    expect(ids(moveGroup(list, "g1", -1, true))).toBe("c d a b");
+  });
+
+  test("a nested group moves among its siblings, then widens to its parent at the edge", () => {
+    const list = [el("a", "g1"), el("b", "g1", "g2"), el("c", "g1", "g2"), el("d")];
+    expect(ids(moveGroup(list, "g2", -1, false))).toBe("b c a d");
+    // Already last inside g1: the move takes g1 past d.
+    expect(ids(moveGroup(list, "g2", 1, false))).toBe("d a b c");
+  });
+
+  test("says when there is nowhere to go", () => {
+    const list = [el("b", "g1"), el("c", "g1"), el("d")];
+    expect(canMoveGroup(list, "g1", -1)).toBe(false);
+    expect(canMoveGroup(list, "g1", 1)).toBe(true);
+    expect(canMoveGroup(list, "nope", 1)).toBe(false);
   });
 });
 

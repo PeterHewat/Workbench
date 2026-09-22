@@ -688,6 +688,10 @@
           <h3>About</h3>
           <ul>
             <li>
+              Vellum is part of <a href="../">Workbench</a>, a set of useful tools that run entirely
+              in your browser and keep working offline.
+            </li>
+            <li>
               <b>What this is</b> — a drawing tool for people who want the SVG itself to be good: a
               small set of primitives, a live view of the markup, and an export with no editor
               leftovers in it. It runs entirely in your browser, works offline once loaded, and
@@ -701,10 +705,6 @@
               a reference image underneath, your drawing on the sheet above it — and it is the other
               half of the name too, because SVG, like vellum, is meant to still be readable long
               after the thing that made it is gone.
-            </li>
-            <li>
-              <b>Part of Workbench</b> — Vellum is one of the tools in <a href="../">Workbench</a>,
-              a small set of tools that run entirely in your browser and keep working offline.
             </li>
           </ul>
 
@@ -903,10 +903,16 @@
               when it is already at the edge the move widens to the group itself.
             </li>
             <li>
-              <b>Naming a group</b> — the line at the top of a group holds its name. A named group
-              exports as <code>&lt;g id="group-57cc1c37_top_view"&gt;</code>: its id, then the name,
-              with spaces as underscores. The checkbox on that line selects the whole group, and its
-              eye shows or hides every shape in it.
+              <b>The group's row</b> — a group has a row of its own at the top of its bracket, with
+              the same buttons as a shape's: the chevron folds the group away, the checkbox selects
+              all of it, the eye shows or hides every shape in it, ▲ ▼ move it as one block, and the
+              bin deletes it with everything inside. Where a shape shows its colours, a group shows
+              how many shapes it holds.
+            </li>
+            <li>
+              <b>Naming a group</b> — type in its row. A named group exports as
+              <code>&lt;g id="group-57cc1c37_top_view"&gt;</code>: its id, then the name, with
+              spaces as underscores.
             </li>
             <li>
               <b>A group holds at least two things.</b> A group carries nothing here but its

@@ -13,19 +13,18 @@ import {
 } from "./model.js";
 import { escapeAttr } from "./utils.js";
 import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
-import { canMoveWithinParent, childBlocks, groupsOf, type Block } from "./groups.js";
+import {
+  canMoveGroup,
+  canMoveWithinParent,
+  childBlocks,
+  groupsOf,
+  moveGroup,
+  type Block,
+} from "./groups.js";
 import { scaleAbout, transformElement } from "./transform.js";
 import { type EditorState, type SceneElement } from "./types.js";
 import { holdSvgFocus, setSvgFocus } from "./svg-source.js";
-import {
-  cachedList,
-  accHeaderHtml,
-  eyeHtml,
-  rowDotHtml,
-  wireAccRow,
-  setField,
-  reorder,
-} from "./accordion.js";
+import { cachedList, accHeaderHtml, wireAccRow, setField, reorder } from "./accordion.js";
 import { byId } from "@workbench/ui";
 
 const primitiveListEl = byId("primitive-list");
@@ -261,6 +260,7 @@ function appendBlocks(
     run.className = "group-run";
     run.dataset.groupId = gid;
     run.style.setProperty("--gc", colors.get(gid) ?? "var(--accent)");
+    run.classList.toggle("collapsed", collapsedGroups.has(gid));
     run.appendChild(groupHead(state, gid));
     const inner = document.createElement("ul");
     inner.className = "group-items";
@@ -271,9 +271,16 @@ function appendBlocks(
 }
 
 /**
- * The head of a group: the checkbox selects the whole group, the name is what `<g id>` carries
- * after the group's id, and the eye shows or hides every member. A group has no row of its own
- * otherwise - its bracket is the rows it holds.
+ * Groups folded shut in the list. Where you are looking, not part of the drawing: not saved,
+ * not undone, and forgotten when the group is.
+ */
+const collapsedGroups = new Set<string>();
+
+/**
+ * A group's own row, built like a shape's so every button lines up down the list: the chevron
+ * folds the group, the checkbox selects all of it, the name is what `<g id>` carries after the
+ * group's id, the count stands where a shape shows its colours, the eye shows or hides every
+ * member, the arrows move the group as one block, and the bin deletes it with everything in it.
  */
 function groupHead(state: EditorState, gid: string): HTMLElement {
   const members = membersOf(state.elements, gid);
@@ -281,22 +288,30 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
   const allSelected = members.every((e) => selected.has(e.id));
   const allHidden = members.every((e) => e.hidden);
   const head = document.createElement("div");
-  head.className = "group-head";
-  head.innerHTML = `
-    ${rowDotHtml("check", allSelected, allSelected ? "Deselect the group" : "Select the group", ' data-group-action="select"')}
-    <input type="text" class="acc-title-input group-name-input" data-group-name value="${escapeAttr(state.groupNames[gid] ?? "")}" placeholder="group" aria-label="Group name" title="Group name - exported in the group's id" />
-    ${eyeHtml(!allHidden, allHidden ? "Show the group" : "Hide the group", ' data-group-action="eye"')}`;
-  head
-    .querySelector('[data-group-action="select"]')!
-    .addEventListener("click", () => toggleGroupSelected(gid));
-  head.querySelector('[data-group-action="eye"]')!.addEventListener("click", () =>
-    setHidden(
-      members.map((e) => e.id),
-      !allHidden
-    )
-  );
+  head.className = "acc-item group-head";
+  head.innerHTML = accHeaderHtml({
+    dot: { on: allSelected, title: allSelected ? "Deselect the group" : "Select the group" },
+    eye: { visible: !allHidden, title: allHidden ? "Show the group" : "Hide the group" },
+    titleHtml: `<input type="text" class="acc-title-input group-name-input" data-group-name value="${escapeAttr(state.groupNames[gid] ?? "")}" placeholder="group" aria-label="Group name" title="Group name - exported in the group's id" />`,
+    extra: `<span class="acc-swatch group-count" title="${members.length} shapes in this group">${members.length}</span>`,
+    canUp: canMoveGroup(state.elements, gid, -1),
+    canDown: canMoveGroup(state.elements, gid, 1),
+    index: 0,
+    count: 0,
+  });
+  wireAccRow(head, {
+    onExpand: () => toggleGroupCollapsed(gid),
+    onDot: () => toggleGroupSelected(gid),
+    onEye: () =>
+      setHidden(
+        members.map((e) => e.id),
+        !allHidden
+      ),
+    onDelete: () => deleteGroup(gid),
+    onMove: (dir, toEnd) => moveGroupBy(gid, dir, toEnd),
+  });
   const input = head.querySelector<HTMLInputElement>("[data-group-name]")!;
-  input.addEventListener("change", () => renameGroup(gid, input.value));
+  input.addEventListener("input", () => renameGroup(gid, input.value));
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") input.blur();
   });
@@ -462,16 +477,57 @@ function setHidden(ids: readonly string[], hidden: boolean): void {
   }));
 }
 
+/** Live while typing, like a shape's name: one undo step for the whole edit. */
 function renameGroup(gid: string, raw: string): void {
   const name = raw.trim();
   const st = getState();
   if ((st.groupNames[gid] ?? "") === name) return;
-  pushUndo();
+  if (!textUndoPushed) {
+    pushUndo();
+    textUndoPushed = true;
+  }
   setState((s) => {
     const groupNames = { ...s.groupNames };
     if (name) groupNames[gid] = name;
     else delete groupNames[gid];
     return { ...s, groupNames };
+  });
+}
+
+function toggleGroupCollapsed(gid: string): void {
+  if (collapsedGroups.has(gid)) collapsedGroups.delete(gid);
+  else collapsedGroups.add(gid);
+  primitiveList.invalidate();
+  primitiveList.sync(getState());
+}
+
+function moveGroupBy(gid: string, dir: number, toEnd: boolean): void {
+  const before = getState().elements;
+  const next = moveGroup(before, gid, dir < 0 ? -1 : 1, toEnd);
+  if (next.every((e, i) => e === before[i])) return;
+  pushUndo();
+  setState((s) => ({ ...s, elements: next }));
+}
+
+/** Deletes a group and everything in it, as the bin on a shape's row deletes that shape. */
+function deleteGroup(gid: string): void {
+  const doomed = new Set(membersOf(getState().elements, gid).map((e) => e.id));
+  if (!doomed.size) return;
+  pushUndo();
+  collapsedGroups.delete(gid);
+  setState((s) => {
+    const groupNames = { ...s.groupNames };
+    delete groupNames[gid];
+    return {
+      ...s,
+      elements: s.elements.filter((e) => !doomed.has(e.id)),
+      groupNames,
+      selection: selectOnly(s.selection.elementIds.filter((id) => !doomed.has(id))),
+      ui: {
+        ...s.ui,
+        expandedElementId: doomed.has(s.ui.expandedElementId ?? "") ? null : s.ui.expandedElementId,
+      },
+    };
   });
 }
 
