@@ -110,8 +110,8 @@ export function accHeaderHtml(o: AccHeaderOptions): string {
       ${o.titleHtml ?? `<input type="text" class="acc-title-input" data-field="name" value="${escapeAttr(o.name ?? "")}" placeholder="${escapeAttr(o.placeholder ?? "")}" />`}
       ${o.extra ?? ""}
       ${o.eye ? eyeHtml(o.eye.visible, o.eye.title) : ""}
-      <button type="button" class="acc-icon-btn acc-move" data-action="move-up" title="Move up (Shift: to top)" aria-label="Move up"${(o.canUp ?? o.index > 0) ? "" : " disabled"}>▲</button>
-      <button type="button" class="acc-icon-btn acc-move" data-action="move-down" title="Move down (Shift: to bottom)" aria-label="Move down"${(o.canDown ?? o.index < o.count - 1) ? "" : " disabled"}>▼</button>
+      <button type="button" class="acc-icon-btn acc-move" data-action="move-up" title="Bring forward (Shift: to the front)" aria-label="Bring forward"${(o.canUp ?? o.index > 0) ? "" : " disabled"}>▲</button>
+      <button type="button" class="acc-icon-btn acc-move" data-action="move-down" title="Send backward (Shift: to the back)" aria-label="Send backward"${(o.canDown ?? o.index < o.count - 1) ? "" : " disabled"}>▼</button>
       <button type="button" class="acc-icon-btn acc-trash" data-action="delete" title="Delete" aria-label="Delete">
         <svg class="ui-icon" aria-hidden="true"><use href="#icon-trash" /></svg>
       </button>
@@ -152,14 +152,24 @@ export function setField(li: HTMLElement, field: string, value: string | number)
   if (input && input !== document.activeElement) input.value = String(value);
 }
 
-/** New index after moving one step (or, with `toEnd`, all the way) up (-1) or down (+1). */
+/**
+ * The lists read like a layers panel: the front-most thing at the top. The document keeps SVG
+ * order, where later is drawn on top, so a list shows it back to front and ▲ - up the list -
+ * is a step later in the document. `dir` is what a row's arrow was pressed: -1 up, +1 down.
+ */
+export function towardFront(dir: number): -1 | 1 {
+  return dir < 0 ? 1 : -1;
+}
+
+/** New index after one step (or, with `toEnd`, all the way) back (-1) or to the front (+1). */
 function movedIndex(idx: number, length: number, dir: number, toEnd: boolean): number {
   return toEnd ? (dir < 0 ? 0 : length - 1) : Math.min(Math.max(idx + dir, 0), length - 1);
 }
 
 /**
- * Moves one entry within the list. An element moves among its siblings inside whatever group
- * holds it, and a nested group counts as one sibling, so reordering can never split a group.
+ * Moves one entry in document order: `dir` +1 is a step towards the front, -1 towards the
+ * back (see `towardFront`). An element moves among its siblings inside whatever group holds
+ * it, and a nested group counts as one sibling, so reordering can never split a group.
  */
 export function reorder(key: "elements" | "images", id: string, dir: number, toEnd: boolean): void {
   if (key === "elements") {

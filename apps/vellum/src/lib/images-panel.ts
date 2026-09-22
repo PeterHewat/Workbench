@@ -4,7 +4,14 @@ import { createImage } from "./model.js";
 import { escapeAttr, escapeXml } from "./utils.js";
 import { type EditorState, type ReferenceImage } from "./types.js";
 import { setSectionOpen } from "./layout.js";
-import { cachedList, accHeaderHtml, wireAccRow, setField, reorder } from "./accordion.js";
+import {
+  cachedList,
+  accHeaderHtml,
+  wireAccRow,
+  setField,
+  reorder,
+  towardFront,
+} from "./accordion.js";
 import { byId } from "@workbench/ui";
 
 const imageListEl = byId("image-list");
@@ -28,7 +35,10 @@ function imageBodyHtml(img: ReferenceImage): string {
 
 function buildImageList(state: EditorState): void {
   imageListEl.innerHTML = "";
-  state.images.forEach((img, index) => {
+  const count = state.images.length;
+  // Back to front, like Primitives: the image drawn on top heads the list.
+  [...state.images].reverse().forEach((img, row) => {
+    const index = count - 1 - row;
     const visible = img.visible !== false;
     const li = document.createElement("li");
     li.className = `acc-item${state.ui.expandedImageId === img.id ? " expanded" : ""}${visible ? "" : " acc-item--hidden"}`;
@@ -40,14 +50,16 @@ function buildImageList(state: EditorState): void {
         // swap it. There is nothing to rename: a name of its own would only be a second,
         // less true label for the same thing.
         titleHtml: `<button type="button" class="file-chip acc-title-file" data-action="replace-file" title="${escapeAttr(img.fileName || img.name)} — click to trace a different file">${escapeXml(img.fileName || img.name)}</button>`,
-        index,
-        count: state.images.length,
+        index: row,
+        count,
+        canUp: index < count - 1,
+        canDown: index > 0,
       }) + imageBodyHtml(img);
     wireAccRow(li, {
       onExpand: () => toggleImageExpanded(img.id),
       onEye: () => toggleImageVisible(img.id),
       onDelete: () => deleteImage(img.id),
-      onMove: (dir, toEnd) => reorder("images", img.id, dir, toEnd),
+      onMove: (dir, toEnd) => reorder("images", img.id, towardFront(dir), toEnd),
     });
     li.querySelector('[data-action="replace-file"]')!.addEventListener("click", () => {
       replaceImageTargetId = img.id;

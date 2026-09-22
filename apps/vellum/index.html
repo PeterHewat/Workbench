@@ -787,9 +787,11 @@
               row in Primitives. Typing one is the way to be exact that a fingertip cannot manage.
             </li>
             <li>
-              <b>Order</b> — the ▲ ▼ arrows on a Primitives row move a shape among its siblings, and
-              never out of its group: at the edge of the group the arrow is dimmed. To move the
-              whole group, use the arrows on the group's own row.
+              <b>Order</b> — the Primitives list reads like a layers panel: the shape drawn on top
+              is at the top of the list. ▲ brings a shape forward and ▼ sends it back, among its
+              siblings and never out of its group: at the edge of the group the arrow is dimmed. To
+              move the whole group, use the arrows on the group's own row. The SVG source keeps the
+              file's order, where the shape drawn last is written last.
             </li>
             <li data-help="mouse">
               <b>Align</b> — hold <kbd>Alt</kbd> while drawing or dragging to snap to points that
@@ -798,8 +800,8 @@
             </li>
             <li>
               <b>Z-order</b> — the ▲ ▼ buttons on the bar beside the selection, or on a row in
-              Primitives and Reference images, move one step (with <kbd>Shift</kbd>: to the top or
-              bottom).
+              Primitives and Reference images, bring forward or send back one step (with
+              <kbd>Shift</kbd>: all the way to the front or the back).
               <span data-help="mouse"
                 ><kbd>Ctrl</kbd>+<kbd>[</kbd> / <kbd>]</kbd> does the same from the keyboard.</span
               >

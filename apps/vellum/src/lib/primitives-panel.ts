@@ -25,7 +25,14 @@ import {
 import { scaleAbout, transformElement } from "./transform.js";
 import { type EditorState, type SceneElement } from "./types.js";
 import { holdSvgFocus, setSvgFocus } from "./svg-source.js";
-import { cachedList, accHeaderHtml, wireAccRow, setField, reorder } from "./accordion.js";
+import {
+  cachedList,
+  accHeaderHtml,
+  wireAccRow,
+  setField,
+  reorder,
+  towardFront,
+} from "./accordion.js";
 import { byId } from "@workbench/ui";
 
 const primitiveListEl = byId("primitive-list");
@@ -241,7 +248,8 @@ function appendBlocks(
   depth: number,
   colors: Map<string, string>
 ): void {
-  for (const block of childBlocks(state.elements, range, depth)) {
+  // Back to front: the shape drawn last, on top of the others, heads the list.
+  for (const block of childBlocks(state.elements, range, depth).reverse()) {
     const gid = groupsOf(state.elements[block.start])[depth];
     if (gid == null) {
       parent.appendChild(primitiveRow(state, block.start));
@@ -285,8 +293,8 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
     eye: { visible: !allHidden, title: allHidden ? "Show the group" : "Hide the group" },
     titleHtml: `<input type="text" class="acc-title-input group-name-input" data-group-name value="${escapeAttr(state.groupNames[gid] ?? "")}" placeholder="group" aria-label="Group name" title="Group name - exported in the group's id" />`,
     extra: `<span class="acc-swatch group-count" title="${members.length} shapes in this group">${members.length}</span>`,
-    canUp: canMoveGroup(state.elements, gid, -1),
-    canDown: canMoveGroup(state.elements, gid, 1),
+    canUp: canMoveGroup(state.elements, gid, towardFront(-1)),
+    canDown: canMoveGroup(state.elements, gid, towardFront(1)),
     index: 0,
     count: 0,
   });
@@ -299,7 +307,7 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
         !allHidden
       ),
     onDelete: () => deleteGroup(gid),
-    onMove: (dir, toEnd) => moveGroupBy(gid, dir, toEnd),
+    onMove: (dir, toEnd) => moveGroupBy(gid, towardFront(dir), toEnd),
   });
   const input = head.querySelector<HTMLInputElement>("[data-group-name]")!;
   input.addEventListener("input", () => renameGroup(gid, input.value));
@@ -322,8 +330,8 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
       name: el.name || "",
       placeholder: el.type,
       extra: `<span class="acc-swatch" style="${headerSwatchStyle(el)}"></span>`,
-      canUp: canMoveWithinParent(state.elements, el.id, -1),
-      canDown: canMoveWithinParent(state.elements, el.id, 1),
+      canUp: canMoveWithinParent(state.elements, el.id, towardFront(-1)),
+      canDown: canMoveWithinParent(state.elements, el.id, towardFront(1)),
       index,
       count: state.elements.length,
     })}
@@ -341,7 +349,7 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
     onDot: () => toggleElementSelected(el.id),
     onEye: () => setHidden([el.id], !el.hidden),
     onDelete: () => deletePrimitive(el.id),
-    onMove: (dir, toEnd) => reorder("elements", el.id, dir, toEnd),
+    onMove: (dir, toEnd) => reorder("elements", el.id, towardFront(dir), toEnd),
   });
   return li;
 }
@@ -492,9 +500,10 @@ function toggleGroupCollapsed(gid: string): void {
   primitiveList.sync(getState());
 }
 
-function moveGroupBy(gid: string, dir: number, toEnd: boolean): void {
+/** `dir` is in document order: +1 towards the front. */
+function moveGroupBy(gid: string, dir: -1 | 1, toEnd: boolean): void {
   const before = getState().elements;
-  const next = moveGroup(before, gid, dir < 0 ? -1 : 1, toEnd);
+  const next = moveGroup(before, gid, dir, toEnd);
   if (next.every((e, i) => e === before[i])) return;
   pushUndo();
   setState((s) => ({ ...s, elements: next }));
