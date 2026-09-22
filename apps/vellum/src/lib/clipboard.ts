@@ -15,7 +15,9 @@ export function copySelectionText(): string | null {
     .filter((e): e is SceneElement => !!e);
   if (!els.length) return null;
   pasteCount = 0;
-  return JSON.stringify({ tag: CLIP_TAG, elements: els });
+  const gids = new Set(els.flatMap((e) => e.groups ?? []));
+  const names = Object.entries(getState().groupNames).filter(([gid]) => gids.has(gid));
+  return JSON.stringify({ tag: CLIP_TAG, elements: els, groupNames: Object.fromEntries(names) });
 }
 
 export function cutSelection(): string | null {
@@ -27,6 +29,7 @@ export function cutSelection(): string | null {
 /** Pastes clipboard text: our own JSON, or plain SVG markup. True if anything was added. */
 export function pasteFromText(text: string): boolean {
   let elements: SceneElement[] | null = null;
+  let names: Record<string, string> = {};
   let fromSvg = false;
   try {
     const data: unknown = JSON.parse(text);
@@ -37,11 +40,12 @@ export function pasteFromText(text: string): boolean {
       Array.isArray((data as { elements?: unknown }).elements)
     ) {
       elements = (data as { elements: SceneElement[] }).elements;
+      names = (data as { groupNames?: Record<string, string> }).groupNames ?? {};
     }
   } catch {
     if (/^\s*<(\?xml|svg)/i.test(text || "")) {
       try {
-        elements = importSvgFile(text).elements;
+        ({ elements, groupNames: names } = importSvgFile(text));
         fromSvg = true;
       } catch {
         elements = null;
@@ -55,10 +59,11 @@ export function pasteFromText(text: string): boolean {
     setState((s) => {
       // SVG markup lands where it says it does; our own copies step away from the original.
       const off = fromSvg ? 0 : Math.max(s.grid.step, 10) * pasteCount;
-      const copies = copyElements(source, off);
+      const { copies, groupNames } = copyElements(source, off, names);
       return {
         ...s,
         elements: [...s.elements, ...copies],
+        groupNames: { ...s.groupNames, ...groupNames },
         selection: selectOnly(copies.map((c) => c.id)),
       };
     });

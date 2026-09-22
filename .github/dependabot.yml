@@ -13,7 +13,8 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # The composite action under .github/actions is not scanned from "/" alone.
+    directories: ["/", "/.github/actions/*"]
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3

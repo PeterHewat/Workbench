@@ -3,6 +3,7 @@ import {
   elementIdFromSvgId,
   elementToSvgMarkup,
   formatExportSvg,
+  groupIdFromSvgId,
   importSvgFile,
   sanitizeName,
   serializeProject,
@@ -222,6 +223,80 @@ describe("round trip", () => {
     const el = Object.assign(createRect(0, 0, 10, 10), { name: "outline" });
     const back = importSvgFile(formatExportSvg(doc([el]), true), { keepIds: true });
     expect(back.elements[0]!.name).toBe("outline");
+  });
+
+  test("a closed path of two curved anchors keeps both curves (a heart)", () => {
+    // Dragging one end of a three-anchor curve onto the other leaves two anchors and two
+    // curves; the curve back to the start must be drawn, and must survive the trip.
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">' +
+      '<path d="M 176 224 C 128 160 112 256 160 288 C 208 256 224 160 176 224 Z"/></svg>';
+    const [heart] = importSvgFile(svg).elements;
+    expect(heart?.type === "path" && heart.points).toHaveLength(2);
+    const first = formatExportSvg(doc([heart!]), true);
+    expect(first.match(/ C /g)).toHaveLength(2);
+    const back = importSvgFile(first, { keepIds: true });
+    expect(formatExportSvg(doc(back.elements), true)).toBe(first);
+  });
+
+  test("a closing curve does not come back as an extra anchor on top of the first", () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<path d="M 10 10 C 40 0 60 0 90 10 L 50 90 C 20 80 0 40 10 10 Z"/></svg>';
+    const [shape] = importSvgFile(svg).elements;
+    expect(shape?.type === "path" && shape.points).toHaveLength(3);
+  });
+
+  test("a group's name rides along in its id, and comes back as its name", () => {
+    const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-57cc1c37"] });
+    const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-57cc1c37"] });
+    const first = formatExportSvg(
+      { ...doc([a, b]), groupNames: { "group-57cc1c37": "top view" } },
+      true
+    );
+    expect(first).toContain('<g id="group-57cc1c37_top_view">');
+    const back = importSvgFile(first, { keepIds: true });
+    expect(back.elements[0]!.groups).toEqual(["group-57cc1c37"]);
+    expect(back.groupNames).toEqual({ "group-57cc1c37": "top_view" });
+    const second = formatExportSvg({ ...doc(back.elements), groupNames: back.groupNames }, true);
+    expect(second).toBe(first);
+  });
+
+  test("the group id is read back out of a named <g id>", () => {
+    expect(groupIdFromSvgId("group-79acbec9_2222")).toBe("group-79acbec9");
+    expect(groupIdFromSvgId("group-79acbec9")).toBe("group-79acbec9");
+    expect(groupIdFromSvgId("wheels")).toBeNull();
+  });
+
+  test("a foreign <g id> becomes the group's name", () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg"><g id="wheels">' +
+      '<rect width="1" height="1"/><rect x="2" width="1" height="1"/></g></svg>';
+    const back = importSvgFile(svg);
+    const gid = back.elements[0]!.groups![0]!;
+    expect(gid).toMatch(/^group-/);
+    expect(back.groupNames).toEqual({ [gid]: "wheels" });
+  });
+
+  test("a hidden shape exports as display none and comes back hidden", () => {
+    const el = Object.assign(createRect(0, 0, 10, 10), { hidden: true });
+    const first = formatExportSvg(doc([el]), true);
+    expect(first).toContain('display="none"');
+    const back = importSvgFile(first, { keepIds: true });
+    expect(back.elements[0]!.hidden).toBe(true);
+    expect(formatExportSvg(doc(back.elements), true)).toBe(first);
+  });
+
+  test("a saved project keeps the names of groups that still exist, and only those", () => {
+    const a = Object.assign(createRect(0, 0, 1, 1), { groups: ["group-aaaa"] });
+    const b = Object.assign(createRect(2, 2, 1, 1), { groups: ["group-aaaa"] });
+    const saved = serializeProject({
+      ...createInitialState(),
+      elements: [a, b],
+      groupNames: { "group-aaaa": "side view", "group-gone": "old" },
+    });
+    expect(saved.groupNames).toEqual({ "group-aaaa": "side view" });
+    expect(serializeProject(createInitialState()).groupNames).toBeUndefined();
   });
 
   test("groups survive the trip", () => {

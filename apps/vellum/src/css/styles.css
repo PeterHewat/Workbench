@@ -546,20 +546,54 @@ body {
   pointer-events: none;
 }
 
+/* A selection outline is a coloured line over a pale halo, so it reads on the dark canvas and
+   on a white artboard alike. --sel is a group's own colour when it is set. */
 .selection-box {
   fill: none;
-  stroke: var(--accent);
-  stroke-width: 1;
-  stroke-dasharray: 4 2;
+  stroke: var(--sel, var(--accent));
+  stroke-width: 1.75;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
+}
+
+.selection-halo {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 4;
+}
+
+/* A selected group's box is the one that leads; its members' boxes step back. */
+.group-box {
+  stroke-width: 2.25;
+}
+
+.group-box.selection-halo {
+  stroke-width: 5;
+}
+
+.member-box {
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  stroke-opacity: 0.8;
+}
+
+.member-box.selection-halo {
+  stroke-width: 2.5;
+  stroke-dasharray: none;
+  stroke-opacity: 0.5;
 }
 
 /* Hover is the same outline the selection draws, quieter: solid rather than marching dashes,
    so a hovered shape and a selected one are never confused for each other. */
 .hover-box {
+  stroke-dasharray: 5 3;
+  stroke-width: 1.5;
+  stroke-opacity: 0.8;
+}
+
+.hover-box.selection-halo {
   stroke-dasharray: none;
-  stroke-opacity: 0.55;
+  stroke-width: 3.5;
+  stroke-opacity: 0.45;
 }
 
 .marquee {
@@ -1006,6 +1040,43 @@ body {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+/* The group's own row is a shape's row, so its buttons line up with theirs. The name and the
+   count take the group's colour, so the row and its bracket read as one thing. The chevron
+   points down while the group is open, and folding it hides its members. */
+.group-run:not(.collapsed) > .group-head .chevron {
+  transform: rotate(90deg);
+}
+
+.group-run.collapsed > .group-items {
+  display: none;
+}
+
+.group-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-color: var(--gc, var(--border));
+  color: var(--gc, var(--muted));
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.group-name-input {
+  color: var(--gc, var(--text));
+  font-weight: 600;
+}
+
+.group-name-input::placeholder {
+  color: var(--gc, var(--muted));
+  font-weight: 400;
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.acc-item--hidden .acc-swatch {
+  opacity: 0.35;
 }
 
 /* The bracket supplies the gap under the group, so the last row inside it does not add another. */
@@ -1566,6 +1637,27 @@ body {
   .help-mode-btn {
     min-height: 36px;
     padding: 0 10px;
+  }
+}
+
+/* A phone-width panel: at 375px the 74px colour preview and four 40px buttons left the name
+   field 15px wide. The preview becomes a 22px square - it still shows stroke and fill - and the
+   row buttons give up a little of their target, so the name can be read and edited. */
+@media (max-width: 460px) {
+  .acc-swatch {
+    width: 22px;
+    margin-left: 4px;
+  }
+
+  .acc-expand-btn {
+    width: 24px;
+  }
+
+  .acc-icon-btn,
+  .acc-trash,
+  .btn-visibility {
+    min-width: 34px;
+    min-height: 34px;
   }
 }
 

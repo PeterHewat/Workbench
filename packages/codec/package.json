@@ -1,0 +1,17 @@
+{
+  "name": "@workbench/codec",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure encoding helpers shared by the text tools: base64, hex, UTF-8 and JSON with error positions",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  }
+}

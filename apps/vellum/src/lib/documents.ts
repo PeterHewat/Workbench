@@ -7,19 +7,17 @@ import {
   deleteDocument,
   renameDocument,
   duplicateDocument,
-  formerStorageFound,
   type DocumentMeta,
 } from "./storage.js";
 import { serializeProject, loadProject } from "./io.js";
-import { deepClone, downloadText, escapeAttr, uid } from "./utils.js";
-import { registerServiceWorker } from "@workbench/ui";
+import { deepClone, escapeAttr, uid } from "./utils.js";
+import { byId, downloadText, registerServiceWorker } from "@workbench/ui";
 import { type ProjectFile } from "./types.js";
 import { savedView } from "./session.js";
 import { setSectionOpen } from "./layout.js";
 import { fitToView } from "./zoom.js";
 import { invalidateLists, rowDotHtml } from "./accordion.js";
 import { hydrateImageDimensions } from "./images-panel.js";
-import { byId } from "./dom.js";
 
 /** The document on the canvas. Read by the rest of the app; only this module replaces it. */
 export let currentDoc: { id: string | null; name: string } = { id: null, name: "" };
@@ -320,9 +318,18 @@ interface DocumentFile {
 }
 
 /** A file name that survives every operating system, from the document's name. */
+/** A document name made safe for a file name. */
+function fileBase(name: string): string {
+  return name.replace(/[^\w. -]+/g, "").trim() || "document";
+}
+
 function docFileName(name: string): string {
-  const base = name.replace(/[^\w. -]+/g, "").trim() || "document";
-  return `${base}.vellum.json`;
+  return `${fileBase(name)}.vellum.json`;
+}
+
+/** What an SVG export of the open document is saved as. */
+export function svgFileName(): string {
+  return `${fileBase(currentDoc.name)}.svg`;
 }
 
 async function exportDoc(id: string): Promise<void> {
@@ -403,29 +410,6 @@ window.addEventListener("beforeunload", (e) => {
   }
 });
 
-const RENAME_NOTICE_KEY = "vellum.renameNotice";
-
-/** Said once: documents from before the rename are still on this machine, under the old name. */
-async function noticeFormerStorage(): Promise<void> {
-  if (docsCache.length) return;
-  try {
-    if (localStorage.getItem(RENAME_NOTICE_KEY)) return;
-  } catch {
-    return;
-  }
-  if (!(await formerStorageFound())) return;
-  try {
-    localStorage.setItem(RENAME_NOTICE_KEY, "1");
-  } catch {
-    /* said once per session rather than once ever */
-  }
-  window.alert(
-    "This app used to be called vector-tracer, and it stored documents under that name. " +
-      "They are still in this browser but are not read here. To bring one across, open the " +
-      "older version, export the document to a file, and import it with the ↑ button."
-  );
-}
-
 /** Opens the last document (or a blank one) and starts the service worker. Call once, last. */
 export function startDocuments(): void {
   void openInitialDocument();
@@ -434,7 +418,6 @@ export function startDocuments(): void {
 
 async function openInitialDocument(): Promise<void> {
   await refreshDocList();
-  await noticeFormerStorage();
   let last: string | null = null;
   try {
     last = localStorage.getItem(LAST_DOC_KEY);

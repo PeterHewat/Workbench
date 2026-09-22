@@ -3,8 +3,6 @@
 import type { ProjectFile } from "./types.js";
 
 const DB_NAME = "vellum";
-/** What the app was called before it was Vellum. Nothing reads this store; see below. */
-const FORMER_DB_NAME = "vector-tracer";
 const META = "meta";
 const DATA = "data";
 
@@ -17,22 +15,6 @@ export interface DocumentMeta {
 interface DataRecord {
   id: string;
   data: ProjectFile;
-}
-
-/**
- * True when documents are sitting in the store the app kept before it was renamed.
- *
- * They are not migrated: reading a store this build no longer owns is exactly the kind of
- * quiet compatibility shim that rots. The app says they are there instead, so they can be
- * exported one file at a time from the previous build and imported back here.
- */
-export async function formerStorageFound(): Promise<boolean> {
-  if (typeof indexedDB?.databases !== "function") return false;
-  try {
-    return (await indexedDB.databases()).some((d) => d.name === FORMER_DB_NAME);
-  } catch {
-    return false;
-  }
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;

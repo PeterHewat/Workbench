@@ -2,7 +2,7 @@ import { getState } from "./state.js";
 import { renderRulers, setRulerOffset } from "./rulers.js";
 import { isCoarsePointer } from "./pointer.js";
 import { writeSessionView, savedView } from "./session.js";
-import { byId, bySelector } from "./dom.js";
+import { byId, bySelector } from "@workbench/ui";
 
 const NARROW = "(max-width: 760px)";
 const narrowQuery = window.matchMedia(NARROW);

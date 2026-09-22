@@ -21,14 +21,13 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter @workbench/vellum dev",
-    "dev:home": "bun run --filter @workbench/home dev",
+    "dev": "bun tools/dev.ts",
     "build": "bun tools/build-site.ts",
     "preview": "bun run --filter @workbench/home preview",
     "lint": "eslint .",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
-    "typecheck": "bun run --filter '*' typecheck",
+    "typecheck": "tsc -p . && bun run --filter '*' typecheck",
     "check": "bun run lint && bun run typecheck && bun run format",
     "test": "bun run --filter '*' test",
     "verify": "bun run check && bun run test && bun run build",

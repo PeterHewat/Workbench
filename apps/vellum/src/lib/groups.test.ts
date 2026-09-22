@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { createRect } from "./model.js";
 import {
+  assignGroupHuesInPlace,
+  nextGroupHue,
+  selectedGroups,
   canMoveSelectionZ,
+  canMoveGroup,
   canMoveWithinParent,
+  moveGroup,
   moveSelectionZ,
   moveWithinParent,
   normalizeGroups,
@@ -61,16 +66,46 @@ describe("moveWithinParent", () => {
     expect(ids(moveWithinParent(list, "d", -1, false))).toBe("a b d c");
   });
 
-  test("a member at the edge takes its group with it rather than leaving it", () => {
+  test("a member at the edge of its group stays put, and says so", () => {
     const list = [el("a"), el("b", "g1"), el("c", "g1"), el("d")];
-    // c is last inside g1, so the whole group steps over d; c is still beside b.
-    expect(ids(moveWithinParent(list, "c", 1, false))).toBe("a d b c");
-    expect(ids(moveWithinParent(list, "c", 1, true))).toBe("a d b c");
+    expect(ids(moveWithinParent(list, "c", 1, false))).toBe("a b c d");
+    expect(ids(moveWithinParent(list, "c", 1, true))).toBe("a b c d");
+    expect(ids(moveWithinParent(list, "b", -1, false))).toBe("a b c d");
+    expect(canMoveWithinParent(list, "c", 1)).toBe(false);
+    expect(canMoveWithinParent(list, "b", -1)).toBe(false);
+    expect(canMoveWithinParent(list, "b", 1)).toBe(true);
   });
 
   test("a nested group moves as one sibling", () => {
     const list = [el("a", "g1"), el("b", "g1", "g2"), el("c", "g1", "g2"), el("d", "g1")];
     expect(ids(moveWithinParent(list, "a", 1, false))).toBe("b c a d");
+  });
+});
+
+describe("moveGroup", () => {
+  test("a top-level group steps over its neighbour as one block", () => {
+    const list = [el("a"), el("b", "g1"), el("c", "g1"), el("d")];
+    expect(ids(moveGroup(list, "g1", 1, false))).toBe("a d b c");
+    expect(ids(moveGroup(list, "g1", -1, false))).toBe("b c a d");
+  });
+
+  test("Shift sends it to the end", () => {
+    const list = [el("a"), el("b"), el("c", "g1"), el("d", "g1")];
+    expect(ids(moveGroup(list, "g1", -1, true))).toBe("c d a b");
+  });
+
+  test("a nested group moves among its siblings and stops at its parent's edge", () => {
+    const list = [el("a", "g1"), el("b", "g1", "g2"), el("c", "g1", "g2"), el("d")];
+    expect(ids(moveGroup(list, "g2", -1, false))).toBe("b c a d");
+    expect(ids(moveGroup(list, "g2", 1, false))).toBe("a b c d");
+    expect(canMoveGroup(list, "g2", 1)).toBe(false);
+  });
+
+  test("says when there is nowhere to go", () => {
+    const list = [el("b", "g1"), el("c", "g1"), el("d")];
+    expect(canMoveGroup(list, "g1", -1)).toBe(false);
+    expect(canMoveGroup(list, "g1", 1)).toBe(true);
+    expect(canMoveGroup(list, "nope", 1)).toBe(false);
   });
 });
 
@@ -149,31 +184,29 @@ describe("expandToGroups", () => {
   });
 });
 
-describe("the arrows widen when there is no room left", () => {
-  test("the first member of a group moves the whole group up instead of nothing", () => {
+describe("the arrows stop at the edge of a group", () => {
+  // A group has a row of its own with its own arrows, so a member never moves it.
+  test("the first member of a group cannot go up, and moving it does nothing", () => {
     const list = [el("a"), el("b", "g1"), el("c", "g1")];
-    expect(ids(moveWithinParent(list, "b", -1, false))).toBe("b c a");
+    expect(ids(moveWithinParent(list, "b", -1, false))).toBe("a b c");
+    expect(canMoveWithinParent(list, "b", -1)).toBe(false);
   });
 
-  test("the last member moves the whole group down", () => {
+  test("the last member cannot go down", () => {
     const list = [el("a", "g1"), el("b", "g1"), el("c")];
-    expect(ids(moveWithinParent(list, "b", 1, false))).toBe("c a b");
+    expect(ids(moveWithinParent(list, "b", 1, false))).toBe("a b c");
+    expect(canMoveWithinParent(list, "b", 1)).toBe(false);
   });
 
-  test("a nested group escalates one level at a time", () => {
+  test("the first member of a nested group stays inside it", () => {
     const list = [el("a", "g1"), el("b", "g1", "g2"), el("c", "g1", "g2"), el("d")];
-    // b is first inside g2, so the move widens to g2 inside g1: g2 steps over a.
-    expect(ids(moveWithinParent(list, "b", -1, false))).toBe("b c a d");
-    // From there the next press widens again, taking the whole of g1 past d.
-    const next = moveWithinParent(list, "b", -1, false);
-    expect(ids(moveWithinParent(next, "b", -1, false))).toBe("b c a d");
+    expect(ids(moveWithinParent(list, "b", -1, false))).toBe("a b c d");
+    expect(canMoveWithinParent(list, "b", -1)).toBe(false);
   });
 
-  test("at the very top there is genuinely nowhere to go", () => {
-    const list = [el("a", "g1"), el("b", "g1"), el("c")];
-    expect(ids(moveWithinParent(list, "a", -1, false))).toBe("a b c");
-    expect(canMoveWithinParent(list, "a", -1)).toBe(false);
-    expect(canMoveWithinParent(list, "a", 1)).toBe(true);
+  test("a loose element still steps over a whole group", () => {
+    const list = [el("a"), el("b", "g1"), el("c", "g1")];
+    expect(ids(moveWithinParent(list, "a", 1, false))).toBe("b c a");
   });
 
   test("canMoveSelectionZ knows when the selection is already at an end", () => {
@@ -182,5 +215,49 @@ describe("the arrows widen when there is no room left", () => {
     expect(canMoveSelectionZ(list, new Set(["a"]), 1)).toBe(true);
     expect(canMoveSelectionZ(list, new Set(["b", "c"]), 1)).toBe(false);
     expect(canMoveSelectionZ(list, new Set(["b", "c"]), -1)).toBe(true);
+  });
+});
+
+describe("group colours", () => {
+  test("a group keeps its colour when groups are reordered", () => {
+    const list = [el("a", "g1"), el("b", "g1"), el("c", "g2"), el("d", "g2")];
+    const hues: Record<string, number> = {};
+    assignGroupHuesInPlace(list, hues);
+    const before = { ...hues };
+    const moved = moveGroup(list, "g2", -1, false);
+    assignGroupHuesInPlace(moved, hues);
+    expect(hues).toEqual(before);
+  });
+
+  test("every group gets a colour well apart from the others", () => {
+    const list = Array.from({ length: 8 }, (_, i) => [
+      el(`a${i}`, `g${i}`),
+      el(`b${i}`, `g${i}`),
+    ]).flat();
+    const hues: Record<string, number> = {};
+    assignGroupHuesInPlace(list, hues);
+    const values = Object.values(hues);
+    expect(values).toHaveLength(8);
+    for (let i = 0; i < values.length; i++) {
+      for (let j = i + 1; j < values.length; j++) {
+        const d = Math.abs(values[i]! - values[j]!) % 360;
+        expect(Math.min(d, 360 - d)).toBeGreaterThanOrEqual(30);
+      }
+    }
+  });
+
+  test("a new group avoids the colours already in use, not just the next one in line", () => {
+    // The first hue in the sequence is taken, so the next group must not reuse it.
+    const first = nextGroupHue([]);
+    expect(nextGroupHue([first])).not.toBe(first);
+  });
+});
+
+describe("selectedGroups", () => {
+  test("a group counts only when every member is selected, nested ones included", () => {
+    const list = [el("a", "g1"), el("b", "g1", "g2"), el("c", "g1", "g2"), el("d")];
+    expect([...selectedGroups(list, new Set(["b", "c"])).keys()]).toEqual(["g2"]);
+    expect([...selectedGroups(list, new Set(["a", "b", "c"])).keys()].sort()).toEqual(["g1", "g2"]);
+    expect(selectedGroups(list, new Set(["a", "b"])).size).toBe(0);
   });
 });

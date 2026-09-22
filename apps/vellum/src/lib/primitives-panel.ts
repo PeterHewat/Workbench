@@ -1,4 +1,4 @@
-import { setState, mutate, findElement, selectOnly } from "./state.js";
+import { getState, setState, mutate, findElement, selectOnly } from "./state.js";
 import { setElementClosed } from "./selection-commands.js";
 import { pushUndo } from "./undo.js";
 import {
@@ -13,12 +13,27 @@ import {
 } from "./model.js";
 import { escapeAttr } from "./utils.js";
 import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
-import { canMoveWithinParent, childBlocks, groupsOf, type Block } from "./groups.js";
+import {
+  canMoveGroup,
+  canMoveWithinParent,
+  childBlocks,
+  groupColor,
+  groupsOf,
+  moveGroup,
+  type Block,
+} from "./groups.js";
 import { scaleAbout, transformElement } from "./transform.js";
 import { type EditorState, type SceneElement } from "./types.js";
 import { holdSvgFocus, setSvgFocus } from "./svg-source.js";
-import { cachedList, accHeaderHtml, wireAccRow, setField, reorder } from "./accordion.js";
-import { byId } from "./dom.js";
+import {
+  cachedList,
+  accHeaderHtml,
+  wireAccRow,
+  setField,
+  reorder,
+  towardFront,
+} from "./accordion.js";
+import { byId } from "@workbench/ui";
 
 const primitiveListEl = byId("primitive-list");
 
@@ -26,15 +41,24 @@ const primitiveListEl = byId("primitive-list");
 
 function primitiveListKeyOf(state: EditorState): string {
   const els = state.elements
-    .map((e) => `${e.id}:${e.type}:${groupsOf(e).join("/")}:${"closed" in e && e.closed ? 1 : 0}`)
+    .map(
+      (e) =>
+        `${e.id}:${e.type}:${groupsOf(e).join("/")}:${"closed" in e && e.closed ? 1 : 0}:${e.hidden ? 1 : 0}`
+    )
     .join(",");
   return `${els}|${state.selection.elementIds.join(",")}|${state.ui.expandedElementId}`;
 }
 
-function groupColor(gid: string): string {
-  let h = 0;
-  for (const ch of gid) h = (h * 31 + ch.charCodeAt(0)) % 360;
-  return `hsl(${h} 65% 60%)`;
+/** Each group's colour, from the hue it was given when it appeared (see `groupHues`). */
+function groupColors(state: EditorState): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [gid, hue] of Object.entries(state.groupHues)) out.set(gid, groupColor(hue));
+  return out;
+}
+
+/** Every element in group `gid`, at any depth. */
+function membersOf(elements: readonly SceneElement[], gid: string): SceneElement[] {
+  return elements.filter((e) => groupsOf(e).includes(gid));
 }
 
 function swatchHtml(kind: string, color: string, alpha: number, title: string): string {
@@ -212,12 +236,20 @@ function buildPrimitiveList(state: EditorState): void {
     primitiveListEl.appendChild(li);
     return;
   }
-  appendBlocks(primitiveListEl, state, { start: 0, end: state.elements.length }, 0);
+  const colors = groupColors(state);
+  appendBlocks(primitiveListEl, state, { start: 0, end: state.elements.length }, 0, colors);
 }
 
 /** One level of the tree: each block is either a nested group or a single row. */
-function appendBlocks(parent: HTMLElement, state: EditorState, range: Block, depth: number): void {
-  for (const block of childBlocks(state.elements, range, depth)) {
+function appendBlocks(
+  parent: HTMLElement,
+  state: EditorState,
+  range: Block,
+  depth: number,
+  colors: Map<string, string>
+): void {
+  // Back to front: the shape drawn last, on top of the others, heads the list.
+  for (const block of childBlocks(state.elements, range, depth).reverse()) {
     const gid = groupsOf(state.elements[block.start])[depth];
     if (gid == null) {
       parent.appendChild(primitiveRow(state, block.start));
@@ -226,13 +258,63 @@ function appendBlocks(parent: HTMLElement, state: EditorState, range: Block, dep
     const run = document.createElement("li");
     run.className = "group-run";
     run.dataset.groupId = gid;
-    run.style.setProperty("--gc", groupColor(gid));
+    run.style.setProperty("--gc", colors.get(gid) ?? "var(--accent)");
+    run.classList.toggle("collapsed", collapsedGroups.has(gid));
+    run.appendChild(groupHead(state, gid));
     const inner = document.createElement("ul");
     inner.className = "group-items";
     run.appendChild(inner);
-    appendBlocks(inner, state, block, depth + 1);
+    appendBlocks(inner, state, block, depth + 1, colors);
     parent.appendChild(run);
   }
+}
+
+/**
+ * Groups folded shut in the list. Where you are looking, not part of the drawing: not saved,
+ * not undone, and forgotten when the group is.
+ */
+const collapsedGroups = new Set<string>();
+
+/**
+ * A group's own row, built like a shape's so every button lines up down the list: the chevron
+ * folds the group, the checkbox selects all of it, the name is what `<g id>` carries after the
+ * group's id, the count stands where a shape shows its colours, the eye shows or hides every
+ * member, the arrows move the group as one block, and the bin deletes it with everything in it.
+ */
+function groupHead(state: EditorState, gid: string): HTMLElement {
+  const members = membersOf(state.elements, gid);
+  const selected = new Set(state.selection.elementIds);
+  const allSelected = members.every((e) => selected.has(e.id));
+  const allHidden = members.every((e) => e.hidden);
+  const head = document.createElement("div");
+  head.className = "acc-item group-head";
+  head.innerHTML = accHeaderHtml({
+    dot: { on: allSelected, title: allSelected ? "Deselect the group" : "Select the group" },
+    eye: { visible: !allHidden, title: allHidden ? "Show the group" : "Hide the group" },
+    titleHtml: `<input type="text" class="acc-title-input group-name-input" data-group-name value="${escapeAttr(state.groupNames[gid] ?? "")}" placeholder="group" aria-label="Group name" title="Group name - exported in the group's id" />`,
+    extra: `<span class="acc-swatch group-count" title="${members.length} shapes in this group">${members.length}</span>`,
+    canUp: canMoveGroup(state.elements, gid, towardFront(-1)),
+    canDown: canMoveGroup(state.elements, gid, towardFront(1)),
+    index: 0,
+    count: 0,
+  });
+  wireAccRow(head, {
+    onExpand: () => toggleGroupCollapsed(gid),
+    onDot: () => toggleGroupSelected(gid),
+    onEye: () =>
+      setHidden(
+        members.map((e) => e.id),
+        !allHidden
+      ),
+    onDelete: () => deleteGroup(gid),
+    onMove: (dir, toEnd) => moveGroupBy(gid, towardFront(dir), toEnd),
+  });
+  const input = head.querySelector<HTMLInputElement>("[data-group-name]")!;
+  input.addEventListener("input", () => renameGroup(gid, input.value));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") input.blur();
+  });
+  return head;
 }
 
 function primitiveRow(state: EditorState, index: number): HTMLElement {
@@ -243,19 +325,20 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
   li.dataset.elementId = el.id;
   li.innerHTML = `
     ${accHeaderHtml({
-      on: isSelected,
-      dotTitle: isSelected ? "Deselect" : "Select",
+      dot: { on: isSelected, title: isSelected ? "Deselect" : "Select" },
+      eye: { visible: !el.hidden, title: el.hidden ? "Show" : "Hide" },
       name: el.name || "",
       placeholder: el.type,
       extra: `<span class="acc-swatch" style="${headerSwatchStyle(el)}"></span>`,
-      canUp: canMoveWithinParent(state.elements, el.id, -1),
-      canDown: canMoveWithinParent(state.elements, el.id, 1),
+      canUp: canMoveWithinParent(state.elements, el.id, towardFront(-1)),
+      canDown: canMoveWithinParent(state.elements, el.id, towardFront(1)),
       index,
       count: state.elements.length,
     })}
     <div class="acc-body">${primitiveBodyHtml(el)}</div>
   `;
   li.dataset.filltype = el.fillType || "solid";
+  li.classList.toggle("acc-item--hidden", !!el.hidden);
   li.classList.toggle("acc-item--invisible", isInvisible(el));
   if (isInvisible(el)) {
     const sw = li.querySelector<HTMLElement>(".acc-swatch");
@@ -264,13 +347,19 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
   wireAccRow(li, {
     onExpand: () => toggleElementExpanded(el.id),
     onDot: () => toggleElementSelected(el.id),
+    onEye: () => setHidden([el.id], !el.hidden),
     onDelete: () => deletePrimitive(el.id),
-    onMove: (dir, toEnd) => reorder("elements", el.id, dir, toEnd),
+    onMove: (dir, toEnd) => reorder("elements", el.id, towardFront(dir), toEnd),
   });
   return li;
 }
 
 function updatePrimitiveListValues(state: EditorState): void {
+  primitiveListEl.querySelectorAll<HTMLElement>(".group-run").forEach((run) => {
+    const input = run.querySelector<HTMLInputElement>(":scope > .group-head [data-group-name]");
+    const gid = run.dataset.groupId;
+    if (input && gid && input !== document.activeElement) input.value = state.groupNames[gid] ?? "";
+  });
   for (const el of state.elements) {
     const li = primitiveListEl.querySelector<HTMLElement>(`[data-element-id="${el.id}"]`);
     if (!li) continue;
@@ -348,6 +437,96 @@ function toggleElementSelected(id: string): void {
       ...s,
       selection: selectOnly(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]),
       tool: "select",
+    };
+  });
+}
+
+/** Selects every member of a group, or, when they all are already, none of them. */
+function toggleGroupSelected(gid: string): void {
+  setState((s) => {
+    const ids = membersOf(s.elements, gid).map((e) => e.id);
+    const current = new Set(s.selection.elementIds);
+    const all = ids.every((id) => current.has(id));
+    const next = all
+      ? s.selection.elementIds.filter((id) => !ids.includes(id))
+      : [...new Set([...s.selection.elementIds, ...ids])];
+    return { ...s, selection: selectOnly(next), tool: "select" };
+  });
+}
+
+/**
+ * Shows or hides shapes. A hidden shape leaves the selection, since nothing on the canvas would
+ * show what a drag or a Delete was about to act on.
+ */
+function setHidden(ids: readonly string[], hidden: boolean): void {
+  const wanted = new Set(ids);
+  pushUndo();
+  setState((s) => ({
+    ...s,
+    elements: s.elements.map((e) => {
+      if (!wanted.has(e.id) || !!e.hidden === hidden) return e;
+      const next = { ...e };
+      if (hidden) next.hidden = true;
+      else delete next.hidden;
+      return next;
+    }),
+    selection: hidden
+      ? selectOnly(s.selection.elementIds.filter((id) => !wanted.has(id)))
+      : s.selection,
+  }));
+}
+
+/** Live while typing, like a shape's name: one undo step for the whole edit. */
+function renameGroup(gid: string, raw: string): void {
+  const name = raw.trim();
+  const st = getState();
+  if ((st.groupNames[gid] ?? "") === name) return;
+  if (!textUndoPushed) {
+    pushUndo();
+    textUndoPushed = true;
+  }
+  setState((s) => {
+    const groupNames = { ...s.groupNames };
+    if (name) groupNames[gid] = name;
+    else delete groupNames[gid];
+    return { ...s, groupNames };
+  });
+}
+
+function toggleGroupCollapsed(gid: string): void {
+  if (collapsedGroups.has(gid)) collapsedGroups.delete(gid);
+  else collapsedGroups.add(gid);
+  primitiveList.invalidate();
+  primitiveList.sync(getState());
+}
+
+/** `dir` is in document order: +1 towards the front. */
+function moveGroupBy(gid: string, dir: -1 | 1, toEnd: boolean): void {
+  const before = getState().elements;
+  const next = moveGroup(before, gid, dir, toEnd);
+  if (next.every((e, i) => e === before[i])) return;
+  pushUndo();
+  setState((s) => ({ ...s, elements: next }));
+}
+
+/** Deletes a group and everything in it, as the bin on a shape's row deletes that shape. */
+function deleteGroup(gid: string): void {
+  const doomed = new Set(membersOf(getState().elements, gid).map((e) => e.id));
+  if (!doomed.size) return;
+  pushUndo();
+  collapsedGroups.delete(gid);
+  setState((s) => {
+    const groupNames = { ...s.groupNames };
+    delete groupNames[gid];
+    return {
+      ...s,
+      elements: s.elements.filter((e) => !doomed.has(e.id)),
+      groupNames,
+      selection: selectOnly(s.selection.elementIds.filter((id) => !doomed.has(id))),
+      ui: {
+        ...s.ui,
+        expandedElementId: doomed.has(s.ui.expandedElementId ?? "") ? null : s.ui.expandedElementId,
+      },
     };
   });
 }

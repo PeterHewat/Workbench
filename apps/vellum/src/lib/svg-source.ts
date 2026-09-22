@@ -5,13 +5,14 @@ import {
   buildDefsMarkup,
   sanitizeName,
   elementIdFromSvgId,
+  groupIdFromSvgId,
   formatExportSvg,
   importSvgFile,
 } from "./io.js";
 import { escapeXml } from "./utils.js";
-import { groupsOf } from "./groups.js";
+import { groupsOf, selectedGroups } from "./groups.js";
 import { type EditorState, type SceneElement } from "./types.js";
-import { byId } from "./dom.js";
+import { byId } from "@workbench/ui";
 import { noteChange } from "./documents.js";
 
 /* ---------- SVG source: editable, highlighted, synced with the selection ---------- */
@@ -71,6 +72,10 @@ function highlightAttrs(esc: string, field: string): string {
 /** Colored copy of the textarea's text: selected shapes blue, the focused attribute highlighted. */
 function refreshSvgHighlight(selectedIds: readonly string[]): void {
   const sel = new Set(selectedIds);
+  // A group counts as selected when all of it is; its <g> and its </g> are highlighted then.
+  const groups = selectedGroups(getState().elements, sel);
+  // One entry per <g> still open, saying whether its </g> should be highlighted too.
+  const open: boolean[] = [];
   const focus = svgFocus;
   const block = focus ? FIELD_BLOCKS[focus.field] : undefined;
   let inBlock = false;
@@ -82,8 +87,15 @@ function refreshSvgHighlight(selectedIds: readonly string[]): void {
       const svgId = m ? m[1]! : "";
       const elId = m ? elementIdFromSvgId(svgId) : null;
       if (focus && elId === focus.id) esc = highlightAttrs(esc, focus.field);
-      let out =
-        elId && sel.has(elId) ? `<span class="svg-line svg-line--selected">${esc}</span>` : esc;
+      let selected = !!elId && sel.has(elId);
+      if (/^\s*<g[\s>]/.test(line) && !/\/>\s*$/.test(line)) {
+        const gid = groupIdFromSvgId(svgId);
+        selected = !!gid && groups.has(gid);
+        open.push(selected);
+      } else if (/^\s*<\/g>/.test(line)) {
+        selected = open.pop() ?? false;
+      }
+      let out = selected ? `<span class="svg-line svg-line--selected">${esc}</span>` : esc;
       if (block && focus) {
         if (svgId.startsWith(block[0] + focus.id) && (!block[1] || svgId.endsWith(block[1]))) {
           inBlock = true;
@@ -173,6 +185,25 @@ function sameElement(a: SceneElement, b: SceneElement): boolean {
   );
 }
 
+/**
+ * Group names from the markup. A name typed with spaces comes back underscored from its id, so
+ * where the markup still says the same thing the name as typed is kept, as shapes' names are.
+ */
+function mergeGroupNames(
+  parsed: Record<string, string>,
+  current: Readonly<Record<string, string>>
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [gid, name] of Object.entries(parsed)) {
+    const typed = current[gid];
+    out[gid] = typed && sanitizeName(typed) === sanitizeName(name) ? typed : name;
+  }
+  return out;
+}
+
+const sameNames = (a: Record<string, string>, b: Record<string, string>) =>
+  Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => a[k] === b[k]);
+
 /** Applies the edited markup. Untouched shapes keep their exact float geometry. */
 function applySvgText(): void {
   svgApplyTimer = null;
@@ -194,7 +225,9 @@ function applySvgText(): void {
   // No background rect in the markup means a transparent document; the colour is kept so that
   // deleting the rect and typing it back does not lose what was chosen.
   const background = parsed.background ?? { color: st.background.color, opacity: 0 };
+  const groupNames = mergeGroupNames(parsed.groupNames, st.groupNames);
   const same =
+    sameNames(groupNames, st.groupNames) &&
     next.length === st.elements.length &&
     next.every((e, i) => e === st.elements[i]) &&
     artboard.width === st.artboard.width &&
@@ -210,6 +243,7 @@ function applySvgText(): void {
   setState((s) => ({
     ...s,
     elements: next,
+    groupNames,
     artboard,
     background,
     selection: selectOnly(s.selection.elementIds.filter((id) => ids.has(id))),

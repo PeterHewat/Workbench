@@ -17,7 +17,7 @@ import {
 import { pushUndo, canUndo, canRedo } from "./undo.js";
 import { formatExportSvg, importSvgFile } from "./io.js";
 import { canJoin } from "./model.js";
-import { downloadText } from "./utils.js";
+import { byId, copyText, downloadText } from "@workbench/ui";
 import { bindTouch, setTouchFinishPathHandler } from "./touch.js";
 import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
 import { initRulers, renderRulers } from "./rulers.js";
@@ -39,8 +39,7 @@ import { doUndo, doRedo } from "./edit-commands.js";
 import { imageList } from "./images-panel.js";
 import { primitiveList } from "./primitives-panel.js";
 import { syncSvgEditor } from "./svg-source.js";
-import { byId } from "./dom.js";
-import { currentDoc, saveNow, startDocuments } from "./documents.js";
+import { currentDoc, saveNow, startDocuments, svgFileName } from "./documents.js";
 
 const svg = byId<HTMLElement>("viewport-svg") as unknown as SVGSVGElement;
 const camera = byId<HTMLElement>("camera") as unknown as SVGGElement;
@@ -164,10 +163,16 @@ function syncGroupButtons(state: EditorState): void {
 
 /* ---------- Toolbar ---------- */
 
+/** Sizes and steps are whole, positive numbers; anything else puts the field back as it was. */
 function bindNumber(id: string, apply: (v: number) => void): void {
   byId(id).addEventListener("change", (e) => {
+    const v = Math.round(parseFloat((e.target as HTMLInputElement).value));
+    if (!Number.isFinite(v) || v < 1) {
+      syncPanel(getState());
+      return;
+    }
     pushUndo();
-    apply(parseFloat((e.target as HTMLInputElement).value));
+    apply(v);
   });
 }
 
@@ -213,20 +218,14 @@ byId("btn-final").addEventListener("click", () => {
 });
 
 byId("btn-save-svg").addEventListener("click", () => {
-  downloadText("document.svg", formatExportSvg(getState(), true), "image/svg+xml");
+  downloadText(svgFileName(), formatExportSvg(getState(), true), "image/svg+xml");
 });
 byId("btn-copy-svg").addEventListener("click", async (e) => {
   e.stopPropagation();
   const text = formatExportSvg(getState(), true);
-  const btn = byId("btn-copy-svg");
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    downloadText("document.svg", text, "image/svg+xml");
-    return;
+  if (!(await copyText(text, byId("btn-copy-svg")))) {
+    downloadText(svgFileName(), text, "image/svg+xml");
   }
-  btn.classList.add("copied");
-  setTimeout(() => btn.classList.remove("copied"), 1000);
 });
 byId("btn-import-svg").addEventListener("click", () => {
   byId<HTMLInputElement>("input-import-svg").click();
@@ -237,11 +236,19 @@ byId("input-import-svg").addEventListener("change", async (e) => {
   const file = input.files?.[0];
   input.value = "";
   if (!file) return;
-  const { artboard, background, elements } = importSvgFile(await file.text());
+  let imported: ReturnType<typeof importSvgFile>;
+  try {
+    imported = importSvgFile(await file.text());
+  } catch (err) {
+    window.alert(`Could not import ${file.name}: ${err instanceof Error ? err.message : err}`);
+    return;
+  }
+  const { artboard, background, elements, groupNames } = imported;
   pushUndo();
   setState((s) => ({
     ...s,
     elements: [...s.elements, ...elements],
+    groupNames: { ...s.groupNames, ...groupNames },
     artboard: artboard ?? s.artboard,
     background: background ?? s.background,
   }));
@@ -263,9 +270,11 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.ctrlKey || e.metaKey) {
+    // Ctrl+Y on Windows, Cmd+Shift+Z on a Mac; both work everywhere.
     if (key === "z") {
       e.preventDefault();
-      doUndo();
+      if (e.shiftKey) doRedo();
+      else doUndo();
     }
     if (key === "y") {
       e.preventDefault();
@@ -284,7 +293,7 @@ window.addEventListener("keydown", (e) => {
       e.preventDefault();
       setState((s) => ({
         ...s,
-        selection: selectOnly(s.elements.map((el) => el.id)),
+        selection: selectOnly(s.elements.filter((el) => !el.hidden).map((el) => el.id)),
         tool: "select",
       }));
     }

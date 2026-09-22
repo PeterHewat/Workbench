@@ -17,8 +17,9 @@
 - **Package manager:** Bun. Do not add an npm or pnpm lockfile.
 - **TypeScript:** strict, `verbatimModuleSyntax`, ESM with `.js` import specifiers. `noUncheckedIndexedAccess` is deliberately **off**: the geometry code is full of indexed loops where it buys assertions rather than safety.
 - **Names:** kebab-case files; camelCase functions; PascalCase types. App slugs are lowercase and dash-separated, and match the folder name.
-- **New app:** `bun run new-app <slug> "Display Name"`, then add the catalog entry it prints.
-- **Offline:** apps register the shared service worker in `packages/ui/sw.js` via `registerServiceWorker()`. The `workbenchServiceWorker()` Vite plugin from `@workbench/ui/vite` serves it in dev and emits it into the app's build, so an app must include that plugin in its `vite.config.ts`.
+- **New app:** `bun run new-app <slug> "Display Name"` — it also adds an unlisted catalog entry to fill in.
+- **App wiring:** an app's `vite.config.ts` is `defineConfig(workbenchApp("<slug>"))` from `@workbench/ui/vite`. It sets the base path and output folder, and injects `<title>`, description, icon and manifest from the catalog — so an app's `index.html` must not set those itself (the build fails if it does). Each app keeps its own `public/icon.svg`.
+- **Offline:** apps call `registerServiceWorker()` from `@workbench/ui`. The same plugin emits `packages/ui/sw.js` into the build with a version hash and the list of files to precache, so every deploy replaces the previous cache. The worker is not registered under the dev server.
 
 ## Format gate
 
@@ -49,7 +50,7 @@ Pass explicit paths for the files you changed, not a blind repo-wide format.
 
 ## Running it
 
-Do not start `bun run dev` — it is probably already running. Use `bun run build` to validate.
+Do not start `bun run dev <slug>` — it is probably already running. Use `bun run build` to validate.
 To preview the built site locally, build with the base at the root:
 
 ```bash

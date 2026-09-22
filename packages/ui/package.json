@@ -3,18 +3,23 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Shared browser helpers every Workbench app can use",
+  "description": "Shared browser helpers, base styles and build wiring for every Workbench app",
   "exports": {
     ".": "./src/index.ts",
-    "./vite": "./src/vite-service-worker.ts"
+    "./vite": "./src/vite.ts",
+    "./base.css": "./base.css"
   },
   "files": [
     "src",
-    "sw.js"
+    "sw.js",
+    "base.css"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test"
+  },
+  "dependencies": {
+    "@workbench/catalog": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.3",

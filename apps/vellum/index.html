@@ -8,14 +8,6 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
-    <title>Vellum — trace images to SVG</title>
-    <meta
-      name="description"
-      content="Trace reference images and export clean, pure SVG. Runs entirely in your browser."
-    />
-    <meta name="color-scheme" content="dark" />
-    <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="src/css/styles.css" />
   </head>
   <body>
@@ -102,7 +94,7 @@
           <circle cx="19" cy="19" r="2.3" fill="currentColor" />
         </symbol>
         <!-- The dot in a row says what kind of choice it is: a radio where only one can be
-             chosen (documents), a checkbox where any number can (primitives, reference images). -->
+             chosen (documents), a checkbox where any number can (primitives and groups). -->
         <symbol id="icon-radio-on" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2" />
           <circle cx="12" cy="12" r="4" fill="currentColor" />
@@ -257,6 +249,16 @@
             d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"
           />
           <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2" />
+        </symbol>
+        <symbol id="icon-eye-off" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM4 4l16 16"
+          />
         </symbol>
         <symbol id="icon-magnet" viewBox="0 0 24 24">
           <path
@@ -548,7 +550,7 @@
             type="button"
             class="tool-btn"
             id="btn-redo"
-            title="Redo (Ctrl+Y)"
+            title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
             aria-label="Redo"
             disabled
           >
@@ -686,6 +688,10 @@
           <h3>About</h3>
           <ul>
             <li>
+              Vellum is part of <a href="../">Workbench</a>, a set of useful tools that run entirely
+              in your browser and keep working offline.
+            </li>
+            <li>
               <b>What this is</b> — a drawing tool for people who want the SVG itself to be good: a
               small set of primitives, a live view of the markup, and an export with no editor
               leftovers in it. It runs entirely in your browser, works offline once loaded, and
@@ -781,10 +787,11 @@
               row in Primitives. Typing one is the way to be exact that a fingertip cannot manage.
             </li>
             <li>
-              <b>Order</b> — the ▲ ▼ arrows on a Primitives row move a shape among its siblings.
-              When it is already at the edge of its group the move widens to the group itself, so a
-              group is reordered by pressing the arrow on the row at its edge; the arrow is dimmed
-              only when there is genuinely nowhere left to go.
+              <b>Order</b> — the Primitives list reads like a layers panel: the shape drawn on top
+              is at the top of the list. ▲ brings a shape forward and ▼ sends it back, among its
+              siblings and never out of its group: at the edge of the group the arrow is dimmed. To
+              move the whole group, use the arrows on the group's own row. The SVG source keeps the
+              file's order, where the shape drawn last is written last.
             </li>
             <li data-help="mouse">
               <b>Align</b> — hold <kbd>Alt</kbd> while drawing or dragging to snap to points that
@@ -793,8 +800,8 @@
             </li>
             <li>
               <b>Z-order</b> — the ▲ ▼ buttons on the bar beside the selection, or on a row in
-              Primitives and Reference images, move one step (with <kbd>Shift</kbd>: to the top or
-              bottom).
+              Primitives and Reference images, bring forward or send back one step (with
+              <kbd>Shift</kbd>: all the way to the front or the back).
               <span data-help="mouse"
                 ><kbd>Ctrl</kbd>+<kbd>[</kbd> / <kbd>]</kbd> does the same from the keyboard.</span
               >
@@ -892,9 +899,21 @@
             </li>
             <li>
               In the Primitives list a group is one coloured line down the left of the rows it
-              holds, and a group inside a group is a line inside a line. Members stay together: the
-              ▲ ▼ arrows reorder a shape among its siblings, and when it is already at the edge the
-              move widens to the group itself.
+              holds, and a group inside a group is a line inside a line. Each group gets a colour of
+              its own when it is made and keeps it wherever it moves. Members stay together: the ▲ ▼
+              arrows reorder a shape among its siblings and stop at the edge of its group.
+            </li>
+            <li>
+              <b>The group's row</b> — a group has a row of its own at the top of its bracket, with
+              the same buttons as a shape's: the chevron folds the group away, the checkbox selects
+              all of it, the eye shows or hides every shape in it, ▲ ▼ move it as one block, and the
+              bin deletes it with everything inside. Where a shape shows its colours, a group shows
+              how many shapes it holds.
+            </li>
+            <li>
+              <b>Naming a group</b> — type in its row. A named group exports as
+              <code>&lt;g id="group-57cc1c37_top_view"&gt;</code>: its id, then the name, with
+              spaces as underscores.
             </li>
             <li>
               <b>A group holds at least two things.</b> A group carries nothing here but its
@@ -918,7 +937,8 @@
           <ul>
             <li>
               Undo / Redo buttons in the toolbar<span data-help="mouse"
-                >, or <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></span
+                >, or <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> (or
+                <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>)</span
               >.
             </li>
           </ul>
@@ -932,15 +952,15 @@
               is one scrolling surface: only the SVG source keeps a scrollbar of its own. Every row
               across the lists is built the same way, and the control at its head says which kind of
               choice it is — a round radio where only one thing can be chosen (which document is
-              open), a square checkbox where any number can (which shapes are selected, which
-              overlays are shown).
+              open), a square checkbox where any number can (which shapes are selected). The eye on
+              a row shows or hides that shape or reference image.
             </li>
             <li>
               <b>Reference images</b> — add reference images to trace; each row is the file it came
               from, and <span data-help="mouse">clicking</span
               ><span data-help="touch">tapping</span>
               that file name swaps in a different one. Open the row for position, scale, rotation
-              and opacity; the dot beside it shows the overlay or hides it.
+              and opacity; the eye shows the overlay or hides it.
             </li>
             <li>
               <b>SVG</b> — the artboard size (width × height), the grid (its visibility and its step
@@ -961,7 +981,11 @@
               exported as a full-artboard <code>&lt;rect id="background"&gt;</code>, so what you see
               is what the file contains.
             </li>
-            <li><b>Primitives</b> — one row per shape (see Style).</li>
+            <li>
+              <b>Primitives</b> — one row per shape (see Style). The eye hides a shape: it is not
+              drawn and cannot be clicked, but stays in the document, exported with
+              <code>display="none"</code> so the file still holds it.
+            </li>
             <li>
               Documents save automatically, like Pages or Notes on macOS — there is no Save button.
               <b>Documents</b> lists everything stored in this browser (reference images included).
@@ -1087,7 +1111,7 @@
               <td>Split path at selected point / join two selected paths</td>
             </tr>
             <tr>
-              <td>Ctrl+Z / Ctrl+Y</td>
+              <td>Ctrl+Z / Ctrl+Y, Ctrl+Shift+Z</td>
               <td>Undo / redo</td>
             </tr>
             <tr>

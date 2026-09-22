@@ -79,7 +79,7 @@ function drawingActions(state: EditorState): Action[] {
     {
       key: "undo-point",
       label: "Remove the last point",
-      glyph: "⌫",
+      icon: "icon-undo",
       disabled: points < 1,
       run: handlers.undoPoint,
     },

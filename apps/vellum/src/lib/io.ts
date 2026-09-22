@@ -175,7 +175,22 @@ function exportIds(elements: readonly SceneElement[]): Map<string, string> {
 /** What export needs from the document: no selection, no viewport, nothing live. */
 export type ExportDoc = Pick<EditorState, "artboard" | "elements"> & {
   background?: BackgroundPaint | null;
+  groupNames?: Readonly<Record<string, string>>;
 };
+
+/** A group's id in the file: its own id, then "_" and its name when it has one. */
+export function groupExportId(gid: string, names: Readonly<Record<string, string>> = {}): string {
+  const name = sanitizeName(names[gid]);
+  return name ? `${gid}_${name}` : gid;
+}
+
+/** A group id as Vellum writes it, optionally followed by "_" and the group's name. */
+const GROUP_ID = /^(group-[A-Za-z0-9-]+)(?:_(.+))?$/;
+
+/** The group id in an exported `<g id>` (`group-57cc1c37_top_view` -> `group-57cc1c37`). */
+export function groupIdFromSvgId(svgId: string | null | undefined): string | null {
+  return (svgId || "").match(GROUP_ID)?.[1] ?? null;
+}
 
 function buildSvgLines(state: ExportDoc): Line[] {
   const ids = exportIds(state.elements);
@@ -201,7 +216,7 @@ function buildSvgLines(state: ExportDoc): Line[] {
       text: `<rect id="${BACKGROUND_ID}" width="${width}" height="${height}" fill="${bg.color}"${alpha}/>`,
     });
   }
-  emitRange(state.elements, 0, state.elements.length, 0, 1, lines, ids);
+  emitRange(state.elements, 0, state.elements.length, 0, 1, lines, ids, state.groupNames ?? {});
   lines.push({ indent: 0, text: "</svg>" });
   return lines;
 }
@@ -218,7 +233,8 @@ function emitRange(
   depth: number,
   indent: number,
   lines: Line[],
-  ids: Map<string, string>
+  ids: Map<string, string>,
+  groupNames: Readonly<Record<string, string>>
 ): void {
   let i = start;
   while (i < end) {
@@ -226,8 +242,8 @@ function emitRange(
     if (gid) {
       let j = i;
       while (j < end && groupsOf(els[j])[depth] === gid) j++;
-      lines.push({ indent, text: `<g id="${gid}">` });
-      emitRange(els, i, j, depth + 1, indent + 1, lines, ids);
+      lines.push({ indent, text: `<g id="${groupExportId(gid, groupNames)}">` });
+      emitRange(els, i, j, depth + 1, indent + 1, lines, ids, groupNames);
       lines.push({ indent, text: "</g>" });
       i = j;
     } else {
@@ -253,10 +269,32 @@ export function serializeProject(state: EditorState): ProjectFile {
     grid: state.grid,
     images: state.images,
     elements: state.elements,
+    ...namesInUse(state.elements, state.groupNames),
+    ...huesInUse(state.elements, state.groupHues),
     viewport: state.viewport,
     tool: state.tool,
     finalOnly: state.finalOnly,
   };
+}
+
+/** The colours of groups that still exist, as the project file's optional `groupHues`. */
+function huesInUse(
+  elements: readonly SceneElement[],
+  hues: Readonly<Record<string, number>>
+): { groupHues?: Record<string, number> } {
+  const used = new Set(elements.flatMap((e) => groupsOf(e)));
+  const kept = Object.entries(hues).filter(([gid]) => used.has(gid));
+  return kept.length ? { groupHues: Object.fromEntries(kept) } : {};
+}
+
+/** The names of groups that still exist, as the project file's optional `groupNames`. */
+function namesInUse(
+  elements: readonly SceneElement[],
+  names: Readonly<Record<string, string>>
+): { groupNames?: Record<string, string> } {
+  const used = new Set(elements.flatMap((e) => groupsOf(e)));
+  const kept = Object.entries(names).filter(([gid, name]) => used.has(gid) && name);
+  return kept.length ? { groupNames: Object.fromEntries(kept) } : {};
 }
 
 export function loadProject(json: ProjectFile): void {
@@ -275,6 +313,8 @@ export function loadProject(json: ProjectFile): void {
     grid: json.grid,
     images: (json.images || []).map((img) => ({ ...img, visible: img.visible !== false })),
     elements: json.elements || [],
+    groupNames: json.groupNames ?? {},
+    groupHues: json.groupHues ?? {},
     viewport: json.viewport || base.viewport,
     tool: json.tool || "select",
     finalOnly: json.finalOnly || false,
@@ -408,8 +448,15 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
       cx = x;
       cy = y;
     } else if (c === "Z") {
-      if (subStart && points.length > 2) {
-        const first = points[0]!;
+      const first = points[0];
+      const end = last();
+      if (subStart && first && end && end !== first && end.x === first.x && end.y === first.y) {
+        // A closing curve drawn back onto the start ends on the first anchor. It is that anchor,
+        // arriving: keep its incoming handle and drop the copy, or every re-import grows one.
+        first.hIn = end.hIn;
+        first.smooth = first.smooth || end.smooth;
+        points.pop();
+      } else if (subStart && first && points.length > 2) {
         if (first.x !== cx || first.y !== cy) corner(first.x, first.y);
       }
       cx = subStart?.x ?? cx;
@@ -562,6 +609,7 @@ function styleFromNode(node: Element, svg: Element): StyleCarrier {
     if (ref) gradientStyle(svg, ref[1]!, style);
     else style.fill = normalizeColor(fillAttr);
   }
+  if (inheritedProp(node, "display") === "none") style.hidden = true;
   const ms = inheritedProp(node, "marker-start");
   const me = inheritedProp(node, "marker-end");
   if (ms) style.markerStart = markerFromRef(svg, ms);
@@ -664,6 +712,8 @@ export interface ImportResult {
   /** The background rect the file carried, or null when it has none: a transparent document. */
   background: BackgroundPaint | null;
   elements: SceneElement[];
+  /** Group names read from `<g id>`s, by the group ids the elements carry. */
+  groupNames: Record<string, string>;
 }
 
 /** `keepIds` restores generated ids from the markup (used when editing the SVG text in place). */
@@ -701,6 +751,7 @@ export function importSvgFile(text: string, { keepIds = false } = {}): ImportRes
 
   const imported: SceneElement[] = [];
   const groupIds = new Map<Element, string>();
+  const groupNames: Record<string, string> = {};
   const usedIds = new Set<string>();
   svg.querySelectorAll(ELEMENT_SELECTOR).forEach((node) => {
     if (node === bgNode) return;
@@ -709,7 +760,7 @@ export function importSvgFile(text: string, { keepIds = false } = {}): ImportRes
     const nodeId = node.getAttribute("id");
     const name = nameFromNode(node, nodeId);
     if (name) style.name = name;
-    const { chain, matrix } = ancestry(node, svg, groupIds, keepIds);
+    const { chain, matrix } = ancestry(node, svg, groupIds, groupNames, keepIds);
     if (chain.length) style.groups = chain;
     const el = elementFromNode(node, node.tagName.toLowerCase(), style);
     if (!el) return;
@@ -726,7 +777,16 @@ export function importSvgFile(text: string, { keepIds = false } = {}): ImportRes
     imported.push(placed);
   });
 
-  return { artboard, background, elements: normalizeGroups(pruneGroups(imported)) };
+  const elements = normalizeGroups(pruneGroups(imported));
+  return { artboard, background, elements, ...withNames(elements, groupNames) };
+}
+
+/** Group names for the groups that survived pruning (a group of one is no group). */
+function withNames(
+  elements: readonly SceneElement[],
+  names: Record<string, string>
+): { groupNames: Record<string, string> } {
+  return { groupNames: namesInUse(elements, names).groupNames ?? {} };
 }
 
 /**
@@ -737,6 +797,7 @@ function ancestry(
   node: Element,
   svg: Element,
   groupIds: Map<Element, string>,
+  groupNames: Record<string, string>,
   keepIds: boolean
 ): { chain: string[]; matrix: Matrix } {
   const groups: Element[] = [];
@@ -748,8 +809,14 @@ function ancestry(
   let matrix: Matrix = IDENTITY;
   for (const gEl of groups) {
     if (!groupIds.has(gEl)) {
-      const gid = gEl.getAttribute("id") ?? "";
-      groupIds.set(gEl, keepIds && /^group-[A-Za-z0-9_-]+$/.test(gid) ? gid : uid("group"));
+      // Our own ids carry the group's name after the first "_"; any other id is itself a name,
+      // the way a foreign id on a shape is.
+      const raw = gEl.getAttribute("id") ?? "";
+      const own = raw.match(GROUP_ID);
+      const gid = keepIds && own ? own[1]! : uid("group");
+      const name = own ? own[2] : raw;
+      groupIds.set(gEl, gid);
+      if (name) groupNames[gid] = name;
     }
     chain.push(groupIds.get(gEl)!);
     matrix = multiply(matrix, parseTransform(gEl.getAttribute("transform")));

@@ -18,8 +18,10 @@ a base path. Hard-coding that in each app's Vite config would need a grep to cha
 - `APPS` — the list of apps, with the copy the index page needs (name, blurb, icon, tags, status).
 - `siteBase()` / `appBase()` — the deploy path, read from `WORKBENCH_BASE`.
 
-The index page renders from `APPS`. The build script iterates `APPS`. Each app's Vite config calls
-`appBase(slug)`. Nothing else keeps a list of apps or a copy of the base path.
+The index page renders from `APPS`. The build script iterates `APPS`. Each app's Vite config is
+`workbenchApp(slug)` from `@workbench/ui/vite`, which takes the base path, page title, description
+and manifest from the catalog. Nothing else keeps a list of apps, a copy of the base path, or a
+copy of an app's copy.
 
 ## Consequences
 

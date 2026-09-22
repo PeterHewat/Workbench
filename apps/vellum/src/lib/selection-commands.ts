@@ -197,19 +197,33 @@ export function setElementClosed(id: string, closed: boolean): void {
 }
 
 /** Copies elements with fresh ids and fresh group ids, offset by `off`. */
-export function copyElements(elements: readonly SceneElement[], off: number): SceneElement[] {
+/**
+ * Fresh copies of `elements`, shifted by `off`, in fresh groups. The copied groups keep their
+ * names, returned by their new ids so the caller can add them to the document.
+ */
+export function copyElements(
+  elements: readonly SceneElement[],
+  off: number,
+  groupNames: Readonly<Record<string, string>> = {}
+): { copies: SceneElement[]; groupNames: Record<string, string> } {
   const groupMap = new Map<string, string>();
+  const names: Record<string, string> = {};
   const remap = (gid: string) => {
-    if (!groupMap.has(gid)) groupMap.set(gid, uid("group"));
+    if (!groupMap.has(gid)) {
+      const next = uid("group");
+      groupMap.set(gid, next);
+      if (groupNames[gid]) names[next] = groupNames[gid];
+    }
     return groupMap.get(gid)!;
   };
-  return elements.map((el) => {
+  const copies = elements.map((el) => {
     const c = duplicateElement(el);
     translateElement(c, off, off);
     const chain = groupsOf(c);
     if (chain.length) c.groups = chain.map(remap);
     return c;
   });
+  return { copies, groupNames: names };
 }
 
 export function duplicateSelection(): void {
@@ -219,10 +233,11 @@ export function duplicateSelection(): void {
       const source = s.selection.elementIds
         .map((id) => findElement(id))
         .filter((e): e is SceneElement => !!e);
-      const copies = copyElements(source, s.grid.step);
+      const { copies, groupNames } = copyElements(source, s.grid.step, s.groupNames);
       return {
         ...s,
         elements: [...s.elements, ...copies],
+        groupNames: { ...s.groupNames, ...groupNames },
         selection: selectOnly(copies.map((c) => c.id)),
       };
     });
