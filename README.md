@@ -71,6 +71,10 @@ ES modules that will still work off any file server in ten years.
 | `bun run verify`     | `check` + `test` + `build`                |
 | `bun run new-app`    | Scaffold a new app                        |
 
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md). `bun run verify` is the check CI runs.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
