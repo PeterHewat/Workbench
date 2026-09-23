@@ -193,8 +193,7 @@ function rgba(hex: string, a: number | undefined): string {
 
 /** Circle in the row header: border = stroke color, inside = fill (transparent when none). */
 function headerSwatchStyle(el: SceneElement): string {
-  const border =
-    el.strokeWidth === 0 ? "rgba(255,255,255,0.25)" : rgba(el.stroke, el.strokeOpacity);
+  const border = el.strokeWidth === 0 ? "var(--swatch-ring)" : rgba(el.stroke, el.strokeOpacity);
   let inside = "transparent";
   if (el.fillEnabled) {
     if (el.fillType === "solid") {
@@ -344,7 +343,11 @@ function queueRenderLines(): void {
   renderQueued = true;
   requestAnimationFrame(() => {
     renderQueued = false;
-    renderLines(getState());
+    // The document may have changed since this was queued (another one opened, say) without the
+    // list having caught up yet: drawing the old lines against the new shapes read past their end.
+    const state = getState();
+    primitiveList.sync(state);
+    renderLines(state);
   });
 }
 primitiveListEl.closest("#menu-document")?.addEventListener("scroll", queueRenderLines, {

@@ -188,6 +188,35 @@ export function mirrorHandle(anchor: Point, dragged: Point): Point {
   return { x: anchor.x + (anchor.x - dragged.x), y: anchor.y + (anchor.y - dragged.y) };
 }
 
+/**
+ * Pulls a turn onto the nearest multiple of 15° once it comes within a few degrees of one: the
+ * steps Shift gives a mouse, for a finger, without taking away the angles in between. `startDeg`
+ * is the rotation the shape already carries, so the magnet works on the angle you see.
+ */
+export function magnetTurn(delta: number, startDeg = 0): number {
+  const STEP = 15;
+  const REACH = 3;
+  const deg = startDeg + (delta * 180) / Math.PI;
+  const near = Math.round(deg / STEP) * STEP;
+  return Math.abs(deg - near) <= REACH ? ((near - startDeg) * Math.PI) / 180 : delta;
+}
+
+/** Whether an anchor has two handles standing off it: the only case where linking them means anything. */
+export function hasTwoHandles(p: Anchor): boolean {
+  const off = (h: Point | null) => !!h && (h.x !== p.x || h.y !== p.y);
+  return off(p.hIn) && off(p.hOut);
+}
+
+/**
+ * Links an anchor's two handles, so dragging one mirrors the other, or breaks them into a cusp
+ * whose handles move on their own. `smooth` is that link. Linking mirrors the in-handle off the
+ * out one straight away, so what you see is what the next drag keeps.
+ */
+export function setHandlesLinked(p: Anchor, linked: boolean): void {
+  p.smooth = linked;
+  if (linked && p.hOut) p.hIn = mirrorHandle(p, p.hOut);
+}
+
 export function createLine(
   x1: number,
   y1: number,

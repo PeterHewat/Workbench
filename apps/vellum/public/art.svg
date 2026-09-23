@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 320" width="512" height="320">
+  <defs>
+    <linearGradient id="grad-de456d11" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b8def" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#5b8def" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="grad-aab84c73" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5b8def" stop-opacity="1"/>
+      <stop offset="1" stop-color="#8a6cf0" stop-opacity="1"/>
+    </linearGradient>
+  </defs>
+  <rect id="de456d11_backdrop" x="0" y="0" width="512" height="320" stroke="none" fill="url(#grad-de456d11)"/>
+  <polygon id="a6134866_floor_shadow" points="224,142 384,235 288,290 128,198" stroke="none" fill="#5b6b8a" fill-opacity="0.18"/>
+  <g id="group-ae5b338a_desk">
+    <polygon id="dc0d0814_back_left_leg_front" points="218,158 224,161 224,95 218,91" stroke="none" fill="#7a522a"/>
+    <polygon id="d27adcfe_back_left_leg_side" points="230,158 224,161 224,95 230,91" stroke="none" fill="#6b4724"/>
+    <polygon id="d26058f4_back_left_leg_top" points="224,87 230,91 224,95 218,91" stroke="none" fill="#8a5e30"/>
+    <polygon id="e17ee21b_back_right_leg_front" points="345,231 351,235 351,168 345,164" stroke="none" fill="#7a522a"/>
+    <polygon id="bfc1e3c7_back_right_leg_side" points="357,231 351,235 351,168 357,164" stroke="none" fill="#6b4724"/>
+    <polygon id="f1432c77_back_right_leg_top" points="351,161 357,164 351,168 345,164" stroke="none" fill="#8a5e30"/>
+    <polygon id="be46337a_front_left_leg_front" points="155,194 161,198 161,131 155,127" stroke="none" fill="#7a522a"/>
+    <polygon id="e1aa408e_front_left_leg_side" points="168,194 161,198 161,131 168,127" stroke="none" fill="#6b4724"/>
+    <polygon id="fd43cacc_front_left_leg_top" points="161,124 168,127 161,131 155,127" stroke="none" fill="#8a5e30"/>
+    <polygon id="d85f5700_front_right_leg_front" points="282,267 288,271 288,204 282,200" stroke="none" fill="#7a522a"/>
+    <polygon id="b9b61126_front_right_leg_side" points="295,267 288,271 288,204 295,200" stroke="none" fill="#6b4724"/>
+    <polygon id="b38d332a_front_right_leg_top" points="288,197 295,200 288,204 282,200" stroke="none" fill="#8a5e30"/>
+    <polygon id="d9947281_desktop_front" points="147,127 288,209 288,201 147,120" stroke="none" fill="#b5834a"/>
+    <polygon id="ed816448_desktop_side" points="365,164 288,209 288,201 365,157" stroke="none" fill="#9f6f3a"/>
+    <polygon id="e69b1e34_desktop_top" points="224,75 365,157 288,201 147,120" stroke="none" fill="#dcae72"/>
+  </g>
+  <g id="group-faf8f565_laptop">
+    <polygon id="f5bd719a_laptop_base_front" points="190,107 239,135 239,133 190,105" stroke="none" fill="#a9aebb"/>
+    <polygon id="e8aeaf33_laptop_base_side" points="272,116 239,135 239,133 272,114" stroke="none" fill="#959aa8"/>
+    <polygon id="cce3cae6_laptop_base_top" points="224,85 272,114 239,133 190,105" stroke="none" fill="#c9ced8"/>
+    <polygon id="efc108c2_laptop_lid" points="224,85 272,114 277,74 229,46" stroke="none" fill="#2b3144"/>
+    <polygon id="aab84c73_laptop_screen" points="228,83 270,107 274,77 231,52" stroke="none" fill="url(#grad-aab84c73)"/>
+  </g>
+  <g id="group-f337778e_pencil">
+    <polygon id="df0cc726_pencil_side" points="286,125 253,144 253,140 286,121" stroke="none" fill="#c45a33"/>
+    <polygon id="a1e25f51_pencil_top" points="283,119 286,121 253,140 250,138" stroke="none" fill="#f07a4a"/>
+    <polygon id="a358b05a_pencil_tip" points="250,138 253,140 253,144 245,145" stroke="none" fill="#f3d9b1"/>
+    <polygon id="cea6d2bb_pencil_lead" points="247,143 248,145 245,145" stroke="none" fill="#3a3a3a"/>
+  </g>
+  <g id="group-d5e93e57_ruler">
+    <polygon id="c220de1b_ruler_front" points="179,124 250,164 250,163 179,122" stroke="none" fill="#d9a73a"/>
+    <polygon id="b7b20cd0_ruler_side" points="257,160 250,164 250,163 257,159" stroke="none" fill="#c99a32"/>
+    <polygon id="a9e8f6ca_ruler_top" points="187,118 257,159 250,163 179,122" stroke="none" fill="#f2c14e"/>
+  </g>
+  <g id="group-fd1110f9_plant">
+    <polygon id="aaf4ee88_plant_pot_front" points="303,149 314,155 314,145 303,139" stroke="none" fill="#c2653f"/>
+    <polygon id="dac58d49_plant_pot_side" points="324,149 314,155 314,145 324,139" stroke="none" fill="#ad5836"/>
+    <polygon id="fc03abc6_plant_pot_top" points="314,133 324,139 314,145 303,139" stroke="none" fill="#d8774f"/>
+    <ellipse id="c0cb790d_leaf_left" cx="307" cy="129" rx="6" ry="13" transform="rotate(330 307 129)" stroke="none" fill="#3f9a5c"/>
+    <ellipse id="ab6cd1bb_leaf_right" cx="321" cy="129" rx="6" ry="13" transform="rotate(30 321 129)" stroke="none" fill="#2f8150"/>
+    <ellipse id="efbb3aac_leaf_middle" cx="314" cy="123" rx="6" ry="15" stroke="none" fill="#4db36c"/>
+  </g>
+  <g id="group-59fc1a69_mug">
+    <path id="c35b96fc_mug_handle" d="M 296 170 C 309 168 309 177 295 177" stroke="#3b7fb8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path id="e41834c0_mug_body" d="M 277 166 L 277 183 C 277 186 282 188 287 188 C 292 188 296 186 297 183 L 297 166 Z" stroke="none" fill="#4a90cf"/>
+    <ellipse id="b7b78fae_mug_rim" cx="287" cy="166" rx="10" ry="6" stroke="none" fill="#6aa8dc"/>
+    <ellipse id="fbaceef4_coffee" cx="287" cy="167" rx="8" ry="4" stroke="none" fill="#5a3a24"/>
+    <path id="d4ce7147_steam_left" d="M 284 158 C 278 150 290 146 284 136" stroke="#9aa6b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.8" fill="none"/>
+    <path id="acdbeafa_steam_right" d="M 292 158 C 286 150 298 146 292 136" stroke="#9aa6b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.8" fill="none"/>
+  </g>
+</svg>

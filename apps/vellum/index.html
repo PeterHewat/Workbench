@@ -22,6 +22,99 @@
             d="M5 3v17l4.2-4.2 3.3 6.2 2.5-1.3-3.2-6 5.2-.1L5 3z"
           />
         </symbol>
+        <!-- The select arrow with a plus: taps add to the selection. -->
+        <symbol id="icon-select-more" viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            stroke="currentColor"
+            stroke-width="0.5"
+            stroke-linejoin="round"
+            d="M3 2v15l3.7-3.7 2.9 5.4 2.2-1.1-2.8-5.3 4.6-.1L3 2z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            d="M18 13v8M14 17h8"
+          />
+        </symbol>
+        <symbol id="icon-select-all" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-dasharray="3 2.4"
+            d="M2.5 2.5h19v19h-19z"
+          />
+          <rect x="6.5" y="6.5" width="5" height="5" rx="1" fill="currentColor" />
+          <circle cx="15" cy="15" r="2.8" fill="currentColor" />
+        </symbol>
+        <symbol id="icon-clipboard" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M9 4H6a1 1 0 00-1 1v15a1 1 0 001 1h12a1 1 0 001-1V5a1 1 0 00-1-1h-3"
+          />
+          <rect
+            x="9"
+            y="2.5"
+            width="6"
+            height="4"
+            rx="1"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M9 12h6M9 16h4"
+          />
+        </symbol>
+        <symbol id="icon-paste" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M9 4H6a1 1 0 00-1 1v15a1 1 0 001 1h12a1 1 0 001-1V5a1 1 0 00-1-1h-3"
+          />
+          <rect
+            x="9"
+            y="2.5"
+            width="6"
+            height="4"
+            rx="1"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 10v7M9 14l3 3 3-3"
+          />
+        </symbol>
+        <!-- Two shapes lined up on a guide: snap to other shapes' points. -->
+        <symbol id="icon-align" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-dasharray="2.5 2"
+            d="M2 12h20"
+          />
+          <rect x="3" y="5" width="7" height="7" rx="1" fill="currentColor" />
+          <circle cx="17" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+        </symbol>
         <symbol id="icon-pen" viewBox="0 0 24 24">
           <path
             fill="none"
@@ -146,6 +239,32 @@
           />
           <path fill="none" stroke="currentColor" stroke-width="2" d="M12 4v4M12 16v4" />
           <circle cx="12" cy="12" r="2.4" fill="currentColor" />
+        </symbol>
+        <!-- A point's two handles, joined through it or broken apart at it. -->
+        <symbol id="icon-link" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M3 17 21 7"
+          />
+          <circle cx="12" cy="12" r="2.6" fill="currentColor" />
+          <circle cx="3.5" cy="16.7" r="2" fill="currentColor" />
+          <circle cx="20.5" cy="7.3" r="2" fill="currentColor" />
+        </symbol>
+        <symbol id="icon-unlink" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-dasharray="3 2.5"
+            d="M3.5 7.5 12 12l8.5-4.5"
+          />
+          <circle cx="12" cy="12" r="2.6" fill="currentColor" />
+          <circle cx="3.5" cy="7.5" r="2" fill="currentColor" />
+          <circle cx="20.5" cy="7.5" r="2" fill="currentColor" />
         </symbol>
         <symbol id="icon-join" viewBox="0 0 24 24">
           <path
@@ -627,6 +746,17 @@
           >
             <svg class="ui-icon" aria-hidden="true"><use href="#icon-magnet" /></svg>
           </button>
+          <!-- Alt, as a switch: a finger has no key to hold. -->
+          <button
+            type="button"
+            class="tool-btn"
+            id="btn-align"
+            title="Snap to other shapes' points (or hold Alt) — instead of the grid while on"
+            aria-label="Snap to other shapes"
+            aria-pressed="false"
+          >
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-align" /></svg>
+          </button>
         </div>
 
         <div class="tool-group" id="group-view" role="group" aria-label="View">
@@ -666,8 +796,13 @@
           </button>
         </div>
 
-        <!-- Help sits outside the view menu, last in the bar: on a phone the one button you
-             reach for when you are lost should not itself be behind a menu. -->
+        <p id="cursor-pos" class="cursor-readout mono" aria-live="polite">—</p>
+
+        <!-- On a phone the bar has no room for it: the switch moves into the Help panel. -->
+        <button type="button" class="tool-btn theme-btn" data-theme-toggle></button>
+
+        <!-- Help is last in the bar, at the edge its panel opens from, and outside any menu: on a
+             phone the one button you reach for when you are lost should not be behind one. -->
         <button
           type="button"
           class="tool-btn help-btn"
@@ -678,8 +813,6 @@
         >
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-help" /></svg>
         </button>
-
-        <p id="cursor-pos" class="cursor-readout mono" aria-live="polite">—</p>
       </header>
 
       <aside
@@ -696,6 +829,11 @@
             </button>
             <button type="button" class="help-mode-btn" data-help-mode="touch">Touch</button>
           </div>
+          <button
+            type="button"
+            class="tool-btn theme-btn theme-btn--panel"
+            data-theme-toggle
+          ></button>
         </div>
         <div class="help-body help--mouse" id="help-body">
           <h3>About</h3>
@@ -735,7 +873,10 @@
               <b>Select</b> — the resting state, with no drawing tool chosen: tap a shape to select
               it (thin strokes have a wider invisible target), drag it to move it. A shape only
               starts moving once your finger has really travelled, so a tap that selects never
-              nudges anything.
+              nudges anything. To select several, turn on <b>add to the selection</b> (the arrow
+              with a plus, first on the bar beside the selection): while it is on, a tap adds a
+              shape or takes it out, as Shift-click does with a mouse. It lets go by itself once
+              nothing is selected. <b>Select everything</b> is on the same bar.
             </li>
             <li data-help="mouse">
               <b>Panning</b> — hold <kbd>Space</kbd> and drag, or drag with the middle mouse button;
@@ -753,10 +894,10 @@
               becomes a line, polyline or polygon automatically. <kbd>Esc</kbd> cancels.
             </li>
             <li data-help="touch">
-              <b>Pen</b> — tap for corner points, drag for curves. The bar beside the path has the
-              three things you need while drawing: take back the last point, close the path and
-              finish, or just finish. Double-tapping finishes too. A path with no curves becomes a
-              line, polyline or polygon automatically.
+              <b>Pen</b> — tap for corner points, drag for curves. The bar beside the path has what
+              you need while drawing: take back the last point, close the path and finish, just
+              finish, or throw the path away. Double-tapping finishes too. A path with no curves
+              becomes a line, polyline or polygon automatically.
             </li>
             <li data-help="mouse">
               <b>Rectangle (R) / Ellipse (E)</b> — drag, or click twice. <kbd>Shift</kbd> makes a
@@ -786,8 +927,11 @@
             <li>
               <b>Rotate</b> — drag the pink handle above a selected shape<span data-help="touch"
                 >, or put two fingers on it and twist</span
-              >.<span data-help="mouse"> <kbd>Shift</kbd> snaps to 15°.</span> Rectangles, ellipses
-              and text keep their type and carry the angle, exported as
+              >.<span data-help="mouse"> <kbd>Shift</kbd> snaps to 15°.</span
+              ><span data-help="touch">
+                The angle catches on each 15° as it passes and lets go as you keep turning.</span
+              >
+              Rectangles, ellipses and text keep their type and carry the angle, exported as
               <code>transform="rotate()"</code>, so a rotated rectangle is still a rectangle with a
               width, a height and a corner radius. Paths and polylines have the rotation baked into
               their points, which loses nothing.
@@ -806,10 +950,11 @@
               move the whole group, use the arrows on the group's own row. The SVG source keeps the
               file's order, where the shape drawn last is written last.
             </li>
-            <li data-help="mouse">
-              <b>Align</b> — hold <kbd>Alt</kbd> while drawing or dragging to snap to points that
-              line up horizontally or vertically with other shapes (this replaces grid snapping
-              while held).
+            <li>
+              <b>Align</b> —
+              <span data-help="mouse">hold <kbd>Alt</kbd> while drawing or dragging, or </span>turn
+              on the switch beside the magnet, to snap to points that line up horizontally or
+              vertically with other shapes. It replaces grid snapping while it is on.
             </li>
             <li>
               <b>Z-order</b> — the ▲ ▼ buttons on the bar beside the selection, or on a row in
@@ -846,12 +991,13 @@
               turn into paths first.
             </li>
             <li>
-              <b>Curve handles</b> — the two handles of a smooth point mirror each other.
+              <b>Curve handles</b> — the two handles of a smooth point are linked: drag one and the
+              other mirrors it. Grabbing a handle selects its point, and the bar beside the point
+              breaks the pair into a <em>cusp</em>, whose handles then move on their own (their arms
+              are drawn dashed), or links it again, mirroring one handle off the other.
               <span data-help="mouse"
-                >Hold <kbd>Alt</kbd> while dragging one to move it independently; release Alt to
-                mirror again. A cusp is remembered until you drag a handle without Alt.</span
-              ><span data-help="touch"
-                >To break the pairing, turn the point into a corner by double-tapping it.</span
+                >Holding <kbd>Alt</kbd> while you drag breaks the pair on the fly; let go of Alt
+                before the mouse and it mirrors again.</span
               >
             </li>
             <li>
@@ -952,12 +1098,18 @@
             </li>
           </ul>
 
-          <h3 data-help="mouse">Clipboard</h3>
-          <ul data-help="mouse">
-            <li>
+          <h3>Clipboard</h3>
+          <ul>
+            <li data-help="mouse">
               <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd> copy, cut and paste shapes
               (offset each time). Paste also accepts SVG markup copied from anywhere, and works
               between browser tabs. <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicates.
+            </li>
+            <li data-help="touch">
+              <b>Copy</b> is on the bar beside the selection. With nothing selected a small bar sits
+              above the tools with <b>Paste</b> and <b>Select everything</b>. Paste takes what you
+              last copied here, or else SVG markup copied from another app — your browser may ask
+              first. Each paste steps away from the last.
             </li>
           </ul>
 
@@ -1015,15 +1167,23 @@
               <code>display="none"</code> so the file still holds it.
             </li>
             <li>
+              The first time Vellum opens it shows <b>Vellum Workbench</b>, a workbench drawn in
+              isometric view — a desk, a laptop, a mug, a plant. Each is a named group, so the
+              Primitives list reads like layers; open one up and pull it apart. Its backdrop is
+              see-through, which is why the checkerboard shows. Delete it when you are done; it does
+              not come back.
+            </li>
+            <li>
               Documents save automatically, like Pages or Notes on macOS — there is no Save button.
               <b>Documents</b> lists everything stored in this browser (reference images included).
               <span data-help="mouse">Click</span><span data-help="touch">Tap</span> a document to
               open it; <span data-help="mouse">click</span><span data-help="touch">tap</span> the
               name of the open document to rename it in place. Every row reads like the other lists:
-              a dot showing which one is open, then duplicate, save to a file, and delete (deleting
-              an empty document doesn't ask; others do). <b>+</b> starts a new document (named
-              Untitled, Untitled 2, …; the current one is already saved). The last document reopens
-              when you start the app.
+              a dot showing which one is open, then duplicate, save to a file, ▲ ▼ to move it up or
+              down the list, and delete (deleting an empty document doesn't ask; others do). The
+              list keeps the order you give it; saving never reshuffles it. <b>+</b> starts a new
+              document at the top (named Untitled, Untitled 2, …; the current one is already saved).
+              The last document reopens when you start the app.
             </li>
             <li>
               Documents live in this browser only, so move them out as files: the ⬇ on a row saves
@@ -1056,7 +1216,12 @@
             <li data-help="touch">
               Nothing in the bar is behind a menu: Document, undo, redo, fit, zoom, Final SVG and
               Help all fit across the top, and the tools and the magnet sit at the bottom where your
-              thumb is.
+              thumb is. On a phone the light / dark switch is here, at the top of this panel.
+            </li>
+            <li>
+              <b>Light / dark</b> — the sun or moon beside Help switches the theme. Until you use
+              it, Vellum follows your system's setting; once you have, it keeps your choice, and so
+              does every other Workbench tool.
             </li>
             <li>
               Reloading the page puts you back where you were: the zoom and pan, and whichever
@@ -1073,21 +1238,23 @@
           <h3>The bar beside the selection</h3>
           <ul>
             <li>
-              Select a shape and a small bar appears next to it with what applies: delete,
-              duplicate, send backward / bring forward (dimmed when there is nowhere to go), close
-              or open a path, join two paths, group, merge and ungroup, and edit text. It is the
-              same set the keyboard shortcuts reach, within reach of a thumb.
+              Select a shape and a small bar appears next to it with what applies: add to the
+              selection, select everything, delete, copy, duplicate, send backward / bring forward
+              (dimmed when there is nowhere to go), close or open a path, join two paths, group,
+              merge and ungroup, and edit text. It is the same set the keyboard shortcuts reach,
+              within reach of a thumb.
             </li>
             <li>
-              Select one <em>point</em> of a path and the bar narrows to that point: split the path
-              here, close or open it, delete this point. The whole-shape actions step aside, because
+              Select one <em>point</em> of a path, or grab one of its handles, and the bar moves
+              beside that point and narrows to it: link or break its handles, split the path here,
+              close or open it, delete this point. The whole-shape actions step aside, because
               beside a highlighted point they would act on something other than what is highlighted
               — delete most of all.
             </li>
             <li>
               While the pen has a path open the bar shows that instead: take back the last point,
-              close the path and finish, or just finish. That is how you end a path without a
-              keyboard.
+              close the path and finish, just finish, or throw the path away. That is how you end a
+              path without a keyboard.
             </li>
           </ul>
 
@@ -1164,7 +1331,7 @@
             </tr>
             <tr>
               <td>Alt</td>
-              <td>Align-snap; breaks handle symmetry while dragging a curve handle</td>
+              <td>Align-snap; breaks a handle pair while dragging a curve handle</td>
             </tr>
             <tr>
               <td>Shift</td>

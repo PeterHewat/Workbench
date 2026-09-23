@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { APPS, findApp, listedApps } from "./index.js";
 import { appBase, siteBase } from "./site.js";
@@ -19,6 +19,13 @@ describe("catalog", () => {
       expect(app.name.length).toBeGreaterThan(0);
       expect(app.blurb.length).toBeGreaterThan(0);
       expect(app.icon.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("an app that claims card art ships it", () => {
+    for (const app of APPS.filter((a) => a.art)) {
+      const file = join(import.meta.dir, "..", "..", "..", "apps", app.slug, "public", "art.svg");
+      expect(existsSync(file)).toBe(true);
     }
   });
 

@@ -20,6 +20,11 @@ export interface WorkbenchApp {
   /** Inline SVG path data for the index card icon, drawn on a 24x24 grid. */
   readonly icon: string;
   readonly tags: readonly string[];
+  /**
+   * The app ships `public/art.svg`, a 512 x 320 picture shown across the top of its index card.
+   * Its background should be translucent or absent, so it sits on the card in either theme.
+   */
+  readonly art?: boolean;
   readonly status: AppStatus;
   /** Hidden from the index while false. Still built. */
   readonly listed: boolean;
@@ -34,6 +39,7 @@ export const APPS: readonly WorkbenchApp[] = [
       "A single-page SVG tracing editor. Place reference images, draw over them with a Bézier pen and standard shapes, then export pure SVG with no raster embedded.",
     icon: "M4 19c3-10 6-13 8-13s2 3 0 6-5 4-7 4 8 1 11-4",
     tags: ["svg", "vector", "drawing", "tracing"],
+    art: true,
     status: "beta",
     listed: true,
   },

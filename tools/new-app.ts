@@ -78,28 +78,29 @@ import { workbenchApp } from "@workbench/ui/vite";
 
 export default defineConfig(workbenchApp("${slug}"));
 `,
-  // Title, description, icon and manifest are added from the catalog at build time.
+  // Title, description, colour scheme, icon and manifest are added at build time.
   "index.html": `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
   </head>
   <body>
     <header class="wb-header">
       <a class="wb-home" href="../">← Workbench</a>
       <h1>${title}</h1>
+      <button type="button" class="wb-theme-toggle" id="theme-toggle"></button>
     </header>
     <main class="wb-main" id="app"></main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
 `,
-  "src/main.ts": `import { byId, registerServiceWorker } from "@workbench/ui";
+  "src/main.ts": `import { bindThemeToggle, byId, registerServiceWorker } from "@workbench/ui";
 import "@workbench/ui/base.css";
 import "./styles.css";
 
+bindThemeToggle(byId("theme-toggle"));
 byId("app").textContent = "Nothing here yet.";
 
 registerServiceWorker();

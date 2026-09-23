@@ -13,6 +13,9 @@ import { fileURLToPath } from "node:url";
 import type { HtmlTagDescriptor, Plugin, UserConfig } from "vite";
 import { findApp, type WorkbenchApp } from "@workbench/catalog";
 import { SITE, appBase, siteBase } from "@workbench/catalog/site";
+// By package name, not "./theme.js": Node loads this file for the Vite config, and it does not
+// map a .js specifier onto the .ts file beside it the way the bundler does.
+import { THEME_BOOT_SCRIPT } from "@workbench/ui/theme";
 
 const SW_SOURCE = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "..", "sw.js"),
@@ -31,6 +34,9 @@ export function workbenchApp(slug: string): UserConfig {
   if (!app) throw new Error(`"${slug}" is not in packages/catalog — add it there first`);
   return {
     base: appBase(slug),
+    // Not "spa": its fallback served the app at any path under the base, where every relative
+    // URL - the icon, the manifest, the welcome drawing - then resolved into the wrong folder.
+    appType: "mpa",
     plugins: [pageHead(app), manifest(app), serviceWorker()],
     build: { outDir: `../../dist/${slug}`, emptyOutDir: true, target: "es2022" },
   };
@@ -40,6 +46,7 @@ export function workbenchApp(slug: string): UserConfig {
 export function workbenchHome(): UserConfig {
   return {
     base: siteBase(),
+    appType: "mpa",
     plugins: [pageHead(null), serviceWorker()],
     // Not emptied: the site build writes the index first, then each app into its own folder.
     build: { outDir: "../../dist", emptyOutDir: false, target: "es2022" },
@@ -63,6 +70,7 @@ export function manifestFor(app: WorkbenchApp): Record<string, unknown> {
 
 /** The head tags a page gets from the catalog; `null` is the index page. */
 export function headTags(app: WorkbenchApp | null): HtmlTagDescriptor[] {
+  const base = app ? appBase(app.slug) : siteBase();
   const title = app
     ? `${app.name} — ${SITE.name}`
     : `${SITE.name} — ${SITE.tagline.replace(/\.$/, "")}`;
@@ -71,12 +79,16 @@ export function headTags(app: WorkbenchApp | null): HtmlTagDescriptor[] {
     { tag: "title", children: title },
     { tag: "meta", attrs: { name: "description", content: description } },
     { tag: "meta", attrs: { name: "theme-color", content: SITE.themeColor } },
+    { tag: "meta", attrs: { name: "color-scheme", content: "dark light" } },
+    // Runs while the head is parsed, before the body paints: a stored choice never flashes.
+    { tag: "script", children: THEME_BOOT_SCRIPT },
     { tag: "meta", attrs: { property: "og:title", content: title } },
     { tag: "meta", attrs: { property: "og:description", content: description } },
     { tag: "meta", attrs: { property: "og:type", content: "website" } },
-    { tag: "link", attrs: { rel: "icon", href: ICON, type: "image/svg+xml" } },
+    // Absolute: a page reached at a deeper path must still find the files beside its index.
+    { tag: "link", attrs: { rel: "icon", href: `${base}${ICON}`, type: "image/svg+xml" } },
   ];
-  if (app) tags.push({ tag: "link", attrs: { rel: "manifest", href: MANIFEST } });
+  if (app) tags.push({ tag: "link", attrs: { rel: "manifest", href: `${base}${MANIFEST}` } });
   return tags.map((t) => ({ ...t, injectTo: "head" }));
 }
 
@@ -85,8 +97,10 @@ function pageHead(app: WorkbenchApp | null): Plugin {
     name: "workbench-page-head",
     transformIndexHtml(html) {
       // One source for the copy: a hand-written title would silently disagree with the catalog.
-      if (/<title>|name="description"|rel="manifest"/.test(html)) {
-        throw new Error("index.html must not set its own title, description or manifest");
+      if (/<title>|name="description"|rel="manifest"|name="color-scheme"/.test(html)) {
+        throw new Error(
+          "index.html must not set its own title, description, colour scheme or manifest"
+        );
       }
       return headTags(app);
     },
@@ -99,7 +113,7 @@ function manifest(app: WorkbenchApp): Plugin {
     name: "workbench-manifest",
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        if (!(req.url ?? "").split("?")[0]!.endsWith(`/${MANIFEST}`)) return next();
+        if ((req.url ?? "").split("?")[0] !== `${appBase(app.slug)}${MANIFEST}`) return next();
         res.setHeader("Content-Type", "application/manifest+json");
         res.end(body);
       });

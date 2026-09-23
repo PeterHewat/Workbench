@@ -8,8 +8,11 @@
  * not the same as having them to hand.
  *
  * While the pen still has a path open it shows what that state needs instead - finish, close,
- * take back the last point - because finishing a path on touch is otherwise an undiscoverable
- * double-tap, and every other tool shows its actions the moment the shape exists.
+ * take back the last point, throw it away - because finishing a path on touch is otherwise an
+ * undiscoverable double-tap, and every other tool shows its actions the moment the shape exists.
+ *
+ * On a touch screen it also stays up with nothing selected, docked above the tool bar, for the
+ * two things a keyboard would otherwise do there: select everything, and paste.
  */
 
 import { findElement, selectedElements } from "./state.js";
@@ -17,14 +20,17 @@ import {
   canJoin,
   canRotate,
   canToggleClosed,
+  hasTwoHandles,
   isClosedShape,
   localBBox,
   toWorldPoint,
 } from "./model.js";
 import { canMergeGroups, canMoveSelectionZ, groupsOf, outerGroup } from "./groups.js";
 import { worldToScreen } from "./viewport.js";
+import { isCoarsePointer } from "./pointer.js";
+import { isSelectMore } from "./modes.js";
 import { HANDLE_EXTENT, outerHandlePoints } from "./render.js";
-import type { EditorState, SceneElement } from "./types.js";
+import type { EditorState, Point, SceneElement } from "./types.js";
 
 export interface ActionBarHandlers {
   duplicate: () => void;
@@ -36,11 +42,17 @@ export interface ActionBarHandlers {
   merge: () => void;
   ungroup: () => void;
   splitPoint: () => void;
+  linkHandles: (linked: boolean) => void;
   join: () => void;
   editText: (id: string) => void;
   finishPath: () => void;
   closeAndFinishPath: () => void;
   undoPoint: () => void;
+  discardPath: () => void;
+  selectMore: (on: boolean) => void;
+  selectAll: () => void;
+  copy: () => void;
+  paste: () => void;
 }
 
 interface Action {
@@ -50,6 +62,8 @@ interface Action {
   glyph?: string;
   danger?: boolean;
   disabled?: boolean;
+  /** A switch rather than an action: shown pressed while on. */
+  pressed?: boolean;
   run: () => void;
 }
 
@@ -98,7 +112,38 @@ function drawingActions(state: EditorState): Action[] {
       disabled: points < 2,
       run: handlers.finishPath,
     },
+    {
+      key: "discard",
+      label: "Throw this path away",
+      icon: "icon-trash",
+      danger: true,
+      run: handlers.discardPath,
+    },
   ];
+}
+
+/** Select all and paste: shown on touch with nothing selected, where there is no keyboard. */
+function idleActions(state: EditorState): Action[] {
+  return [
+    {
+      key: "select-all",
+      label: "Select everything",
+      icon: "icon-select-all",
+      disabled: !state.elements.some((e) => !e.hidden),
+      run: handlers.selectAll,
+    },
+    { key: "paste", label: "Paste", icon: "icon-paste", run: handlers.paste },
+  ];
+}
+
+/** Whether the idle bar is up: touch, the select tool, nothing selected and nothing drawn. */
+function idle(state: EditorState): boolean {
+  return (
+    isCoarsePointer() &&
+    state.tool === "select" &&
+    !state.selection.elementIds.length &&
+    !state.drawing?.activePathId
+  );
 }
 
 /** Closing or opening the path, when there is a path and closing it would show. */
@@ -122,8 +167,28 @@ function closeAction(el: SceneElement): Action | null {
  * reads as a lie next to a highlighted point, and delete is the one button whose meaning really
  * does change with the selection. So the bar narrows to the point, and says so.
  */
-function pointActions(el: SceneElement): Action[] {
+function pointActions(el: SceneElement, index: number): Action[] {
   const out: Action[] = [];
+  const p = el.type === "path" ? el.points[index] : undefined;
+  // Only a point with two handles has a pair to link or break. The key carries the state, as
+  // the close button's does, so the button is rebuilt when it flips.
+  if (p && hasTwoHandles(p)) {
+    out.push(
+      p.smooth
+        ? {
+            key: "unlink",
+            label: "Break the handles: each moves on its own",
+            icon: "icon-unlink",
+            run: () => handlers.linkHandles(false),
+          }
+        : {
+            key: "link",
+            label: "Link the handles: they mirror each other",
+            icon: "icon-link",
+            run: () => handlers.linkHandles(true),
+          }
+    );
+  }
   out.push({
     key: "split",
     label: "Split the path at this point",
@@ -147,8 +212,9 @@ function selectionActions(state: EditorState): Action[] {
   const out: Action[] = [];
   const single = sel.length === 1 ? sel[0]! : null;
 
-  const edited = state.selection.pathEdit ? findElement(state.selection.pathEdit.pathId) : null;
-  if (edited) return pointActions(edited);
+  const pe = state.selection.pathEdit;
+  const edited = pe ? findElement(pe.pathId) : null;
+  if (pe && edited) return pointActions(edited, pe.index);
 
   if (single?.type === "text") {
     out.push({
@@ -181,6 +247,23 @@ function selectionActions(state: EditorState): Action[] {
   }
 
   const ids = new Set(state.selection.elementIds);
+  const more = isSelectMore();
+  out.unshift({
+    // Shift for a finger: while on, a tap adds a shape to the selection or takes it out.
+    key: more ? "more-on" : "more-off",
+    label: more ? "Stop adding to the selection" : "Add to the selection: tap more shapes",
+    icon: "icon-select-more",
+    pressed: more,
+    run: () => handlers.selectMore(!more),
+  });
+  if (state.elements.some((e) => !e.hidden && !ids.has(e.id))) {
+    out.splice(1, 0, {
+      key: "select-all",
+      label: "Select everything",
+      icon: "icon-select-all",
+      run: handlers.selectAll,
+    });
+  }
   out.push(
     {
       key: "back",
@@ -196,6 +279,7 @@ function selectionActions(state: EditorState): Action[] {
       disabled: !canMoveSelectionZ(state.elements, ids, 1),
       run: handlers.forward,
     },
+    { key: "copy", label: "Copy", icon: "icon-clipboard", run: handlers.copy },
     { key: "duplicate", label: "Duplicate", icon: "icon-copy", run: handlers.duplicate },
     { key: "delete", label: "Delete", icon: "icon-trash", danger: true, run: handlers.remove }
   );
@@ -217,6 +301,10 @@ function build(actions: readonly Action[]): void {
       btn.classList.add("tool-btn--text");
     }
     if (action.danger) btn.classList.add("action-danger");
+    if (action.pressed !== undefined) {
+      btn.setAttribute("aria-pressed", String(action.pressed));
+      btn.classList.toggle("active", action.pressed);
+    }
     btn.disabled = !!action.disabled;
     btn.addEventListener("click", action.run);
     bar.appendChild(btn);
@@ -230,9 +318,44 @@ interface AnchorRect {
   bottom: number;
 }
 
-/** The screen rectangle the bar sits beside: the selection, or the path being drawn. */
+/**
+ * The screen rectangle around one selected point and its curve handles. The bar only acts on
+ * that point, so it sits beside it: against the whole shape it could land a screen away from
+ * what it acts on.
+ */
+function pointRect(state: EditorState): AnchorRect | null {
+  const pe = state.selection.pathEdit;
+  const el = pe ? findElement(pe.pathId) : undefined;
+  const p = pe && el && "points" in el ? el.points[pe.index] : undefined;
+  if (!el || !p) return null;
+  const points: Point[] = [p];
+  if (el.type === "path") {
+    const { hIn, hOut } = el.points[pe!.index]!;
+    if (hIn) points.push(hIn);
+    if (hOut) points.push(hOut);
+  }
+  let left = Infinity;
+  let right = -Infinity;
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const local of points) {
+    const world = toWorldPoint(el, local);
+    const s = worldToScreen(world.x, world.y);
+    left = Math.min(left, s.x - HANDLE_EXTENT);
+    right = Math.max(right, s.x + HANDLE_EXTENT);
+    top = Math.min(top, s.y - HANDLE_EXTENT);
+    bottom = Math.max(bottom, s.y + HANDLE_EXTENT);
+  }
+  return { left, right, top, bottom };
+}
+
+/** The screen rectangle the bar sits beside: a selected point, the selection, or the path being drawn. */
 function anchorRect(state: EditorState): AnchorRect | null {
   const drawing = findElement(state.drawing?.activePathId);
+  if (!drawing && state.selection.pathEdit) {
+    const around = pointRect(state);
+    if (around) return around;
+  }
   const shapes = drawing ? [drawing] : selectedElements();
   let left = Infinity;
   let right = -Infinity;
@@ -288,9 +411,18 @@ function freeBand(): { top: number; bottom: number } {
 
 /** Puts the bar just above the selection, or below it when there is no room. */
 function position(state: EditorState): void {
+  // Measured from the left edge: where it last stood limits how wide a wrapping bar lays out.
+  bar.style.left = "8px";
+  const size = bar.getBoundingClientRect();
+  if (idle(state)) {
+    // Nothing to sit beside: it docks at the bottom of the free band, over the tool bar.
+    const band = freeBand();
+    bar.style.left = `${Math.max(8, (window.innerWidth - size.width) / 2)}px`;
+    bar.style.top = `${band.bottom - size.height}px`;
+    return;
+  }
   const at = anchorRect(state);
   if (!at) return;
-  const size = bar.getBoundingClientRect();
   const x = Math.min(
     Math.max((at.left + at.right) / 2 - size.width / 2, 8),
     window.innerWidth - size.width - 8
@@ -306,13 +438,19 @@ function position(state: EditorState): void {
 export function syncActionBar(state: EditorState): void {
   const drawing = !!state.drawing?.activePathId;
   const show =
-    !state.finalOnly && !state.ui.editingTextId && (drawing || !!state.selection.elementIds.length);
+    !state.finalOnly &&
+    !state.ui.editingTextId &&
+    (drawing || !!state.selection.elementIds.length || idle(state));
   bar.classList.toggle("hidden", !show);
   if (!show) {
     lastSignature = "";
     return;
   }
-  const actions = drawing ? drawingActions(state) : selectionActions(state);
+  const actions = drawing
+    ? drawingActions(state)
+    : idle(state)
+      ? idleActions(state)
+      : selectionActions(state);
   // Rebuilt only when the set of buttons, or whether they are enabled, actually changes.
   const signature = actions.map((a) => `${a.key}${a.disabled ? "-off" : ""}`).join(",");
   if (signature !== lastSignature) {

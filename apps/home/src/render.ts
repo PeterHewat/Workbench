@@ -9,14 +9,22 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** One index card. `base` is the site root, so the link is `<base><slug>/`. */
+/**
+ * One index card. `base` is the site root, so the link is `<base><slug>/`. An app with art gets
+ * its picture across the top, served from its own folder.
+ */
 export function cardHtml(app: WorkbenchApp, base: string): string {
   const tags = app.tags.map((t) => `<li>${escapeHtml(t)}</li>`).join("");
   const status =
     app.status === "stable"
       ? ""
       : `<span class="status status--${app.status}">${app.status}</span>`;
+  const art = app.art
+    ? `<img class="card-art" src="${base}${app.slug}/art.svg" alt="" width="512" height="320" loading="lazy" />`
+    : "";
   return `<a class="card" href="${base}${app.slug}/">
+      ${art}
+      <span class="card-row">
       <span class="card-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="28" height="28">
           <path d="${app.icon}" fill="none" stroke="currentColor" stroke-width="1.75"
@@ -28,12 +36,14 @@ export function cardHtml(app: WorkbenchApp, base: string): string {
         <span class="card-blurb">${escapeHtml(app.blurb)}</span>
         <ul class="card-tags">${tags}</ul>
       </span>
+      </span>
     </a>`;
 }
 
 export function pageHtml(apps: readonly WorkbenchApp[], base: string): string {
   return `
     <header class="masthead">
+      <button type="button" class="wb-theme-toggle" id="theme-toggle"></button>
       <h1>${escapeHtml(SITE.name)}</h1>
       <p class="tagline">${escapeHtml(SITE.tagline)}</p>
     </header>

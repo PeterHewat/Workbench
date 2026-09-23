@@ -20,6 +20,35 @@ export function copySelectionText(): string | null {
   return JSON.stringify({ tag: CLIP_TAG, elements: els, groupNames: Object.fromEntries(names) });
 }
 
+/**
+ * What the bar's Copy put away, for its Paste. The system clipboard gets it too, so it reaches
+ * other tabs, but reading that back needs a permission prompt on some phones, and the copy
+ * made a moment ago in this tab should not have to ask for one.
+ */
+let copied: string | null = null;
+
+/** Copy, as a button rather than Ctrl+C. */
+export async function copyToClipboard(): Promise<void> {
+  const text = copySelectionText();
+  if (!text) return;
+  copied = text;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    /* kept for this tab only */
+  }
+}
+
+/** Paste, as a button: this tab's last copy, else whatever the system clipboard holds. */
+export async function pasteFromClipboard(): Promise<void> {
+  if (copied && pasteFromText(copied)) return;
+  try {
+    pasteFromText(await navigator.clipboard.readText());
+  } catch {
+    /* nothing readable */
+  }
+}
+
 export function cutSelection(): string | null {
   const text = copySelectionText();
   if (text) deleteSelection();

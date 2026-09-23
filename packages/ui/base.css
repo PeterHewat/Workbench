@@ -3,7 +3,12 @@
  * small tool needs. An app imports it once (`import "@workbench/ui/base.css"`) and adds its own
  * layout on top. Classes are prefixed `wb-` so they never collide with an app's own.
  *
- * `--bg` must match SITE.themeColor in packages/catalog/src/site.ts.
+ * `--bg` must match SITE.themeColor in packages/catalog/src/site.ts (the dark one: the head
+ * announces it before any script runs, and theme.ts replaces it once the page knows better).
+ *
+ * Dark is the base. The light tokens apply when the browser prefers light and nobody has chosen,
+ * or when someone chose light (`<html data-theme="light">`, set by theme.ts). The block is
+ * written twice because a media query cannot share a rule with an attribute selector.
  */
 
 :root {
@@ -18,9 +23,44 @@
   --danger: #e85d5d;
   --ok: #5fbf7f;
   --warn: #e0b050;
+  --violet: #c98fe0;
   --radius: 8px;
   --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
   color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --panel-2: #eceef2;
+    --border: #d5d9e0;
+    --text: #1b1d22;
+    --muted: #5d6471;
+    --accent: #2f6fe0;
+    --accent-dim: #d6e3fb;
+    --danger: #cf3b3b;
+    --ok: #2a8a50;
+    --warn: #a8780a;
+    --violet: #8a44a8;
+    color-scheme: light;
+  }
+}
+
+:root[data-theme="light"] {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --panel-2: #eceef2;
+  --border: #d5d9e0;
+  --text: #1b1d22;
+  --muted: #5d6471;
+  --accent: #2f6fe0;
+  --accent-dim: #d6e3fb;
+  --danger: #cf3b3b;
+  --ok: #2a8a50;
+  --warn: #a8780a;
+  --violet: #8a44a8;
+  color-scheme: light;
 }
 
 *,
@@ -54,6 +94,11 @@ a {
   padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
+}
+
+/* The theme switch, when a page puts it in the header, takes the far end. */
+.wb-header .wb-theme-toggle {
+  margin-left: auto;
 }
 
 .wb-header h1 {
@@ -152,6 +197,31 @@ pre.wb-code {
 .wb-code.dragging {
   border-style: dashed;
   border-color: var(--accent);
+}
+
+/* The light/dark switch (see theme.ts): an icon button that shows the theme it switches to. */
+.wb-theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.wb-theme-toggle:hover,
+.wb-theme-toggle:focus-visible {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.wb-theme-icon {
+  width: 20px;
+  height: 20px;
 }
 
 /* ---------- Layout pieces ---------- */

@@ -10,6 +10,8 @@ export interface DocumentMeta {
   id: string;
   name: string;
   updated: number;
+  /** Place in the Documents list, lowest first. Set by the person, not by recency. */
+  order: number;
 }
 
 interface DataRecord {
@@ -54,13 +56,24 @@ function request<T>(req: IDBRequest<T>): Promise<T> {
   });
 }
 
-/** Saved documents, newest first. */
+/** Saved documents, in the order the list shows them. */
 export async function listDocuments(): Promise<DocumentMeta[]> {
   const db = await openDb();
   const all = await request<DocumentMeta[]>(db.transaction(META).objectStore(META).getAll());
-  return all.sort((a, b) => b.updated - a.updated);
+  // Greenfield: a library written before documents had a place in the list is refused, not
+  // guessed at. Clearing the site's storage starts it again.
+  if (all.some((m) => typeof m.order !== "number")) {
+    throw new Error(
+      "These documents were saved by an older Vellum. Clear this site's storage to start again."
+    );
+  }
+  return all.sort((a, b) => a.order - b.order);
 }
 
+/** A new document's place: above everything already in the list. */
+const topOrder = (all: readonly DocumentMeta[]) => Math.min(0, ...all.map((m) => m.order)) - 1;
+
+/** Saves a document. One that is new goes to the top of the list; one that exists keeps its place. */
 export async function saveDocument(doc: {
   id: string;
   name: string;
@@ -68,8 +81,31 @@ export async function saveDocument(doc: {
 }): Promise<void> {
   const db = await openDb();
   const tx = db.transaction([META, DATA], "readwrite");
-  tx.objectStore(META).put({ id: doc.id, name: doc.name, updated: Date.now() });
+  const meta = tx.objectStore(META);
+  const all = await request<DocumentMeta[]>(meta.getAll());
+  const existing = all.find((m) => m.id === doc.id);
+  const record: DocumentMeta = {
+    ...existing,
+    id: doc.id,
+    name: doc.name,
+    updated: Date.now(),
+    order: existing?.order ?? topOrder(all),
+  };
+  meta.put(record);
   tx.objectStore(DATA).put({ id: doc.id, data: doc.data });
+  await done(tx);
+}
+
+/** Puts the list in the given order. Ids it does not name keep their place after those it does. */
+export async function reorderDocuments(ids: readonly string[]): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(META, "readwrite");
+  const meta = tx.objectStore(META);
+  const all = await request<DocumentMeta[]>(meta.getAll());
+  for (const m of all) {
+    const at = ids.indexOf(m.id);
+    meta.put({ ...m, order: at < 0 ? ids.length + m.order : at });
+  }
   await done(tx);
 }
 
@@ -101,7 +137,10 @@ export async function duplicateDocument(id: string, newId: string, name: string)
   const rec = await request<DataRecord | undefined>(db.transaction(DATA).objectStore(DATA).get(id));
   if (!rec) return;
   const tx = db.transaction([META, DATA], "readwrite");
-  tx.objectStore(META).put({ id: newId, name, updated: Date.now() });
+  const meta = tx.objectStore(META);
+  const all = await request<DocumentMeta[]>(meta.getAll());
+  // A copy goes on top, like any new document.
+  meta.put({ id: newId, name, updated: Date.now(), order: topOrder(all) });
   tx.objectStore(DATA).put({ id: newId, data: rec.data });
   await done(tx);
 }
