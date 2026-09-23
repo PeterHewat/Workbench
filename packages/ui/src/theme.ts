@@ -102,7 +102,14 @@ export function bindThemeToggle(button: HTMLElement, iconClass = "wb-theme-icon"
   const render = () => {
     const next: Theme = currentTheme() === "dark" ? "light" : "dark";
     const label = `Switch to ${next} theme`;
-    button.innerHTML = `<svg class="${iconClass}" viewBox="0 0 24 24" aria-hidden="true">${next === "light" ? SUN : MOON}</svg>`;
+    // Built as elements: the class is the caller's, and must never be read as markup. Only the
+    // two icons, which are constants here, go through innerHTML.
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", iconClass);
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.innerHTML = next === "light" ? SUN : MOON;
+    button.replaceChildren(svg);
     button.title = label;
     button.setAttribute("aria-label", label);
   };
