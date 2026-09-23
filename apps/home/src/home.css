@@ -10,7 +10,15 @@ body {
 }
 
 .masthead {
+  position: relative;
   padding: 72px 0 40px;
+}
+
+/* Top right on every width: the masthead has the room, and on a phone it is still in reach. */
+.masthead .wb-theme-toggle {
+  position: absolute;
+  top: 16px;
+  right: 0;
 }
 
 .masthead h1 {
@@ -36,8 +44,8 @@ body {
 
 .card {
   display: flex;
-  gap: 16px;
-  padding: 18px;
+  flex-direction: column;
+  overflow: hidden;
   height: 100%;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -53,6 +61,21 @@ body {
 .card:focus-visible {
   border-color: var(--accent);
   transform: translateY(-2px);
+}
+
+/* Translucent by contract (see `art` in the catalog), so the card's own colour shows through. */
+.card-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 8 / 5;
+  border-bottom: 1px solid var(--border);
+}
+
+.card-row {
+  display: flex;
+  gap: 16px;
+  padding: 18px;
 }
 
 .card-icon {
@@ -96,13 +119,13 @@ body {
 }
 
 .status--beta {
-  color: #e0b050;
-  border-color: #5a4a26;
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
 }
 
 .status--experiment {
-  color: #c98fe0;
-  border-color: #503a5c;
+  color: var(--violet);
+  border-color: color-mix(in srgb, var(--violet) 40%, transparent);
 }
 
 .card-tags {

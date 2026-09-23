@@ -1,7 +1,7 @@
 import { getState, selectedElements, setState } from "./state.js";
 import { clampZoom, zoomAt } from "./viewport.js";
 import { pushUndo } from "./undo.js";
-import { elementBBox, rotateElementCopy } from "./model.js";
+import { elementBBox, magnetTurn, rotateElementCopy } from "./model.js";
 import { deepClone } from "./utils.js";
 import type { Point, SceneElement, Viewport } from "./types.js";
 
@@ -93,7 +93,7 @@ export function bindTouch(svg: SVGSVGElement): void {
         }
         if (twisting) {
           const d = twist;
-          const rotated = rotateElementCopy(d.base, delta, d.cx, d.cy);
+          const rotated = rotateElementCopy(d.base, magnetTurn(delta, d.base.rotation), d.cx, d.cy);
           setState((s) => ({
             ...s,
             elements: s.elements.map((x) => (x.id === d.id ? rotated : x)),

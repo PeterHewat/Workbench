@@ -1,6 +1,7 @@
 import { selectedElements, findElement } from "./state.js";
 import {
   elementBBox,
+  hasTwoHandles,
   localBBox,
   cornersOf,
   toWorldPoint,
@@ -332,8 +333,21 @@ function hitRForPoint(points: readonly Point[], i: number): number {
   return Math.max(HANDLE_R + 1, Math.min(defaultHitR(), nearest / 2));
 }
 
-function addHandleLine(parent: Element, x1: number, y1: number, x2: number, y2: number): void {
-  add(parent, "line", { class: "handle-line", x1, y1, x2, y2 });
+function addHandleLine(
+  parent: Element,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  broken = false
+): void {
+  add(parent, "line", {
+    class: `handle-line${broken ? " handle-line--broken" : ""}`,
+    x1,
+    y1,
+    x2,
+    y2,
+  });
 }
 
 /** Where the rotate handle sits, and the top-centre of the shape it hangs from, in world units. */
@@ -488,10 +502,12 @@ function renderPathHandles(parent: Element, path: PathElement, state: EditorStat
   const pe = state.selection.pathEdit;
   // Curve handles first, anchors after: the anchor sits on top wherever the two overlap.
   path.points.forEach((p, i) => {
+    // A cusp's arms are dashed: the pair is broken, and each handle moves on its own.
+    const broken = !p.smooth && hasTwoHandles(p);
     for (const kind of ["in", "out"] as const) {
       const h = kind === "in" ? p.hIn : p.hOut;
       if (!h || (h.x === p.x && h.y === p.y)) continue;
-      addHandleLine(parent, p.x, p.y, h.x, h.y);
+      addHandleLine(parent, p.x, p.y, h.x, h.y, broken);
       const reach = Math.hypot(h.x - p.x, h.y - p.y) * zoom;
       addHandle(
         parent,

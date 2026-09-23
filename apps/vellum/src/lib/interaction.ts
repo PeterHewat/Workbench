@@ -1,4 +1,5 @@
 import { getState, setState, mutate, findElement, selectOnly } from "./state.js";
+import { isAlignSnap, isSelectMore } from "./modes.js";
 import {
   createPath,
   createPoint,
@@ -17,6 +18,7 @@ import {
   rotateElementCopy,
   createText,
   type AlignOptions,
+  magnetTurn,
 } from "./model.js";
 import { screenToWorld, zoomAt } from "./viewport.js";
 import { deepClone, dist } from "./utils.js";
@@ -51,6 +53,8 @@ type DragState =
       index: number;
       kind: string;
       otherStart: Point | null;
+      /** Whether the handles were linked when the drag began: a cusp stays one. */
+      linked: boolean;
       last: Point | null;
     }
   | { type: "pen-handle"; pathId: string; index: number }
@@ -185,20 +189,20 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     return { x: cx - world.x, y: cy - world.y };
   }
 
-  /** Symmetric by default (partner mirrors); with Alt the partner keeps its position. */
+  /**
+   * A linked pair mirrors; Alt holds the partner still and leaves the point a cusp. A cusp's
+   * handles move on their own with or without Alt - it is linked again from the bar beside the
+   * point, which is the same on every pointer, rather than by a drag that happens to lack a key.
+   */
   function applyHandleDrag(p: Anchor, world: Point, alt: boolean): void {
     if (drag?.type !== "handle") return;
     const key = drag.kind === "out" ? "hOut" : "hIn";
     const otherKey = drag.kind === "out" ? "hIn" : "hOut";
     p[key] = { x: world.x, y: world.y };
     if (!drag.otherStart) return;
-    if (alt) {
-      p.smooth = false;
-      p[otherKey] = { ...drag.otherStart };
-    } else {
-      p.smooth = true;
-      p[otherKey] = mirrorHandle(p, p[key]!);
-    }
+    const mirror = drag.linked && !alt;
+    p.smooth = mirror;
+    p[otherKey] = mirror ? mirrorHandle(p, p[key]!) : { ...drag.otherStart };
   }
 
   function onAltKey(e: KeyboardEvent): void {
@@ -229,11 +233,13 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   function pointerWorld(e: PointerEvent): Point {
     const w = screenToWorld(e.clientX, e.clientY);
     const s = getState();
-    // While dragging a curve handle, Alt breaks its symmetry instead of aligning.
+    // While dragging a curve handle, Alt breaks its symmetry instead of aligning. The align
+    // switch has no second meaning to give way to, so it aligns whatever is being dragged.
     const alignOn =
-      e.altKey &&
-      !(drag?.type === "handle" && drag.kind !== "anchor") &&
-      !(drag?.type === "resize" && drag.role === "corner");
+      isAlignSnap() ||
+      (e.altKey &&
+        !(drag?.type === "handle" && drag.kind !== "anchor") &&
+        !(drag?.type === "resize" && drag.role === "corner"));
     let x = w.x;
     let y = w.y;
     let guideX: number | null = null;
@@ -320,13 +326,13 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           type: "handle",
           ...h,
           otherStart: other ? { x: other.x, y: other.y } : null,
+          linked: !!p?.smooth,
           last: null,
         });
+        // A handle belongs to its anchor, so grabbing one selects that point: the bar beside it
+        // then offers to link or break the pair, which is how touch gets at a cusp.
         setState({
-          selection: selectOnly(
-            [h.pathId],
-            h.kind === "anchor" ? { pathId: h.pathId, kind: "anchor", index: h.index } : null
-          ),
+          selection: selectOnly([h.pathId], { pathId: h.pathId, kind: "anchor", index: h.index }),
         });
         return;
       }
@@ -388,9 +394,10 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           return;
         }
         const members = expandGroups([elId]);
+        const additive = e.shiftKey || isSelectMore();
         setState((s) => {
           let ids = s.selection.elementIds;
-          if (e.shiftKey) {
+          if (additive) {
             ids = members.every((m) => ids.includes(m))
               ? ids.filter((x) => !members.includes(x))
               : [...new Set([...ids, ...members])];
@@ -432,7 +439,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       } else {
         arm(e, marquee, { undo: false, grab: false });
       }
-      if (!e.shiftKey) setState({ selection: selectOnly() });
+      if (!e.shiftKey && !isSelectMore()) setState({ selection: selectOnly() });
       return;
     }
 
@@ -603,7 +610,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       const d = drag;
       let dx = world.x - d.start.x;
       let dy = world.y - d.start.y;
-      if (st.grid.snap && !e.altKey) {
+      if (st.grid.snap && !e.altKey && !isAlignSnap()) {
         // Snap the top-left of the first dragged shape to the grid.
         const firstBase = d.bases[d.ids[0] ?? ""];
         const first = firstBase ? elementBBox(firstBase) : null;
@@ -654,10 +661,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         mutate(() => applyHandleDrag(p, world, e.altKey));
       }
       setState({
-        selection: selectOnly(
-          [d.pathId],
-          d.kind === "anchor" ? { pathId: d.pathId, kind: "anchor", index: d.index } : null
-        ),
+        selection: selectOnly([d.pathId], { pathId: d.pathId, kind: "anchor", index: d.index }),
       });
       return;
     }
@@ -668,6 +672,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       if (e.shiftKey) {
         const step = Math.PI / 12;
         delta = Math.round(delta / step) * step;
+      } else if (e.pointerType !== "mouse") {
+        delta = magnetTurn(delta, d.base.rotation);
       }
       if (!d.active && Math.abs(delta) < 0.01) return;
       d.active = true;
@@ -749,7 +755,9 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       const ids = expandGroups(elementsInMarquee(drag));
       setState((s) => ({
         ...s,
-        selection: selectOnly(e.shiftKey ? [...new Set([...s.selection.elementIds, ...ids])] : ids),
+        selection: selectOnly(
+          e.shiftKey || isSelectMore() ? [...new Set([...s.selection.elementIds, ...ids])] : ids
+        ),
       }));
       clearDrawing();
       drag = null;

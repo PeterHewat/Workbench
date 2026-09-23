@@ -40,6 +40,18 @@ export function closeAndFinishPath(): void {
   finishPath();
 }
 
+/** Throws away the path being drawn, the button form of Esc. */
+export function discardPath(): void {
+  const activeId = getState().drawing?.activePathId;
+  if (!activeId) return;
+  pushUndo();
+  setState((s) => ({
+    ...s,
+    elements: s.elements.filter((e) => e.id !== activeId),
+    drawing: null,
+  }));
+}
+
 /** Takes back the last point placed by the pen, so a misplaced tap is one button to undo. */
 export function removeLastPenPoint(): void {
   const activeId = getState().drawing?.activePathId;

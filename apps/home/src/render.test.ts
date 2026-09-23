@@ -40,6 +40,13 @@ describe("cards", () => {
     expect(cardHtml({ ...app, status: "stable" }, "/")).not.toContain('class="status');
   });
 
+  test("an app with art shows it from its own folder; one without shows none", () => {
+    expect(cardHtml({ ...app, art: true }, "/Workbench/")).toContain(
+      'src="/Workbench/demo/art.svg"'
+    );
+    expect(cardHtml(app, "/")).not.toContain("card-art");
+  });
+
   test("tags are listed", () => {
     const html = cardHtml(app, "/");
     expect(html).toContain("<li>one</li>");

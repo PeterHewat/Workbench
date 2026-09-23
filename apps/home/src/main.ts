@@ -1,5 +1,5 @@
 import { listedApps } from "@workbench/catalog";
-import { registerServiceWorker } from "@workbench/ui";
+import { bindThemeToggle, registerServiceWorker } from "@workbench/ui";
 import { pageHtml } from "./render.js";
 import "@workbench/ui/base.css";
 import "./home.css";
@@ -9,5 +9,8 @@ import "./home.css";
 // whatever the site was built for — a project path, or `/` behind a custom domain.
 const root = document.getElementById("app");
 if (root) root.innerHTML = pageHtml(listedApps(), import.meta.env.BASE_URL);
+
+const toggle = document.getElementById("theme-toggle");
+if (toggle) bindThemeToggle(toggle);
 
 registerServiceWorker();

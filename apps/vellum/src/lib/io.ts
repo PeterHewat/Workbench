@@ -13,6 +13,7 @@ import {
   gradientStops,
   geometryOf,
   styleAttrs,
+  hasTwoHandles,
 } from "./model.js";
 import { ELEMENT_SELECTOR, escapeAttr, escapeXml, uid } from "./utils.js";
 import { groupsOf, normalizeGroups, pruneGroups } from "./groups.js";
@@ -456,9 +457,9 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
         first.hIn = end.hIn;
         first.smooth = first.smooth || end.smooth;
         points.pop();
-      } else if (subStart && first && points.length > 2) {
-        if (first.x !== cx || first.y !== cy) corner(first.x, first.y);
       }
+      // Otherwise Z is a straight line back to the start, which `closed` already draws: an
+      // anchor put there would duplicate the first, and the next import would drop it again.
       cx = subStart?.x ?? cx;
       cy = subStart?.y ?? cy;
       lastControl = null;
@@ -468,7 +469,25 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
       while (i < tokens.length && !isCommand(tokens[i])) i++;
     }
   }
+  for (const p of points) if (hasTwoHandles(p)) p.smooth = handlesInLine(p);
   return { points, closed: /z/i.test(d) };
+}
+
+/**
+ * Whether a point's two handles lie on one line through it, pointing away from each other:
+ * a smooth point, whose pair should mirror when dragged. Anything else is a cusp, and dragging
+ * one of its handles must not swing the other round. The slack allows for coordinates that
+ * were rounded to whole units on export, which bends a short handle by a visible angle.
+ */
+function handlesInLine(p: Anchor): boolean {
+  const ax = p.hIn!.x - p.x;
+  const ay = p.hIn!.y - p.y;
+  const bx = p.hOut!.x - p.x;
+  const by = p.hOut!.y - p.y;
+  const la = Math.hypot(ax, ay);
+  const lb = Math.hypot(bx, by);
+  if (ax * bx + ay * by >= 0) return false;
+  return Math.abs(ax * by - ay * bx) <= 0.05 * la * lb + 0.75 * (la + lb);
 }
 
 let colorCtx: CanvasRenderingContext2D | null = null;

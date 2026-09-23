@@ -10,6 +10,8 @@ import {
   splitAt,
   joinPaths,
   canJoin,
+  hasTwoHandles,
+  setHandlesLinked,
 } from "./model.js";
 import {
   canMergeGroups,
@@ -143,6 +145,15 @@ export function deleteSelection(): void {
       }));
     });
   }
+}
+
+/** Links the curve handles of the selected anchor, or breaks them apart into a cusp. */
+export function setSelectedHandlesLinked(linked: boolean): void {
+  const pe = getState().selection.pathEdit;
+  const el = pe ? findElement(pe.pathId) : undefined;
+  const p = pe && el?.type === "path" ? el.points[pe.index] : undefined;
+  if (!p || !hasTwoHandles(p) || p.smooth === linked) return;
+  commit(() => mutate(() => setHandlesLinked(p, linked)));
 }
 
 /** Cuts the selected path at the selected anchor. */

@@ -7,6 +7,7 @@ import {
   deleteDocument,
   renameDocument,
   duplicateDocument,
+  reorderDocuments,
   type DocumentMeta,
 } from "./storage.js";
 import { serializeProject, loadProject } from "./io.js";
@@ -18,12 +19,15 @@ import { setSectionOpen } from "./layout.js";
 import { fitToView } from "./zoom.js";
 import { invalidateLists, rowDotHtml } from "./accordion.js";
 import { hydrateImageDimensions } from "./images-panel.js";
+import { WELCOME_NAME, loadWelcome } from "./welcome.js";
 
 /** The document on the canvas. Read by the rest of the app; only this module replaces it. */
 export let currentDoc: { id: string | null; name: string } = { id: null, name: "" };
 
 /* ---------- Documents: autosaved to browser storage, macOS-style ---------- */
 const LAST_DOC_KEY = "vellum.lastDoc";
+/** Set once the welcome drawing has been added: deleting it must not bring it back. */
+const WELCOMED_KEY = "vellum.welcomed";
 const docDirtyEl = byId("doc-dirty");
 const docListEl = byId("doc-list");
 let docsCache: DocumentMeta[] = [];
@@ -80,7 +84,8 @@ async function refreshDocList(): Promise<void> {
     if (active.value !== stored) return;
   }
   docListEl.innerHTML = "";
-  for (const d of docsCache) {
+  const last = docsCache.length - 1;
+  for (const [i, d] of docsCache.entries()) {
     const isCurrent = d.id === currentDoc.id;
     const li = document.createElement("li");
     li.dataset.docId = d.id;
@@ -99,6 +104,8 @@ async function refreshDocList(): Promise<void> {
         <button type="button" class="acc-icon-btn doc-act" data-doc-save title="Export document" aria-label="Export document">
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-export" /></svg>
         </button>
+        <button type="button" class="acc-icon-btn acc-move" data-doc-move="-1" title="Move up the list" aria-label="Move document up"${i > 0 ? "" : " disabled"}>▲</button>
+        <button type="button" class="acc-icon-btn acc-move" data-doc-move="1" title="Move down the list" aria-label="Move document down"${i < last ? "" : " disabled"}>▼</button>
         <button type="button" class="acc-icon-btn acc-trash doc-del" data-doc-delete title="Delete" aria-label="Delete document">
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-trash" /></svg>
         </button>
@@ -161,9 +168,32 @@ async function createBlankDocument(): Promise<void> {
   replaceState(createInitialState());
   setState({ viewport: fitToView() });
   currentDoc = { id: uid("doc"), name: uniqueName("Untitled") };
+  await storeNew();
+}
+
+/**
+ * Creates the welcome drawing as a document and switches to it. False, with nothing stored, when
+ * the drawing cannot be fetched (offline before a first load).
+ */
+async function createWelcomeDocument(): Promise<boolean> {
+  replaceState(createInitialState());
+  if (!(await loadWelcome())) return false;
+  markWelcomed();
+  setState({ viewport: fitToView() });
+  currentDoc = { id: uid("doc"), name: uniqueName(WELCOME_NAME) };
+  await storeNew();
+  return true;
+}
+
+/** Stores the document just put on the canvas, at the top of the list, and makes it the open one. */
+async function storeNew(): Promise<void> {
   afterDocumentReplaced();
   try {
-    await storeCurrent();
+    await saveDocument({
+      id: currentDoc.id!,
+      name: currentDoc.name,
+      data: deepClone(serializeProject(getState())),
+    });
   } catch (err) {
     storageError(err);
   }
@@ -263,6 +293,21 @@ async function confirmDelete(id: string): Promise<boolean> {
   return empty || window.confirm(`Delete "${name}"? This cannot be undone.`);
 }
 
+/** Moves a document one place up (-1) or down (+1) the list. */
+async function moveDoc(id: string, step: number): Promise<void> {
+  const ids = docsCache.map((d) => d.id);
+  const from = ids.indexOf(id);
+  const to = from + step;
+  if (from < 0 || to < 0 || to >= ids.length) return;
+  [ids[from], ids[to]] = [ids[to]!, ids[from]!];
+  try {
+    await reorderDocuments(ids);
+  } catch (err) {
+    storageError(err);
+  }
+  await refreshDocList();
+}
+
 async function deleteDoc(id: string): Promise<void> {
   if (!(await confirmDelete(id))) return;
   const wasCurrent = id === currentDoc.id;
@@ -293,7 +338,9 @@ docListEl.addEventListener("click", async (e) => {
   const li = target.closest<HTMLElement>("[data-doc-id]");
   const id = li?.dataset.docId;
   if (!id) return;
-  if (target.closest("[data-doc-dup]")) await duplicateDoc(id);
+  const move = target.closest<HTMLElement>("[data-doc-move]");
+  if (move) await moveDoc(id, Number(move.dataset.docMove));
+  else if (target.closest("[data-doc-dup]")) await duplicateDoc(id);
   else if (target.closest("[data-doc-save]")) await exportDoc(id);
   else if (target.closest("[data-doc-delete]")) await deleteDoc(id);
   else if (target.closest("[data-doc-open]") && id !== currentDoc.id) await openDocument(id);
@@ -410,6 +457,23 @@ window.addEventListener("beforeunload", (e) => {
   }
 });
 
+/** True until the drawing has been added once: an empty library on a later visit gets an empty document. */
+function firstVisit(): boolean {
+  try {
+    return !localStorage.getItem(WELCOMED_KEY);
+  } catch {
+    return true;
+  }
+}
+
+function markWelcomed(): void {
+  try {
+    localStorage.setItem(WELCOMED_KEY, "1");
+  } catch {
+    /* no storage: the drawing is offered again next time, which beats never */
+  }
+}
+
 /** Opens the last document (or a blank one) and starts the service worker. Call once, last. */
 export function startDocuments(): void {
   void openInitialDocument();
@@ -424,8 +488,11 @@ async function openInitialDocument(): Promise<void> {
   } catch {
     last = null;
   }
+  if (!docsCache.length && firstVisit()) await createWelcomeDocument();
+  const first = docsCache[0];
   if (last && docsCache.some((d) => d.id === last)) await openDocument(last);
-  else await createBlankDocument();
+  else if (!currentDoc.id && first) await openDocument(first.id);
+  else if (!currentDoc.id) await createBlankDocument();
   // The view the tab was last showing, but only for the document it was showing it of.
   if (savedView.viewport && savedView.docId === currentDoc.id) {
     setState({ viewport: savedView.viewport });

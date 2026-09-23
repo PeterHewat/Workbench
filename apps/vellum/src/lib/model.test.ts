@@ -23,6 +23,9 @@ import {
   splitAt,
   styleAttrs,
   togglePointSmooth,
+  hasTwoHandles,
+  magnetTurn,
+  setHandlesLinked,
   toPathElement,
   translateElement,
   toLocalPoint,
@@ -256,6 +259,23 @@ describe("point editing", () => {
     expect((next as { points: unknown[] }).points).toHaveLength(3);
   });
 
+  test("linking a cusp mirrors its in-handle off the out one; breaking keeps both", () => {
+    const p = anchor(10, 10, { x: 0, y: 12 }, { x: 16, y: 18 });
+    p.smooth = false;
+    expect(hasTwoHandles(p)).toBe(true);
+    setHandlesLinked(p, true);
+    expect(p.smooth).toBe(true);
+    expect(p.hIn).toEqual({ x: 4, y: 2 });
+    setHandlesLinked(p, false);
+    expect(p.smooth).toBe(false);
+    expect(p.hIn).toEqual({ x: 4, y: 2 });
+    expect(p.hOut).toEqual({ x: 16, y: 18 });
+  });
+
+  test("a point with a retracted handle has no pair to link", () => {
+    expect(hasTwoHandles(anchor(0, 0, { x: 0, y: 0 }, { x: 5, y: 0 }))).toBe(false);
+  });
+
   test("smooth and corner round-trip", () => {
     const p = createPath([anchor(0, 0), anchor(10, 10), anchor(20, 0)], false);
     togglePointSmooth(p, 1);
@@ -478,5 +498,24 @@ describe("rotated frames", () => {
     const centre = rotationCentre(turned);
     expect(centre.x).toBeCloseTo(-5, 6);
     expect(centre.y).toBeCloseTo(-5, 6);
+  });
+});
+
+describe("magnetTurn", () => {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const deg = (r: number) => Math.round(((r * 180) / Math.PI) * 1000) / 1000;
+
+  test("pulls a turn that comes within reach of 15° onto it", () => {
+    expect(deg(magnetTurn(rad(43)))).toBe(45);
+    expect(deg(magnetTurn(rad(-16.5)))).toBe(-15);
+  });
+
+  test("leaves the angles in between alone", () => {
+    expect(deg(magnetTurn(rad(37)))).toBe(37);
+  });
+
+  test("works on the angle the shape shows, not on the turn alone", () => {
+    // Already at 10°: a 34° turn shows 44°, which the magnet takes to 45°, a 35° turn.
+    expect(deg(magnetTurn(rad(34), 10))).toBe(35);
   });
 });

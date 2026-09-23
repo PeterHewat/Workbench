@@ -588,6 +588,18 @@ describe("path data the old parser dropped", () => {
     expect(points("M0 0 Q10 10 20 0 T40 0")).toHaveLength(3);
   });
 
+  test("Z closes back to the start without a second anchor there", () => {
+    // The anchor it used to add was dropped by the next import, so the file changed each trip.
+    expect(points("M0 0 L10 0 L10 10 Z")).toHaveLength(3);
+  });
+
+  test("handles in line through a point import linked; any other pair is a cusp", () => {
+    const smooth = points("M0 0 C0 10 10 10 20 10 C30 10 40 10 40 0");
+    expect(smooth[1]!.smooth).toBe(true);
+    const cusp = points("M0 0 C0 10 10 10 20 10 C20 0 40 10 40 0");
+    expect(cusp[1]!.smooth).toBe(false);
+  });
+
   test("relative commands are resolved against the current point", () => {
     expect(points("M10 10 l10 0 l0 10").map((p) => [p.x, p.y])).toEqual([
       [10, 10],

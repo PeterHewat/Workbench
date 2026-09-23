@@ -2,7 +2,15 @@ import { getState, setState, subscribe, selectOnly } from "./state.js";
 import { initViewport } from "./viewport.js";
 import { initRender, renderAll, renderPointer } from "./render.js";
 import { bindInteraction, cancelOperation } from "./interaction.js";
-import { setTool, finishPath, closeAndFinishPath, removeLastPenPoint } from "./pen-commands.js";
+import {
+  setTool,
+  finishPath,
+  closeAndFinishPath,
+  removeLastPenPoint,
+  discardPath,
+} from "./pen-commands.js";
+import { isAlignSnap, isSelectMore, setAlignSnap, setSelectMore } from "./modes.js";
+import { copyToClipboard, pasteFromClipboard } from "./clipboard.js";
 import {
   deleteSelection,
   duplicateSelection,
@@ -14,11 +22,12 @@ import {
   splitAtSelectedPoint,
   joinSelected,
   setElementClosed,
+  setSelectedHandlesLinked,
 } from "./selection-commands.js";
 import { pushUndo, canUndo, canRedo } from "./undo.js";
 import { formatExportSvg, importSvgFile } from "./io.js";
 import { canJoin } from "./model.js";
-import { byId, copyText, downloadText } from "@workbench/ui";
+import { THEME_EVENT, bindThemeToggle, byId, copyText, downloadText } from "@workbench/ui";
 import { bindTouch, setTouchFinishPathHandler } from "./touch.js";
 import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
 import { initRulers, renderRulers } from "./rulers.js";
@@ -72,6 +81,7 @@ initActionBar(byId("action-bar"), {
   merge: () => mergeSelection(),
   ungroup: () => ungroupSelection(),
   splitPoint: () => splitAtSelectedPoint(),
+  linkHandles: (linked) => setSelectedHandlesLinked(linked),
   join: () => joinSelected(),
   editText: (id) => beginTextEdit(id),
   finishPath: () => {
@@ -80,6 +90,11 @@ initActionBar(byId("action-bar"), {
   },
   closeAndFinishPath: () => closeAndFinishPath(),
   undoPoint: () => removeLastPenPoint(),
+  discardPath: () => discardPath(),
+  selectMore: (on) => setSelectMore(on),
+  selectAll: () => selectAll(),
+  copy: () => void copyToClipboard(),
+  paste: () => void pasteFromClipboard(),
 });
 bindInteraction(svg, wrap);
 setTouchFinishPathHandler(() => finishPath());
@@ -92,6 +107,10 @@ initRulers({
   svg,
 });
 window.addEventListener("resize", () => renderRulers(getState()));
+window.addEventListener(THEME_EVENT, () => renderRulers(getState()));
+document
+  .querySelectorAll<HTMLElement>("[data-theme-toggle]")
+  .forEach((btn) => bindThemeToggle(btn, "ui-icon"));
 
 let lastSavedViewport: EditorState["viewport"] | null = null;
 
@@ -102,6 +121,8 @@ subscribe((state, { pointerOnly }) => {
     syncCursorReadout(state);
     return;
   }
+  // Adding to a selection that has gone empty is starting a new one: the switch lets go.
+  if (isSelectMore() && !state.selection.elementIds.length) setSelectMore(false);
   renderAll(state);
   // Where you are looking belongs to the tab, not to the drawing: kept so a refresh returns it.
   if (state.viewport !== lastSavedViewport) {
@@ -140,6 +161,7 @@ function syncPanel(state: EditorState): void {
   setToggle("btn-grid", state.grid.visible);
   setToggle("btn-final", state.finalOnly);
   setToggle("btn-snap", state.grid.snap);
+  setToggle("btn-align", isAlignSnap());
   const percent = `${Math.round(state.viewport.zoom * 100)}%`;
   if (zoomBtn.textContent !== percent) zoomBtn.textContent = percent;
   zoomMenu.querySelectorAll<HTMLElement>("[data-zoom]").forEach((btn) => {
@@ -229,6 +251,16 @@ function setGridSnap(on: boolean): void {
   setState((s) => ({ ...s, grid: { ...s.grid, snap: on } }));
 }
 byId("btn-snap").addEventListener("click", () => setGridSnap(!getState().grid.snap));
+byId("btn-align").addEventListener("click", () => setAlignSnap(!isAlignSnap()));
+
+/** Every shape that is showing: hidden ones stay out of it, as they do out of a click. */
+function selectAll(): void {
+  setState((s) => ({
+    ...s,
+    selection: selectOnly(s.elements.filter((el) => !el.hidden).map((el) => el.id)),
+    tool: "select",
+  }));
+}
 byId("btn-final").addEventListener("click", () => {
   setState((s) => ({ ...s, finalOnly: !s.finalOnly }));
 });
@@ -307,11 +339,7 @@ window.addEventListener("keydown", (e) => {
     }
     if (key === "a") {
       e.preventDefault();
-      setState((s) => ({
-        ...s,
-        selection: selectOnly(s.elements.filter((el) => !el.hidden).map((el) => el.id)),
-        tool: "select",
-      }));
+      selectAll();
     }
     // By code, not key: Option+G on a Mac types a character rather than "g".
     if (e.altKey && e.code === "KeyG") {

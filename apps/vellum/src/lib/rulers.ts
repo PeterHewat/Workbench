@@ -1,3 +1,4 @@
+import { THEME_EVENT } from "@workbench/ui";
 import type { EditorState } from "./types.js";
 
 const SIZE = 20;
@@ -14,6 +15,34 @@ let top: HTMLCanvasElement;
 let left: HTMLCanvasElement;
 let corner: HTMLElement;
 let svgEl: SVGSVGElement;
+
+interface RulerColors {
+  bg: string;
+  tick: string;
+  text: string;
+  cursor: string;
+}
+
+let colors: RulerColors | null = null;
+
+/** A canvas cannot use CSS variables, so the theme's are read once and again when it changes. */
+function rulerColors(): RulerColors {
+  if (!colors) {
+    const css = getComputedStyle(document.documentElement);
+    const read = (name: string) => css.getPropertyValue(name).trim();
+    colors = {
+      bg: read("--panel"),
+      tick: read("--ruler-tick"),
+      text: read("--muted"),
+      cursor: read("--accent"),
+    };
+  }
+  return colors;
+}
+
+window.addEventListener(THEME_EVENT, () => {
+  colors = null;
+});
 
 export function initRulers(targets: RulerTargets): void {
   top = targets.topCanvas;
@@ -58,10 +87,11 @@ function paintAxis(
   if (!ctx) return;
   const step = pickStep(zoom);
   const minor = step / 5;
-  ctx.fillStyle = "#25262b";
+  const c = rulerColors();
+  ctx.fillStyle = c.bg;
   ctx.fillRect(0, 0, horizontal ? length : SIZE, horizontal ? SIZE : length);
-  ctx.strokeStyle = "#5a5f6c";
-  ctx.fillStyle = "#9aa0ab";
+  ctx.strokeStyle = c.tick;
+  ctx.fillStyle = c.text;
   ctx.font = "10px system-ui, sans-serif";
   ctx.lineWidth = 1;
   const startWorld = Math.floor(-pan / zoom / minor) * minor;
@@ -95,7 +125,7 @@ function paintAxis(
   }
   if (cursorWorld != null) {
     const p = Math.round(pan + cursorWorld * zoom) + 0.5;
-    ctx.strokeStyle = "#5b8def";
+    ctx.strokeStyle = c.cursor;
     ctx.beginPath();
     if (horizontal) {
       ctx.moveTo(p, 0);
