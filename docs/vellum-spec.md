@@ -26,10 +26,10 @@ Primary goals:
 
 ### 3.1 Delivery
 
-- Self-contained web app: static files, open locally or host anywhere.
-- **No heavy SPA framework** required; modular vanilla JS (optionally TypeScript + Vite for dev ergonomics).
+- Self-contained web app: static files, opened locally or hosted anywhere.
+- TypeScript, compiled by Vite into HTML, CSS, and ES modules. No runtime framework and no runtime dependencies. The page is built with the DOM; Vite does not remain in the output.
 - **SVG as source of truth** for exportable content; separate layers for UI that never appear in export.
-- Optional CDN (e.g. jsDelivr) only for small utilities: keyboard shortcuts, immutable undo patches, Bézier/path math helpers—not canvas-centric libraries (Fabric/Konva).
+- Geometry, undo, and path math live in the app. No canvas-centric editor library.
 
 ### 3.2 Layer model
 
@@ -390,7 +390,7 @@ Additional tool shortcuts for polyline/polygon as needed.
 
 ## 16. Non-functional requirements
 
-- **Offline-capable** after first load if no CDN; if CDN used, document fallback.
+- **Offline** after the first load. The build's service worker precaches the page, and the document stays in the browser.
 - **Performance:** smooth interaction with hundreds of anchors; debounce SVG preview formatting.
 - **Accessibility:** focusable panel controls, ARIA labels on tools; canvas/SVG keyboard nudging (arrow keys move selection by 1 user unit, ×10 with Shift).
 - **Browsers:** recent Chrome, Firefox, Edge, Safari.
