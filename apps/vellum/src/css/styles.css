@@ -1981,7 +1981,13 @@ body {
   /* Opaque, both of them: a see-through panel over the whole canvas shows a different drawing
      behind the bar than behind the panel, and the two would never look like one surface. */
   .panel-open .menu-dropdown--docked {
+    bottom: 0;
     background: var(--panel);
+  }
+
+  /* The bottom tool bar only exists to reach the canvas; hide it while a panel owns the screen. */
+  .panel-open .tool-bar {
+    display: none;
   }
 }
 
