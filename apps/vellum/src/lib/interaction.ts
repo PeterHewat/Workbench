@@ -11,6 +11,7 @@ import {
   simplifyPathIfStraight,
   toPathElement,
   togglePointSmooth,
+  removeHandle,
   nearestOnElement,
   insertPointAt,
   canRotate,
@@ -32,7 +33,7 @@ import {
 } from "./types.js";
 import { setDrawing, clearDrawing, commit, pointIndexForRole } from "./ops.js";
 import { finishPath } from "./pen-commands.js";
-import { expandGroups, mergeDroppedEnd } from "./selection-commands.js";
+import { endDropTarget, expandGroups, mergeDroppedEnd } from "./selection-commands.js";
 import { applyResize } from "./resize.js";
 import {
   type ShapeTool,
@@ -131,6 +132,20 @@ interface PendingDrag {
   grab: boolean;
 }
 
+/** How close, in screen pixels, a dropped end has to be to another end to merge with it. */
+const MERGE_REACH = 8;
+
+/** Rings the end that the dragged point would merge with if it were dropped now, if any. */
+function showDropTarget(elementId: string, index: number | null): void {
+  const el = index != null ? findElement(elementId) : undefined;
+  const hit =
+    el && index != null ? endDropTarget(el, index, MERGE_REACH / getState().viewport.zoom) : null;
+  const prev = getState().dropTarget;
+  const next = hit?.point ?? null;
+  if (prev?.x === next?.x && prev?.y === next?.y) return;
+  setState({ dropTarget: next });
+}
+
 export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   let drag: DragState | null = null;
   let pending: PendingDrag | null = null;
@@ -227,6 +242,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       drag = null;
       wrap.classList.remove("grabbing");
       clearDrawing();
+      setState({ dropTarget: null });
     }
   });
 
@@ -320,6 +336,16 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           drag = null;
           return;
         }
+        // Double-clicking a curve handle takes it off, as the bar's button does.
+        const anchor = path.points[h.index];
+        if (isDouble && (h.kind === "in" || h.kind === "out") && anchor) {
+          commit(() => mutate(() => removeHandle(anchor, h.kind as "in" | "out")));
+          setState({
+            selection: selectOnly([h.pathId], { pathId: h.pathId, kind: "anchor", index: h.index }),
+          });
+          drag = null;
+          return;
+        }
         const p = path.points[h.index];
         const other = h.kind === "out" ? p?.hIn : h.kind === "in" ? p?.hOut : null;
         arm(e, {
@@ -330,9 +356,15 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           last: null,
         });
         // A handle belongs to its anchor, so grabbing one selects that point: the bar beside it
-        // then offers to link or break the pair, which is how touch gets at a cusp.
+        // then offers to link or break the pair, which is how touch gets at a cusp, or to
+        // remove the handle grabbed.
         setState({
-          selection: selectOnly([h.pathId], { pathId: h.pathId, kind: "anchor", index: h.index }),
+          selection: selectOnly([h.pathId], {
+            pathId: h.pathId,
+            kind: "anchor",
+            index: h.index,
+            ...(h.kind === "in" || h.kind === "out" ? { handle: h.kind } : {}),
+          }),
         });
         return;
       }
@@ -661,8 +693,14 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         mutate(() => applyHandleDrag(p, world, e.altKey));
       }
       setState({
-        selection: selectOnly([d.pathId], { pathId: d.pathId, kind: "anchor", index: d.index }),
+        selection: selectOnly([d.pathId], {
+          pathId: d.pathId,
+          kind: "anchor",
+          index: d.index,
+          ...(d.kind === "in" || d.kind === "out" ? { handle: d.kind } : {}),
+        }),
       });
+      showDropTarget(d.pathId, d.kind === "anchor" ? d.index : null);
       return;
     }
 
@@ -700,6 +738,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       const el = findElement(d.elementId);
       const at = { x: world.x + d.grab.x, y: world.y + d.grab.y };
       if (el) mutate(() => applyResize(el, d.role, at, d.base, e.altKey));
+      showDropTarget(d.elementId, pointIndexForRole(d.role));
       return;
     }
 
@@ -749,7 +788,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     }
     const world = pointerWorld(e);
     const st = getState();
-    setState({ align: { x: null, y: null } });
+    setState({ align: { x: null, y: null }, dropTarget: null });
 
     if (drag?.type === "marquee") {
       const ids = expandGroups(elementsInMarquee(drag));
@@ -771,7 +810,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       const id = d.type === "handle" ? d.pathId : d.elementId;
       drag = null;
       const el = idx != null ? findElement(id) : undefined;
-      if (el && idx != null) mergeDroppedEnd(el, idx, 8 / st.viewport.zoom);
+      if (el && idx != null) mergeDroppedEnd(el, idx, MERGE_REACH / st.viewport.zoom);
       return;
     }
 

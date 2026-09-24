@@ -1200,6 +1200,22 @@ body {
   stroke-width: 3;
 }
 
+/* The end a dragged end will merge with when it is let go. */
+.drop-target {
+  fill: rgba(126, 231, 135, 0.18);
+  stroke: #3fb950;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* The curve handle grabbed last: the one the bar's "Remove this handle" takes off. */
+.handle.handle-in.selected,
+.handle.handle-out.selected {
+  fill: #ffe08a;
+  stroke: #8a6d00;
+}
+
 /* Keeps the shape square or circular while dragged - the modifier-free square/circle. */
 .handle.uniform-handle {
   fill: #7ee787;

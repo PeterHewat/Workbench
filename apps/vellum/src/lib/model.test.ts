@@ -18,6 +18,10 @@ import {
   rotateElementCopy,
   canRotate,
   closeByMerge,
+  closingEnd,
+  canSplitAt,
+  hasHandle,
+  removeHandle,
   setClosed,
   simplifyPathIfStraight,
   splitAt,
@@ -518,4 +522,61 @@ describe("magnetTurn", () => {
     // Already at 10°: a 34° turn shows 44°, which the magnet takes to 45°, a 35° turn.
     expect(deg(magnetTurn(rad(34), 10))).toBe(35);
   });
+});
+
+describe("point editing", () => {
+  const wave = () =>
+    createPath(
+      [
+        anchor(0, 0, null, { x: 10, y: -10 }),
+        anchor(30, 0, { x: 20, y: 10 }, { x: 40, y: -10 }),
+        anchor(60, 0, { x: 50, y: 10 }, null),
+      ],
+      false
+    ) as PathElement;
+
+  test("an open path splits between its ends, not at them", () => {
+    const path = wave();
+    expect([0, 1, 2].map((i) => canSplitAt(path, i))).toEqual([false, true, false]);
+    for (const i of [0, 1, 2]) expect(canSplitAt(path, i)).toBe(splitAt(wave(), i) !== null);
+  });
+
+  test("a closed path splits at any point", () => {
+    const path = wave();
+    path.closed = true;
+    expect([0, 1, 2].map((i) => canSplitAt(path, i))).toEqual([true, true, true]);
+  });
+
+  test("removing one handle keeps the other, and the pair is no longer linked", () => {
+    const p = wave().points[1]!;
+    p.smooth = true;
+    removeHandle(p, "in");
+    expect(hasHandle(p, "in")).toBe(false);
+    expect(hasHandle(p, "out")).toBe(true);
+    expect(p.smooth).toBe(false);
+    expect(hasTwoHandles(p)).toBe(false);
+  });
+
+  test("a handle lying on its anchor does not count as one", () => {
+    expect(hasHandle(anchor(5, 5, { x: 5, y: 5 }), "in")).toBe(false);
+  });
+
+  test("an end dragged onto the other end announces the close that dropping it makes", () => {
+    const path = heartHalfFor();
+    expect(closingEnd(path, 2, 1)).toMatchObject({ x: 192, y: 288 });
+    expect(closingEnd(path, 1, 1)).toBeNull();
+    // Checking changes nothing: the merge itself is still there to be made.
+    expect(closeByMerge(path, 2, 1)).not.toBeNull();
+  });
+
+  function heartHalfFor(): PathElement {
+    return createPath(
+      [
+        anchor(192, 288, null, { x: 240, y: 256 }),
+        anchor(176, 224, { x: 224, y: 160 }, { x: 128, y: 160 }),
+        anchor(192, 288, { x: 112, y: 256 }, null),
+      ],
+      false
+    ) as PathElement;
+  }
 });

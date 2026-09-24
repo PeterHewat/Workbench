@@ -39,6 +39,7 @@ export function createInitialState(): EditorState {
     hoverId: null,
     cursor: { x: 0, y: 0, snapX: 0, snapY: 0, snapActive: false },
     align: { x: null, y: null },
+    dropTarget: null,
     ui: { expandedImageId: null, expandedElementId: null, editingTextId: null },
     spacePan: false,
   };
@@ -121,7 +122,7 @@ function ensureDefaultNames(elements: SceneElement[]): void {
 type StatePatch = Partial<EditorState> | ((current: EditorState) => EditorState);
 
 /** The slices that follow the pointer around without changing the drawing. */
-const POINTER_KEYS: ReadonlySet<string> = new Set(["cursor", "align", "hoverId"]);
+const POINTER_KEYS: ReadonlySet<string> = new Set(["cursor", "align", "hoverId", "dropTarget"]);
 
 /**
  * Whether going from `prev` to `next` changed pointer slices and nothing else. A change that

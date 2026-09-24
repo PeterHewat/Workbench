@@ -207,6 +207,22 @@ export function hasTwoHandles(p: Anchor): boolean {
   return off(p.hIn) && off(p.hOut);
 }
 
+/** Whether an anchor has the given curve handle, standing off the anchor rather than on it. */
+export function hasHandle(p: Anchor, kind: "in" | "out"): boolean {
+  const h = kind === "in" ? p.hIn : p.hOut;
+  return !!h && (h.x !== p.x || h.y !== p.y);
+}
+
+/**
+ * Takes one handle off an anchor, so the curve leaves it straight on that side while the other
+ * side keeps its curve. With one handle there is no pair left to link.
+ */
+export function removeHandle(p: Anchor, kind: "in" | "out"): void {
+  if (kind === "in") p.hIn = null;
+  else p.hOut = null;
+  p.smooth = false;
+}
+
 /**
  * Links an anchor's two handles, so dragging one mirrors the other, or breaks them into a cusp
  * whose handles move on their own. `smooth` is that link. Linking mirrors the in-handle off the
@@ -1007,19 +1023,27 @@ export function setClosed(el: SceneElement, closed: boolean): SceneElement {
 }
 
 /**
- * When the endpoint `index` of an open shape has been dragged onto its opposite endpoint,
- * merges the two into one point and closes the shape. Returns the replacement element or null.
+ * The opposite end that the end `index` of an open shape would close onto if dropped where it
+ * is, or null. What `closeByMerge` checks, without changing anything, so a drag can show it.
  */
-export function closeByMerge(el: SceneElement, index: number, tol: number): SceneElement | null {
+export function closingEnd(el: SceneElement, index: number, tol: number): Point | null {
   if (el.type !== "path" && el.type !== "polyline") return null;
   if (el.type === "path" && el.closed) return null;
   const n = el.points.length;
   if (n < 4 && !(el.type === "path" && n >= 3)) return null;
   if (index !== 0 && index !== n - 1) return null;
-  const other = index === 0 ? n - 1 : 0;
   const a = el.points[index]!;
-  const b = el.points[other]!;
-  if (Math.hypot(a.x - b.x, a.y - b.y) > tol) return null;
+  const b = el.points[index === 0 ? n - 1 : 0]!;
+  return Math.hypot(a.x - b.x, a.y - b.y) <= tol ? b : null;
+}
+
+/**
+ * When the endpoint `index` of an open shape has been dragged onto its opposite endpoint,
+ * merges the two into one point and closes the shape. Returns the replacement element or null.
+ */
+export function closeByMerge(el: SceneElement, index: number, tol: number): SceneElement | null {
+  if (!closingEnd(el, index, tol) || (el.type !== "path" && el.type !== "polyline")) return null;
+  const n = el.points.length;
   if (el.type === "polyline") {
     const rest = el.points.filter((_, i) => i !== index).map((p) => ({ x: p.x, y: p.y }));
     return createPolygon(rest, { ...styleOf(el), id: el.id });
@@ -1040,6 +1064,13 @@ export function closeByMerge(el: SceneElement, index: number, tol: number): Scen
   }
   el.closed = true;
   return el;
+}
+
+/** Whether `splitAt` cuts the shape at point `i`: anywhere on a closed one, between the ends of an open one. */
+export function canSplitAt(el: SceneElement, i: number): boolean {
+  if (!canToggleClosed(el)) return false;
+  const n = el.points.length;
+  return isClosedShape(el) ? n >= 2 : i > 0 && i < n - 1;
 }
 
 /**

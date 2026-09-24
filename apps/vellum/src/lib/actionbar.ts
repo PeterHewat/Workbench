@@ -19,7 +19,9 @@ import { findElement, selectedElements } from "./state.js";
 import {
   canJoin,
   canRotate,
+  canSplitAt,
   canToggleClosed,
+  hasHandle,
   hasTwoHandles,
   isClosedShape,
   localBBox,
@@ -43,6 +45,8 @@ export interface ActionBarHandlers {
   ungroup: () => void;
   splitPoint: () => void;
   linkHandles: (linked: boolean) => void;
+  togglePointCurve: () => void;
+  removeHandle: () => void;
   join: () => void;
   editText: (id: string) => void;
   finishPath: () => void;
@@ -167,9 +171,37 @@ function closeAction(el: SceneElement): Action | null {
  * reads as a lie next to a highlighted point, and delete is the one button whose meaning really
  * does change with the selection. So the bar narrows to the point, and says so.
  */
-function pointActions(el: SceneElement, index: number): Action[] {
+function pointActions(el: SceneElement, index: number, handle?: "in" | "out"): Action[] {
   const out: Action[] = [];
   const p = el.type === "path" ? el.points[index] : undefined;
+  const curved = !!p && (hasHandle(p, "in") || hasHandle(p, "out"));
+  // Double-clicking the point does the same; the button is there so nobody has to know that.
+  if (canToggleClosed(el)) {
+    out.push(
+      curved
+        ? {
+            key: "corner",
+            label: "Make it a corner: remove its handles",
+            icon: "icon-corner",
+            run: handlers.togglePointCurve,
+          }
+        : {
+            key: "curve",
+            label: "Make it a curve: give it handles",
+            icon: "icon-curve",
+            run: handlers.togglePointCurve,
+          }
+    );
+  }
+  // The handle grabbed last can go on its own, leaving the curve on the other side.
+  if (p && handle && hasHandle(p, handle)) {
+    out.push({
+      key: `remove-${handle}`,
+      label: "Remove this handle: straight on its side",
+      icon: "icon-remove-handle",
+      run: handlers.removeHandle,
+    });
+  }
   // Only a point with two handles has a pair to link or break. The key carries the state, as
   // the close button's does, so the button is rebuilt when it flips.
   if (p && hasTwoHandles(p)) {
@@ -189,12 +221,15 @@ function pointActions(el: SceneElement, index: number): Action[] {
           }
     );
   }
-  out.push({
-    key: "split",
-    label: "Split the path at this point",
-    icon: "icon-split",
-    run: handlers.splitPoint,
-  });
+  // The two ends of an open path have nothing to split.
+  if (canSplitAt(el, index)) {
+    out.push({
+      key: "split",
+      label: "Split the path at this point",
+      icon: "icon-split",
+      run: handlers.splitPoint,
+    });
+  }
   const close = closeAction(el);
   if (close) out.push(close);
   out.push({
@@ -214,7 +249,7 @@ function selectionActions(state: EditorState): Action[] {
 
   const pe = state.selection.pathEdit;
   const edited = pe ? findElement(pe.pathId) : null;
-  if (pe && edited) return pointActions(edited, pe.index);
+  if (pe && edited) return pointActions(edited, pe.index, pe.handle);
 
   if (single?.type === "text") {
     out.push({
@@ -279,10 +314,20 @@ function selectionActions(state: EditorState): Action[] {
       disabled: !canMoveSelectionZ(state.elements, ids, 1),
       run: handlers.forward,
     },
-    { key: "copy", label: "Copy", icon: "icon-clipboard", run: handlers.copy },
     { key: "duplicate", label: "Duplicate", icon: "icon-copy", run: handlers.duplicate },
     { key: "delete", label: "Delete", icon: "icon-trash", danger: true, run: handlers.remove }
   );
+  // Duplicate copies within the document; Copy is for taking shapes to another one, or to
+  // another app. A keyboard has Ctrl+C for that, so the button is for touch, beside the idle
+  // bar's Paste.
+  if (isCoarsePointer()) {
+    out.splice(out.length - 2, 0, {
+      key: "copy",
+      label: "Copy, to paste into another document",
+      icon: "icon-clipboard",
+      run: handlers.copy,
+    });
+  }
   return out;
 }
 

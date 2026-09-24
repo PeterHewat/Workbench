@@ -23,6 +23,8 @@ import {
   joinSelected,
   setElementClosed,
   setSelectedHandlesLinked,
+  toggleSelectedPointCurve,
+  removeSelectedHandle,
 } from "./selection-commands.js";
 import { pushUndo, canUndo, canRedo } from "./undo.js";
 import { formatExportSvg, importSvgFile } from "./io.js";
@@ -82,6 +84,8 @@ initActionBar(byId("action-bar"), {
   ungroup: () => ungroupSelection(),
   splitPoint: () => splitAtSelectedPoint(),
   linkHandles: (linked) => setSelectedHandlesLinked(linked),
+  togglePointCurve: () => toggleSelectedPointCurve(),
+  removeHandle: () => removeSelectedHandle(),
   join: () => joinSelected(),
   editText: (id) => beginTextEdit(id),
   finishPath: () => {

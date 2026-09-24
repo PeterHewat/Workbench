@@ -509,11 +509,12 @@ function renderPathHandles(parent: Element, path: PathElement, state: EditorStat
       if (!h || (h.x === p.x && h.y === p.y)) continue;
       addHandleLine(parent, p.x, p.y, h.x, h.y, broken);
       const reach = Math.hypot(h.x - p.x, h.y - p.y) * zoom;
+      const picked = pe?.pathId === path.id && pe.index === i && pe.handle === kind;
       addHandle(
         parent,
         h.x,
         h.y,
-        `handle-${kind}`,
+        `handle-${kind}${picked ? " selected" : ""}`,
         { "data-path-id": path.id, "data-point-index": i, "data-handle-kind": kind },
         Math.max(HANDLE_R + 1, Math.min(defaultHitR(), reach / 2))
       );
@@ -682,21 +683,40 @@ function union(a: BBox, b: BBox): BBox {
 }
 
 /**
- * The most anchors a selection of several paths shows. Every anchor is a few nodes redrawn on
+ * The most handles a selection of several shapes shows. Every handle is a few nodes redrawn on
  * every frame of a drag, so a large selection - a thousand traced shapes, say - spent most of
  * each frame on points nobody could pick out at that scale. Past this, a multi-selection shows
- * boxes only; one selected path always shows all of its points, however many, since editing
+ * boxes only; one selected shape always shows all of its handles, however many, since editing
  * them is the reason to select it alone.
  */
 const MULTI_ANCHOR_BUDGET = 400;
 
+/** How many handles a shape shows when selected, for the budget above. */
+function handleCount(el: SceneElement): number {
+  switch (el.type) {
+    case "path":
+    case "polyline":
+    case "polygon":
+      return el.points.length;
+    case "rect":
+      return 6;
+    case "ellipse":
+      return 3;
+    case "line":
+      return 2;
+    case "circle":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
 function showsAnchors(sel: readonly SceneElement[]): boolean {
   if (sel.length <= 1) return true;
-  let anchors = 0;
+  let handles = 0;
   for (const el of sel) {
-    if (el.type !== "path") continue;
-    anchors += el.points.length;
-    if (anchors > MULTI_ANCHOR_BUDGET) return false;
+    handles += handleCount(el);
+    if (handles > MULTI_ANCHOR_BUDGET) return false;
   }
   return true;
 }
@@ -730,7 +750,9 @@ function renderOverlay(state: EditorState): void {
       continue;
     }
     renderSelectionBox(els.overlay, el, boxClass(el));
-    if (sel.length === 1) {
+    // Every shape in a selection shows its handles, as paths show their points: grabbing one
+    // narrows the selection to that shape, so a group can be edited without taking it apart.
+    if (anchors || state.selection.pathEdit?.pathId === el.id) {
       renderPrimitiveHandles(els.overlay, el, state.selection.pathEdit);
     }
   }
@@ -797,6 +819,18 @@ function renderPointerLayer(state: EditorState): void {
       y1: cur.snapY - r * 1.6,
       x2: cur.snapX,
       y2: cur.snapY + r * 1.6,
+    });
+  }
+
+  // The end a dragged end would merge with on release: a ring round it, so a drop that closes
+  // the shape or joins two paths is announced before it happens.
+  const drop = state.dropTarget;
+  if (drop) {
+    add(els.pointer, "circle", {
+      class: "drop-target",
+      cx: drop.x,
+      cy: drop.y,
+      r: (isCoarsePointer() ? 20 : 12) / state.viewport.zoom,
     });
   }
 

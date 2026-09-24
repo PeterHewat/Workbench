@@ -192,6 +192,8 @@ export interface PathEdit {
   pathId: string;
   kind: "anchor";
   index: number;
+  /** The curve handle of that point grabbed last, if any: the bar offers to remove it. */
+  handle?: "in" | "out";
 }
 
 export interface Selection {
@@ -272,6 +274,11 @@ export interface EditorState {
   hoverId: string | null;
   cursor: { x: number; y: number; snapX: number; snapY: number; snapActive: boolean };
   align: { x: number | null; y: number | null };
+  /**
+   * While the end of an open shape is dragged: the end it would merge with if dropped now, its
+   * own other end or another shape's. Drawn as a ring, so the drop's effect is visible first.
+   */
+  dropTarget: Point | null;
   ui: {
     expandedImageId: string | null;
     expandedElementId: string | null;
