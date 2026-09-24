@@ -10,7 +10,7 @@ import {
   discardPath,
 } from "./pen-commands.js";
 import { isAlignSnap, isSelectMore, setAlignSnap, setSelectMore } from "./modes.js";
-import { copyToClipboard, pasteFromClipboard } from "./clipboard.js";
+import { pasteFromClipboard } from "./clipboard.js";
 import {
   deleteSelection,
   duplicateSelection,
@@ -97,7 +97,6 @@ initActionBar(byId("action-bar"), {
   discardPath: () => discardPath(),
   selectMore: (on) => setSelectMore(on),
   selectAll: () => selectAll(),
-  copy: () => void copyToClipboard(),
   paste: () => void pasteFromClipboard(),
 });
 bindInteraction(svg, wrap);

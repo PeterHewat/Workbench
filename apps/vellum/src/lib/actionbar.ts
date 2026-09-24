@@ -55,7 +55,6 @@ export interface ActionBarHandlers {
   discardPath: () => void;
   selectMore: (on: boolean) => void;
   selectAll: () => void;
-  copy: () => void;
   paste: () => void;
 }
 
@@ -317,17 +316,6 @@ function selectionActions(state: EditorState): Action[] {
     { key: "duplicate", label: "Duplicate", icon: "icon-copy", run: handlers.duplicate },
     { key: "delete", label: "Delete", icon: "icon-trash", danger: true, run: handlers.remove }
   );
-  // Duplicate copies within the document; Copy is for taking shapes to another one, or to
-  // another app. A keyboard has Ctrl+C for that, so the button is for touch, beside the idle
-  // bar's Paste.
-  if (isCoarsePointer()) {
-    out.splice(out.length - 2, 0, {
-      key: "copy",
-      label: "Copy, to paste into another document",
-      icon: "icon-clipboard",
-      run: handlers.copy,
-    });
-  }
   return out;
 }
 

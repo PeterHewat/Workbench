@@ -11,7 +11,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HtmlTagDescriptor, Plugin, UserConfig } from "vite";
-import { findApp, type WorkbenchApp } from "@workbench/catalog";
+import { APPS, findApp, type WorkbenchApp } from "@workbench/catalog";
 import { SITE, appBase, siteBase } from "@workbench/catalog/site";
 // By package name, not "./theme.js": Node loads this file for the Vite config, and it does not
 // map a .js specifier onto the .ts file beside it the way the bundler does.
@@ -47,9 +47,36 @@ export function workbenchHome(): UserConfig {
   return {
     base: siteBase(),
     appType: "mpa",
-    plugins: [pageHead(null), serviceWorker()],
+    plugins: [pageHead(null), serviceWorker(), appArtInDev()],
     // Not emptied: the site build writes the index first, then each app into its own folder.
     build: { outDir: "../../dist", emptyOutDir: false, target: "es2022" },
+  };
+}
+
+/**
+ * Serves each app's card art to the index page's dev server. In a built site `<slug>/art.svg`
+ * is the app's own file, in the folder beside the index; the dev server has only the index, so
+ * without this every card's picture is a 404.
+ */
+function appArtInDev(): Plugin {
+  const appsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "apps");
+  return {
+    name: "workbench-app-art",
+    apply: "serve",
+    configureServer(server) {
+      const art = new Map(
+        APPS.filter((a) => a.art).map((a) => [
+          `${siteBase()}${a.slug}/art.svg`,
+          join(appsDir, a.slug, "public", "art.svg"),
+        ])
+      );
+      server.middlewares.use((req, res, next) => {
+        const file = art.get((req.url ?? "").split("?")[0] ?? "");
+        if (!file || !existsSync(file)) return next();
+        res.setHeader("Content-Type", "image/svg+xml");
+        res.end(readFileSync(file));
+      });
+    },
   };
 }
 

@@ -446,7 +446,8 @@ name-in-id export, Help panel (`?` button).
   screen, whose buttons are larger.
 - **Panels:** the Document panel docks left and Help docks right; each keeps room for its
   scrollbar, so content that starts to scroll does not reflow. On a phone, where either covers
-  the canvas, opening one closes the other.
+  the canvas, opening one closes the other, the rulers and cursor readout are hidden, and the
+  top bar takes the panel's background from the top edge down, as the panel's header.
 - **Phone layout:** both toolbars float over the canvas instead of taking a strip of it, clear of
   the rulers, transparent between the buttons so the canvas still pans there. Fit-artboard reads
   the strips they cover so it fits what is actually free. There is no overflow menu: Document,
@@ -578,10 +579,9 @@ keyboard shortcuts is unusable without a keyboard. The rules that follow from th
   open path), close/open, delete the point. The selection bar also leads with two keyboard stand-ins:
   an **add to the selection** switch (Shift-click for a finger: taps toggle shapes in and out,
   empty canvas no longer clears; it turns itself off when the selection empties) and **select
-  everything**. On a touch screen it also carries **copy**, for taking shapes to another document
-  (duplicate copies within this one; a keyboard has Ctrl+C). On a touch screen with nothing selected the bar stays up,
-  docked above the tool bar, with **select everything** and **paste** (this tab's last copy, else
-  the system clipboard, which may ask for permission). Beside the magnet, an **align** switch
+  everything**. On a touch screen with nothing selected the bar stays up,
+  docked above the tool bar, with **select everything** and **paste** (the system clipboard, such as SVG markup from
+  another app, which may ask for permission). Beside the magnet, an **align** switch
   does what holding Alt does. These switches are session state (`modes.ts`), outside the editor
   state, so undo never flips them. Two-finger twists, and rotate-handle drags by touch or pen,
   catch on each 15° within 3° of it (`magnetTurn`). While the pen has a path open it offers

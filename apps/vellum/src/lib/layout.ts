@@ -32,6 +32,9 @@ const helpPanel = byId("help-panel");
 const helpBtn = byId("btn-help");
 
 function layoutPanels(): void {
+  // On a phone an open panel covers the canvas: the rulers go, and the bar joins the panel.
+  const anyOpen = !docPanel.classList.contains("hidden") || !helpPanel.classList.contains("hidden");
+  document.body.classList.toggle("panel-open", narrowQuery.matches && anyOpen);
   const top = bySelector<HTMLElement>(".top-bar").getBoundingClientRect().bottom;
   docPanel.style.top = `${top}px`;
   helpPanel.style.top = `${top}px`;
