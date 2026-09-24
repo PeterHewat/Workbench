@@ -40,7 +40,7 @@ export const APPS: readonly WorkbenchApp[] = [
     icon: "M4 19c3-10 6-13 8-13s2 3 0 6-5 4-7 4 8 1 11-4",
     tags: ["svg", "vector", "drawing", "tracing"],
     art: true,
-    status: "beta",
+    status: "stable",
     listed: true,
   },
 ];

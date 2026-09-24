@@ -1,5 +1,5 @@
 import { getState, setState, findElement, selectOnly } from "./state.js";
-import { importSvgFile } from "./io.js";
+import { importSvgFile, isInert } from "./io.js";
 import { type SceneElement } from "./types.js";
 import { commit } from "./ops.js";
 import { expandGroups, deleteSelection, copyElements } from "./selection-commands.js";
@@ -66,7 +66,9 @@ export function pasteFromText(text: string): boolean {
       data &&
       typeof data === "object" &&
       (data as { tag?: string }).tag === CLIP_TAG &&
-      Array.isArray((data as { elements?: unknown }).elements)
+      Array.isArray((data as { elements?: unknown }).elements) &&
+      // The system clipboard can hold anything another page put there.
+      isInert(data)
     ) {
       elements = (data as { elements: SceneElement[] }).elements;
       names = (data as { groupNames?: Record<string, string> }).groupNames ?? {};

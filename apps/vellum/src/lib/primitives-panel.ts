@@ -55,7 +55,7 @@ function membersOf(elements: readonly SceneElement[], gid: string): SceneElement
 }
 
 function swatchHtml(kind: string, color: string, alpha: number, title: string): string {
-  return `<button type="button" class="color-swatch" data-picker="${kind}" title="${title}" style="--c:${color};--a:${alpha}"><span class="color-swatch-fill"></span></button>`;
+  return `<button type="button" class="color-swatch" data-picker="${kind}" title="${title}" style="--c:${escapeAttr(color)};--a:${alpha}"><span class="color-swatch-fill"></span></button>`;
 }
 
 type Option = string | [string, string];
@@ -440,7 +440,7 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
       eye: { visible: !el.hidden, title: el.hidden ? "Show" : "Hide" },
       name: el.name || "",
       placeholder: el.type,
-      extra: `<span class="acc-swatch" style="${headerSwatchStyle(el)}"></span>`,
+      extra: `<span class="acc-swatch" style="${escapeAttr(headerSwatchStyle(el))}"></span>`,
       canUp: canMoveWithinParent(state.elements, el.id, towardFront(-1)),
       canDown: canMoveWithinParent(state.elements, el.id, towardFront(1)),
       index,

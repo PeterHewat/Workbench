@@ -95,7 +95,7 @@ function buildDefsLines(elements: readonly SceneElement[]): Line[] {
     if (isGradient(el)) {
       const stops = gradientStops(el).map(
         (stop) =>
-          `<stop offset="${n3(stop.offset)}" stop-color="${stop.color}" stop-opacity="${n3(stop.opacity)}"/>`
+          `<stop offset="${n3(stop.offset)}" stop-color="${escapeAttr(stop.color)}" stop-opacity="${n3(stop.opacity)}"/>`
       );
       const from = el.gradFrom;
       const to = el.gradTo;
@@ -103,14 +103,14 @@ function buildDefsLines(elements: readonly SceneElement[]): Line[] {
         const r = n3(Math.hypot(to.x - from.x, to.y - from.y) || 0.5);
         lines.push({
           indent: 0,
-          text: `<radialGradient id="grad-${el.id}" cx="${n3(from.x)}" cy="${n3(from.y)}" r="${r}">`,
+          text: `<radialGradient id="grad-${escapeAttr(el.id)}" cx="${n3(from.x)}" cy="${n3(from.y)}" r="${r}">`,
         });
         stops.forEach((s) => lines.push({ indent: 1, text: s }));
         lines.push({ indent: 0, text: "</radialGradient>" });
       } else {
         lines.push({
           indent: 0,
-          text: `<linearGradient id="grad-${el.id}" x1="${n3(from.x)}" y1="${n3(from.y)}" x2="${n3(to.x)}" y2="${n3(to.y)}">`,
+          text: `<linearGradient id="grad-${escapeAttr(el.id)}" x1="${n3(from.x)}" y1="${n3(from.y)}" x2="${n3(to.x)}" y2="${n3(to.y)}">`,
         });
         stops.forEach((s) => lines.push({ indent: 1, text: s }));
         lines.push({ indent: 0, text: "</linearGradient>" });
@@ -126,9 +126,9 @@ function buildDefsLines(elements: readonly SceneElement[]): Line[] {
             : "";
         lines.push({
           indent: 0,
-          text: `<marker id="mk-${el.id}-${end}" viewBox="0 0 10 10" refX="${shape.refX}" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">`,
+          text: `<marker id="mk-${escapeAttr(el.id)}-${end}" viewBox="0 0 10 10" refX="${shape.refX}" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">`,
         });
-        lines.push({ indent: 1, text: shape.markup(`fill="${el.stroke}"${opacity}`) });
+        lines.push({ indent: 1, text: shape.markup(`fill="${escapeAttr(el.stroke)}"${opacity}`) });
         lines.push({ indent: 0, text: "</marker>" });
       }
     }
@@ -299,6 +299,27 @@ function namesInUse(
   return kept.length ? { groupNames: Object.fromEntries(kept) } : {};
 }
 
+/** Keys whose strings are the person's own words, escaped wherever they are shown. */
+const FREE_TEXT = new Set(["name", "text", "fileName", "fontFamily"]);
+const MARKUP = /[<>"&]/;
+
+/**
+ * Whether data read from outside - a document file, pasted shapes - holds only plain values.
+ * Colours, ids and numbers are written into markup in more places than it is sensible to escape
+ * each of them, and a file Vellum wrote never has markup characters in them; one that does was
+ * made to break out of an attribute. Free text may hold anything: it is always escaped.
+ */
+export function isInert(value: unknown, key = ""): boolean {
+  if (typeof value === "string") return FREE_TEXT.has(key) || !MARKUP.test(value);
+  // IndexedDB keeps undefined properties and NaN, where JSON would not: neither is markup.
+  if (value == null || typeof value === "boolean" || typeof value === "number") return true;
+  if (Array.isArray(value)) return value.every((v) => isInert(v, key));
+  if (typeof value !== "object") return false;
+  // A group's name is keyed by the group's id, which is checked like any other id.
+  const inner = (k: string) => (key === "groupNames" ? "name" : k);
+  return Object.entries(value).every(([k, v]) => !MARKUP.test(k) && isInert(v, inner(k)));
+}
+
 /**
  * A stored document brought up to the current format. Every released format stays readable: when
  * `PROJECT_VERSION` goes up, the step from the previous one is added here, and older documents
@@ -316,6 +337,7 @@ export function readProject(raw: unknown): ProjectFile {
       "This document was saved by a newer Vellum. Reload the page to update, then open it again."
     );
   }
+  if (!isInert(json)) throw new Error("This document is damaged and cannot be opened.");
   return json as ProjectFile;
 }
 
