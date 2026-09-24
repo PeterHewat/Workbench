@@ -4,7 +4,8 @@ import { isCoarsePointer } from "./pointer.js";
 import { writeSessionView, savedView } from "./session.js";
 import { byId, bySelector } from "@workbench/ui";
 
-const NARROW = "(max-width: 760px)";
+/** Where the layout turns into the phone one. Keep in step with the media query in styles.css. */
+const NARROW = "(max-width: 720px), (pointer: coarse) and (max-width: 800px)";
 const narrowQuery = window.matchMedia(NARROW);
 const toolGroup = byId("tool-group-tools");
 
@@ -20,6 +21,7 @@ function placeTools(): void {
 placeTools();
 narrowQuery.addEventListener("change", () => {
   placeTools();
+  if (!docPanel.classList.contains("hidden")) setHelpVisible(false);
   layoutPanels();
 });
 
@@ -37,7 +39,12 @@ function layoutPanels(): void {
   renderRulers(getState());
 }
 
+/**
+ * On a phone either panel covers the canvas and the two would sit on top of each other, so opening
+ * one closes the other. On a wider screen they dock on opposite sides and can both stay open.
+ */
 function setDocPanelVisible(visible: boolean): void {
+  if (visible && narrowQuery.matches) setHelpVisible(false);
   docPanel.classList.toggle("hidden", !visible);
   docBtn.setAttribute("aria-expanded", String(visible));
   writeSessionView({ docPanel: visible });
@@ -45,6 +52,7 @@ function setDocPanelVisible(visible: boolean): void {
 }
 
 function setHelpVisible(visible: boolean): void {
+  if (visible && narrowQuery.matches) setDocPanelVisible(false);
   helpPanel.classList.toggle("hidden", !visible);
   helpBtn.setAttribute("aria-expanded", String(visible));
   writeSessionView({ help: visible });

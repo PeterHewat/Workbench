@@ -116,12 +116,26 @@ body {
   background: var(--panel);
 }
 
+/* The view controls, the theme switch and Help sit together at the right of the bar. */
+#group-view {
+  margin-left: auto;
+}
+
+/* Floats top right on the canvas, under the ruler. Light text on a dark halo reads on any
+   artboard, light or dark, and in either theme. */
 .cursor-readout {
-  margin: 0 0 0 auto;
-  padding: 4px 8px;
+  position: absolute;
+  top: calc(var(--ruler-h) + 4px);
+  right: 8px;
+  z-index: 5;
+  margin: 0;
   font-size: 12px;
-  color: var(--muted);
+  color: #f3f5f9;
+  text-shadow:
+    0 0 3px rgba(0, 0, 0, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.8);
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .menu {
@@ -728,6 +742,8 @@ body {
   border-width: 0 1px 0 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Room for the scrollbar is kept whether or not it shows, so opening a row never reflows. */
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--scroll) transparent;
   flex-direction: column;
@@ -1294,6 +1310,7 @@ body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding-right: 6px;
   font-size: 12.5px;
   line-height: 1.5;
@@ -1391,8 +1408,9 @@ body {
   display: flex;
 }
 
+/* Wide enough for "3200%", so the bar does not change width as the zoom does. */
 .zoom-level {
-  min-width: 48px;
+  min-width: 52px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1786,7 +1804,9 @@ body {
   display: none;
 }
 
-@media (max-width: 760px) {
+/* With a mouse the bar needs about 700px; 720 leaves room for fonts that set wider. Touch targets
+   are 44px rather than 34px, so a touch screen needs about 760px and switches before it wraps. */
+@media (max-width: 720px), (pointer: coarse) and (max-width: 800px) {
   /* Both bars float over the canvas instead of taking a strip of it: on a phone the artboard
      is the scarce thing. The top one starts below the ruler, which it must not cover, and the
      bar itself is transparent and click-through - only the buttons take the pointer, so the
@@ -1850,10 +1870,6 @@ body {
 
   /* Seven controls on one line at 360px, so none of them is behind a menu. They shrink to fit
      rather than being sized to the narrowest phone and left small on every other one. */
-  #group-view {
-    margin-left: auto;
-  }
-
   .top-bar .tool-btn,
   .top-bar .menu-trigger--icon,
   .tool-bar .tool-btn {

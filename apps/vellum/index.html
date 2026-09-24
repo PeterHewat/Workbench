@@ -796,8 +796,6 @@
           </button>
         </div>
 
-        <p id="cursor-pos" class="cursor-readout mono" aria-live="polite">—</p>
-
         <!-- On a phone the bar has no room for it: the switch moves into the Help panel. -->
         <button type="button" class="tool-btn theme-btn" data-theme-toggle></button>
 
@@ -1374,6 +1372,10 @@
           <canvas id="ruler-top" class="ruler ruler-top"></canvas>
           <canvas id="ruler-left" class="ruler ruler-left"></canvas>
           <div id="ruler-corner" class="ruler-corner"></div>
+          <!-- Over the canvas rather than in the bar: the bar's width is what decides when the
+               layout turns into the phone one, and a readout that only follows the cursor does
+               not need a place of its own. -->
+          <p id="cursor-pos" class="cursor-readout mono">—</p>
         </section>
       </main>
     </div>
