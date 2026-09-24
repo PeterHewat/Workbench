@@ -3,8 +3,17 @@
 import type { ProjectFile } from "./types.js";
 
 const DB_NAME = "vellum";
+/**
+ * The database's own version, for its stores rather than the documents in them (those carry
+ * `ProjectFile.version`). 1 was the unreleased Vellum, whose documents are not kept; from 2 on,
+ * an upgrade keeps everything.
+ */
+const DB_VERSION = 2;
 const META = "meta";
 const DATA = "data";
+
+/** True when this load found an unreleased library and started it again, empty. */
+export let libraryReset = false;
 
 export interface DocumentMeta {
   id: string;
@@ -28,14 +37,29 @@ function openDb(): Promise<IDBDatabase> {
         reject(new Error("This browser has no IndexedDB storage."));
         return;
       }
-      const req = indexedDB.open(DB_NAME, 1);
-      req.onupgradeneeded = () => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = (e) => {
         const db = req.result;
-        db.createObjectStore(META, { keyPath: "id" });
-        db.createObjectStore(DATA, { keyPath: "id" });
+        if (e.oldVersion < 2) {
+          libraryReset = e.oldVersion > 0;
+          for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name);
+          db.createObjectStore(META, { keyPath: "id" });
+          db.createObjectStore(DATA, { keyPath: "id" });
+        }
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
+      req.onsuccess = () => {
+        const db = req.result;
+        // A newer Vellum in another tab needs this connection gone before it can upgrade.
+        db.onversionchange = () => {
+          db.close();
+          dbPromise = null;
+        };
+        resolve(db);
+      };
+      req.onerror = () => {
+        dbPromise = null;
+        reject(req.error ?? new Error("Could not open the document library."));
+      };
     });
   }
   return dbPromise;
@@ -60,13 +84,6 @@ function request<T>(req: IDBRequest<T>): Promise<T> {
 export async function listDocuments(): Promise<DocumentMeta[]> {
   const db = await openDb();
   const all = await request<DocumentMeta[]>(db.transaction(META).objectStore(META).getAll());
-  // Greenfield: a library written before documents had a place in the list is refused, not
-  // guessed at. Clearing the site's storage starts it again.
-  if (all.some((m) => typeof m.order !== "number")) {
-    throw new Error(
-      "These documents were saved by an older Vellum. Clear this site's storage to start again."
-    );
-  }
   return all.sort((a, b) => a.order - b.order);
 }
 

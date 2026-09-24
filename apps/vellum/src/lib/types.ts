@@ -291,9 +291,16 @@ export type StyleCarrier = Partial<StyleProps> & {
   gradUserSpace?: boolean;
 };
 
+/**
+ * The format of a stored document. Vellum is released: a change to `ProjectFile` bumps this and
+ * teaches `readProject` (io.ts) to bring the previous version up to date, so nobody's work stops
+ * opening.
+ */
+export const PROJECT_VERSION = 1;
+
 /** The serialized document written to storage. */
 export interface ProjectFile {
-  version: 2;
+  version: typeof PROJECT_VERSION;
   artboard: EditorState["artboard"];
   /** Absent in documents saved before backgrounds existed, which means transparent. */
   background?: BackgroundPaint;

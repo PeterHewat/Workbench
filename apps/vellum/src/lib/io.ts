@@ -27,6 +27,7 @@ import {
   type Matrix,
 } from "./transform.js";
 import { replaceState, createInitialState, selectOnly } from "./state.js";
+import { PROJECT_VERSION } from "./types.js";
 import type {
   Anchor,
   BackgroundPaint,
@@ -264,7 +265,7 @@ export function formatExportSvg(state: ExportDoc, pretty = false): string {
 
 export function serializeProject(state: EditorState): ProjectFile {
   return {
-    version: 2,
+    version: PROJECT_VERSION,
     artboard: state.artboard,
     background: state.background,
     grid: state.grid,
@@ -298,14 +299,28 @@ function namesInUse(
   return kept.length ? { groupNames: Object.fromEntries(kept) } : {};
 }
 
-export function loadProject(json: ProjectFile): void {
-  // Greenfield: no migration. A document written by an older build is refused, not rewritten.
-  if (json.version !== 2) {
+/**
+ * A stored document brought up to the current format. Every released format stays readable: when
+ * `PROJECT_VERSION` goes up, the step from the previous one is added here, and older documents
+ * pass through each step in turn. Throws on something that is not a document, or on one written
+ * by a newer Vellum than this one.
+ */
+export function readProject(raw: unknown): ProjectFile {
+  const json = raw as Partial<ProjectFile> | null;
+  const version = json?.version;
+  if (typeof version !== "number" || version < 1 || !json?.artboard || !json.grid) {
+    throw new Error("This is not a Vellum document.");
+  }
+  if (version > PROJECT_VERSION) {
     throw new Error(
-      `This document was saved by an incompatible version (v${String(json.version)}). ` +
-        "Re-import its SVG, or clear the browser storage for this app."
+      "This document was saved by a newer Vellum. Reload the page to update, then open it again."
     );
   }
+  return json as ProjectFile;
+}
+
+export function loadProject(raw: ProjectFile): void {
+  const json = readProject(raw);
   const base = createInitialState();
   replaceState({
     ...base,

@@ -6,6 +6,7 @@ import {
   groupIdFromSvgId,
   importSvgFile,
   sanitizeName,
+  readProject,
   serializeProject,
 } from "./io.js";
 import {
@@ -465,6 +466,25 @@ describe("project file", () => {
 
   test("style defaults are not stored: each element carries its own", () => {
     expect(serializeProject(createInitialState())).not.toHaveProperty("defaults");
+  });
+
+  test("is written as version 1, the first released format", () => {
+    expect(serializeProject(createInitialState()).version).toBe(1);
+  });
+
+  test("a document of the current version reads back as it is", () => {
+    const saved = serializeProject(createInitialState());
+    expect(readProject(saved)).toEqual(saved);
+  });
+
+  test("a document from a newer Vellum is refused, not half-read", () => {
+    const saved = { ...serializeProject(createInitialState()), version: 99 };
+    expect(() => readProject(saved)).toThrow(/newer Vellum/);
+  });
+
+  test("something that is not a document is refused", () => {
+    expect(() => readProject(null)).toThrow(/not a Vellum document/);
+    expect(() => readProject({ artboard: {}, grid: {} })).toThrow(/not a Vellum document/);
   });
 });
 
