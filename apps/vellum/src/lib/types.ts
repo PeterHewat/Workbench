@@ -192,6 +192,8 @@ export interface PathEdit {
   pathId: string;
   kind: "anchor";
   index: number;
+  /** The curve handle of that point grabbed last, if any: the bar offers to remove it. */
+  handle?: "in" | "out";
 }
 
 export interface Selection {
@@ -272,6 +274,11 @@ export interface EditorState {
   hoverId: string | null;
   cursor: { x: number; y: number; snapX: number; snapY: number; snapActive: boolean };
   align: { x: number | null; y: number | null };
+  /**
+   * While the end of an open shape is dragged: the end it would merge with if dropped now, its
+   * own other end or another shape's. Drawn as a ring, so the drop's effect is visible first.
+   */
+  dropTarget: Point | null;
   ui: {
     expandedImageId: string | null;
     expandedElementId: string | null;
@@ -291,9 +298,16 @@ export type StyleCarrier = Partial<StyleProps> & {
   gradUserSpace?: boolean;
 };
 
+/**
+ * The format of a stored document. Vellum is released: a change to `ProjectFile` bumps this and
+ * teaches `readProject` (io.ts) to bring the previous version up to date, so nobody's work stops
+ * opening.
+ */
+export const PROJECT_VERSION = 1;
+
 /** The serialized document written to storage. */
 export interface ProjectFile {
-  version: 2;
+  version: typeof PROJECT_VERSION;
   artboard: EditorState["artboard"];
   /** Absent in documents saved before backgrounds existed, which means transparent. */
   background?: BackgroundPaint;

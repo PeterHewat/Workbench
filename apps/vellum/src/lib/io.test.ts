@@ -6,6 +6,8 @@ import {
   groupIdFromSvgId,
   importSvgFile,
   sanitizeName,
+  isInert,
+  readProject,
   serializeProject,
 } from "./io.js";
 import {
@@ -465,6 +467,51 @@ describe("project file", () => {
 
   test("style defaults are not stored: each element carries its own", () => {
     expect(serializeProject(createInitialState())).not.toHaveProperty("defaults");
+  });
+
+  test("is written as version 1, the first released format", () => {
+    expect(serializeProject(createInitialState()).version).toBe(1);
+  });
+
+  test("a document of the current version reads back as it is", () => {
+    const saved = serializeProject(createInitialState());
+    expect(readProject(saved)).toEqual(saved);
+  });
+
+  test("a document from a newer Vellum is refused, not half-read", () => {
+    const saved = { ...serializeProject(createInitialState()), version: 99 };
+    expect(() => readProject(saved)).toThrow(/newer Vellum/);
+  });
+
+  test("a document with markup hidden in a colour or an id is refused", () => {
+    const saved = serializeProject({
+      ...createInitialState(),
+      elements: [
+        Object.assign(createRect(0, 0, 4, 4), { stroke: '#000"/><img src=x onerror=alert(1)>' }),
+      ],
+    });
+    expect(() => readProject(saved)).toThrow(/damaged/);
+    const badId = serializeProject({
+      ...createInitialState(),
+      elements: [Object.assign(createRect(0, 0, 4, 4), { id: "a<b" })],
+    });
+    expect(() => readProject(badId)).toThrow(/damaged/);
+  });
+
+  test("names and text may say anything: they are escaped wherever they appear", () => {
+    const saved = serializeProject({
+      ...createInitialState(),
+      elements: [Object.assign(createRect(0, 0, 4, 4), { name: 'the "big" <box> & co' })],
+      groupNames: {},
+    });
+    expect(readProject(saved).elements[0]!.name).toBe('the "big" <box> & co');
+    expect(isInert({ groupNames: { "group-1": 'say "hi"' } })).toBe(true);
+    expect(isInert({ groupNames: { 'group-"1': "x" } })).toBe(false);
+  });
+
+  test("something that is not a document is refused", () => {
+    expect(() => readProject(null)).toThrow(/not a Vellum document/);
+    expect(() => readProject({ artboard: {}, grid: {} })).toThrow(/not a Vellum document/);
   });
 });
 

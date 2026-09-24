@@ -50,32 +50,6 @@
           <rect x="6.5" y="6.5" width="5" height="5" rx="1" fill="currentColor" />
           <circle cx="15" cy="15" r="2.8" fill="currentColor" />
         </symbol>
-        <symbol id="icon-clipboard" viewBox="0 0 24 24">
-          <path
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linejoin="round"
-            d="M9 4H6a1 1 0 00-1 1v15a1 1 0 001 1h12a1 1 0 001-1V5a1 1 0 00-1-1h-3"
-          />
-          <rect
-            x="9"
-            y="2.5"
-            width="6"
-            height="4"
-            rx="1"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          />
-          <path
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            d="M9 12h6M9 16h4"
-          />
-        </symbol>
         <symbol id="icon-paste" viewBox="0 0 24 24">
           <path
             fill="none"
@@ -265,6 +239,49 @@
           <circle cx="12" cy="12" r="2.6" fill="currentColor" />
           <circle cx="3.5" cy="7.5" r="2" fill="currentColor" />
           <circle cx="20.5" cy="7.5" r="2" fill="currentColor" />
+        </symbol>
+        <!-- A point as a sharp corner, as a smooth curve, and with one of its handles taken off. -->
+        <symbol id="icon-corner" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M3.5 19 12 6l8.5 13"
+          />
+          <circle cx="12" cy="6" r="2.6" fill="currentColor" />
+        </symbol>
+        <symbol id="icon-curve" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M3.5 19C5 11 8 8.5 12 8.5s7 2.5 8.5 10.5"
+          />
+          <path fill="none" stroke="currentColor" stroke-width="1.5" d="M5 8.5h14" />
+          <circle cx="12" cy="8.5" r="2.6" fill="currentColor" />
+          <circle cx="4" cy="8.5" r="1.8" fill="currentColor" />
+          <circle cx="20" cy="8.5" r="1.8" fill="currentColor" />
+        </symbol>
+        <symbol id="icon-remove-handle" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M3.5 7.5 11 12"
+          />
+          <circle cx="11" cy="12" r="2.6" fill="currentColor" />
+          <circle cx="3.5" cy="7.5" r="2" fill="currentColor" />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="m15.5 5.5 5 5m0-5-5 5"
+          />
         </symbol>
         <symbol id="icon-join" viewBox="0 0 24 24">
           <path
@@ -796,8 +813,6 @@
           </button>
         </div>
 
-        <p id="cursor-pos" class="cursor-readout mono" aria-live="polite">—</p>
-
         <!-- On a phone the bar has no room for it: the switch moves into the Help panel. -->
         <button type="button" class="tool-btn theme-btn" data-theme-toggle></button>
 
@@ -986,15 +1001,19 @@
               to work on points.
             </li>
             <li>
-              <b>Smooth ↔ corner</b> — <span data-help="mouse">double-click</span
-              ><span data-help="touch">double-tap</span> an anchor. Lines, polylines and polygons
-              turn into paths first.
+              <b>Curve ↔ corner</b> — select a point and use the curve / corner button on the bar
+              beside it, or <span data-help="mouse">double-click</span
+              ><span data-help="touch">double-tap</span> the point. A curve gets two handles; a
+              corner has none. Lines, polylines and polygons turn into paths first.
             </li>
             <li>
               <b>Curve handles</b> — the two handles of a smooth point are linked: drag one and the
               other mirrors it. Grabbing a handle selects its point, and the bar beside the point
               breaks the pair into a <em>cusp</em>, whose handles then move on their own (their arms
-              are drawn dashed), or links it again, mirroring one handle off the other.
+              are drawn dashed), or links it again, mirroring one handle off the other. To take one
+              handle off, leaving the curve on the other side, grab it and use the remove button on
+              the bar, or <span data-help="mouse">double-click</span
+              ><span data-help="touch">double-tap</span> it.
               <span data-help="mouse"
                 >Holding <kbd>Alt</kbd> while you drag breaks the pair on the fly; let go of Alt
                 before the mouse and it mirrors again.</span
@@ -1005,11 +1024,12 @@
               <b>Join</b> in the Primitives header<span data-help="mouse">
                 (or press <kbd>J</kbd>)</span
               >: they are connected at their closest ends. Or drag an end point onto another path's
-              end point.
+              end point: a green ring round it shows that letting go there joins them.
             </li>
             <li>
               <b>Close / open</b> — the close / open button on the bar beside the shape, the
-              <b>Closed</b> tick in its row, or drag an end point onto the other end point.
+              <b>Closed</b> tick in its row, or drag an end point onto the other end point (ringed
+              in green when letting go will close it).
             </li>
             <li>
               <b>Split</b> — select a point and use the split button on the bar beside it<span
@@ -1017,7 +1037,7 @@
               >
                 (or press <kbd>X</kbd>)</span
               >. An open path becomes two paths; a closed one becomes one open path cut at that
-              point.
+              point. The two ends of an open path have nothing to split, so they do not offer it.
             </li>
           </ul>
 
@@ -1106,10 +1126,9 @@
               between browser tabs. <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicates.
             </li>
             <li data-help="touch">
-              <b>Copy</b> is on the bar beside the selection. With nothing selected a small bar sits
-              above the tools with <b>Paste</b> and <b>Select everything</b>. Paste takes what you
-              last copied here, or else SVG markup copied from another app — your browser may ask
-              first. Each paste steps away from the last.
+              <b>Duplicate</b> is on the bar beside the selection. With nothing selected a small bar
+              sits above the tools with <b>Paste</b> and <b>Select everything</b>. Paste takes SVG
+              markup copied from another app — your browser may ask first.
             </li>
           </ul>
 
@@ -1239,17 +1258,17 @@
           <ul>
             <li>
               Select a shape and a small bar appears next to it with what applies: add to the
-              selection, select everything, delete, copy, duplicate, send backward / bring forward
-              (dimmed when there is nowhere to go), close or open a path, join two paths, group,
-              merge and ungroup, and edit text. It is the same set the keyboard shortcuts reach,
-              within reach of a thumb.
+              selection, select everything, delete, duplicate, send backward / bring forward (dimmed
+              when there is nowhere to go), close or open a path, join two paths, group, merge and
+              ungroup, and edit text. It is the same set the keyboard shortcuts reach, within reach
+              of a thumb.
             </li>
             <li>
               Select one <em>point</em> of a path, or grab one of its handles, and the bar moves
-              beside that point and narrows to it: link or break its handles, split the path here,
-              close or open it, delete this point. The whole-shape actions step aside, because
-              beside a highlighted point they would act on something other than what is highlighted
-              — delete most of all.
+              beside that point and narrows to it: make it a curve or a corner, remove the handle
+              you grabbed, link or break its handles, split the path here, close or open it, delete
+              this point. The whole-shape actions step aside, because beside a highlighted point
+              they would act on something other than what is highlighted — delete most of all.
             </li>
             <li>
               While the pen has a path open the bar shows that instead: take back the last point,
@@ -1374,6 +1393,10 @@
           <canvas id="ruler-top" class="ruler ruler-top"></canvas>
           <canvas id="ruler-left" class="ruler ruler-left"></canvas>
           <div id="ruler-corner" class="ruler-corner"></div>
+          <!-- Over the canvas rather than in the bar: the bar's width is what decides when the
+               layout turns into the phone one, and a readout that only follows the cursor does
+               not need a place of its own. -->
+          <p id="cursor-pos" class="cursor-readout mono">—</p>
         </section>
       </main>
     </div>

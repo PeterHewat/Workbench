@@ -6,7 +6,7 @@
 - Prefer editing existing files; no secrets in code or logs
 - No `git add` / `commit` / `push` unless the user asks
 - Run the [format gate](#format-gate) after editing, and the [verify gate](#verify-gate) before finishing
-- **Saved formats:** Vellum is released. A change to its IndexedDB documents (`ProjectFile`) or exported SVG keeps existing files opening: bump the version and read the previous one. An app that is not released yet has no migration — when its stored format changes, fail closed and tell the person to clear that app's storage.
+- **Saved formats:** Vellum is released. A change to its IndexedDB documents (`ProjectFile`) or exported SVG keeps existing files opening: bump `PROJECT_VERSION` (`types.ts`) and add the step up from the previous version in `readProject` (`io.ts`); the database's own `DB_VERSION` (`storage.ts`) is for its stores. Exported SVG carries no marker, so an SVG change must still import files written before it. An app that is not released yet has no migration — when its stored format changes, fail closed and tell the person to clear that app's storage.
 
 ## Project conventions
 

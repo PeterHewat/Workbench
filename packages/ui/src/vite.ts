@@ -11,7 +11,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HtmlTagDescriptor, Plugin, UserConfig } from "vite";
-import { findApp, type WorkbenchApp } from "@workbench/catalog";
+import { APPS, findApp, type WorkbenchApp } from "@workbench/catalog";
 import { SITE, appBase, siteBase } from "@workbench/catalog/site";
 // By package name, not "./theme.js": Node loads this file for the Vite config, and it does not
 // map a .js specifier onto the .ts file beside it the way the bundler does.
@@ -27,6 +27,9 @@ const DEV_SW = "self.registration.unregister();\n";
 
 const ICON = "icon.svg";
 const MANIFEST = "manifest.webmanifest";
+/** Set in CI for production builds; omitted locally and in PR builds. */
+export const CF_BEACON_ENV = "WORKBENCH_CF_BEACON_TOKEN";
+const CF_BEACON_SRC = "https://static.cloudflareinsights.com/beacon.min.js";
 
 /** Vite config for the app at `apps/<slug>`. Fails the build if the catalog does not list it. */
 export function workbenchApp(slug: string): UserConfig {
@@ -47,9 +50,36 @@ export function workbenchHome(): UserConfig {
   return {
     base: siteBase(),
     appType: "mpa",
-    plugins: [pageHead(null), serviceWorker()],
+    plugins: [pageHead(null), serviceWorker(), appArtInDev()],
     // Not emptied: the site build writes the index first, then each app into its own folder.
     build: { outDir: "../../dist", emptyOutDir: false, target: "es2022" },
+  };
+}
+
+/**
+ * Serves each app's card art to the index page's dev server. In a built site `<slug>/art.svg`
+ * is the app's own file, in the folder beside the index; the dev server has only the index, so
+ * without this every card's picture is a 404.
+ */
+function appArtInDev(): Plugin {
+  const appsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "apps");
+  return {
+    name: "workbench-app-art",
+    apply: "serve",
+    configureServer(server) {
+      const art = new Map(
+        APPS.filter((a) => a.art).map((a) => [
+          `${siteBase()}${a.slug}/art.svg`,
+          join(appsDir, a.slug, "public", "art.svg"),
+        ])
+      );
+      server.middlewares.use((req, res, next) => {
+        const file = art.get((req.url ?? "").split("?")[0] ?? "");
+        if (!file || !existsSync(file)) return next();
+        res.setHeader("Content-Type", "image/svg+xml");
+        res.end(readFileSync(file));
+      });
+    },
   };
 }
 
@@ -68,8 +98,27 @@ export function manifestFor(app: WorkbenchApp): Record<string, unknown> {
   };
 }
 
+/** Cloudflare Web Analytics beacon, when `WORKBENCH_CF_BEACON_TOKEN` is set at build time. */
+export function cfBeaconTag(
+  env: Record<string, string | undefined> = process.env
+): HtmlTagDescriptor | undefined {
+  const token = env[CF_BEACON_ENV]?.trim();
+  if (!token) return undefined;
+  return {
+    tag: "script",
+    attrs: {
+      type: "module",
+      src: CF_BEACON_SRC,
+      "data-cf-beacon": JSON.stringify({ token }),
+    },
+  };
+}
+
 /** The head tags a page gets from the catalog; `null` is the index page. */
-export function headTags(app: WorkbenchApp | null): HtmlTagDescriptor[] {
+export function headTags(
+  app: WorkbenchApp | null,
+  env: Record<string, string | undefined> = process.env
+): HtmlTagDescriptor[] {
   const base = app ? appBase(app.slug) : siteBase();
   const title = app
     ? `${app.name} — ${SITE.name}`
@@ -89,6 +138,8 @@ export function headTags(app: WorkbenchApp | null): HtmlTagDescriptor[] {
     { tag: "link", attrs: { rel: "icon", href: `${base}${ICON}`, type: "image/svg+xml" } },
   ];
   if (app) tags.push({ tag: "link", attrs: { rel: "manifest", href: `${base}${MANIFEST}` } });
+  const beacon = cfBeaconTag(env);
+  if (beacon) tags.push(beacon);
   return tags.map((t) => ({ ...t, injectTo: "head" }));
 }
 

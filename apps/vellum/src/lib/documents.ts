@@ -8,9 +8,10 @@ import {
   renameDocument,
   duplicateDocument,
   reorderDocuments,
+  libraryReset,
   type DocumentMeta,
 } from "./storage.js";
-import { serializeProject, loadProject } from "./io.js";
+import { serializeProject, loadProject, readProject } from "./io.js";
 import { deepClone, escapeAttr, uid } from "./utils.js";
 import { byId, downloadText, registerServiceWorker } from "@workbench/ui";
 import { type ProjectFile } from "./types.js";
@@ -48,8 +49,13 @@ export function noteChange(): void {
   saveTimer = setTimeout(() => void flushSave(), 900);
 }
 
+/** The last storage failure shown, so one that repeats on every autosave is reported once. */
+let lastStorageError = "";
+
 function storageError(err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
+  if (message === lastStorageError) return;
+  lastStorageError = message;
   window.alert(`Could not access browser storage: ${message}`);
 }
 
@@ -228,7 +234,12 @@ async function openDocument(id: string): Promise<void> {
     return;
   }
   if (!data) return;
-  loadProject(data);
+  try {
+    loadProject(data);
+  } catch (err) {
+    window.alert(err instanceof Error ? err.message : String(err));
+    return;
+  }
   currentDoc = { id, name: docsCache.find((d) => d.id === id)?.name ?? "" };
   rememberLast(id);
   afterDocumentReplaced();
@@ -364,8 +375,7 @@ interface DocumentFile {
   data: ProjectFile;
 }
 
-/** A file name that survives every operating system, from the document's name. */
-/** A document name made safe for a file name. */
+/** A document name made safe for a file name on every operating system. */
 function fileBase(name: string): string {
   return name.replace(/[^\w. -]+/g, "").trim() || "document";
 }
@@ -420,6 +430,12 @@ byId("input-doc-file").addEventListener("change", async (e) => {
     window.alert("That is not a Vellum document file.");
     return;
   }
+  try {
+    parsed.data = readProject(parsed.data);
+  } catch (err) {
+    window.alert(err instanceof Error ? err.message : String(err));
+    return;
+  }
   await flushSave();
   const id = uid("doc");
   try {
@@ -459,6 +475,7 @@ window.addEventListener("beforeunload", (e) => {
 
 /** True until the drawing has been added once: an empty library on a later visit gets an empty document. */
 function firstVisit(): boolean {
+  if (libraryReset) return true;
   try {
     return !localStorage.getItem(WELCOMED_KEY);
   } catch {

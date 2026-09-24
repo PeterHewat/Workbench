@@ -1,5 +1,5 @@
 import { getState, setState, findElement, selectOnly } from "./state.js";
-import { importSvgFile } from "./io.js";
+import { importSvgFile, isInert } from "./io.js";
 import { type SceneElement } from "./types.js";
 import { commit } from "./ops.js";
 import { expandGroups, deleteSelection, copyElements } from "./selection-commands.js";
@@ -20,28 +20,8 @@ export function copySelectionText(): string | null {
   return JSON.stringify({ tag: CLIP_TAG, elements: els, groupNames: Object.fromEntries(names) });
 }
 
-/**
- * What the bar's Copy put away, for its Paste. The system clipboard gets it too, so it reaches
- * other tabs, but reading that back needs a permission prompt on some phones, and the copy
- * made a moment ago in this tab should not have to ask for one.
- */
-let copied: string | null = null;
-
-/** Copy, as a button rather than Ctrl+C. */
-export async function copyToClipboard(): Promise<void> {
-  const text = copySelectionText();
-  if (!text) return;
-  copied = text;
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    /* kept for this tab only */
-  }
-}
-
-/** Paste, as a button: this tab's last copy, else whatever the system clipboard holds. */
+/** Paste, as a button: whatever the system clipboard holds, such as SVG markup from another app. */
 export async function pasteFromClipboard(): Promise<void> {
-  if (copied && pasteFromText(copied)) return;
   try {
     pasteFromText(await navigator.clipboard.readText());
   } catch {
@@ -66,7 +46,9 @@ export function pasteFromText(text: string): boolean {
       data &&
       typeof data === "object" &&
       (data as { tag?: string }).tag === CLIP_TAG &&
-      Array.isArray((data as { elements?: unknown }).elements)
+      Array.isArray((data as { elements?: unknown }).elements) &&
+      // The system clipboard can hold anything another page put there.
+      isInert(data)
     ) {
       elements = (data as { elements: SceneElement[] }).elements;
       names = (data as { groupNames?: Record<string, string> }).groupNames ?? {};

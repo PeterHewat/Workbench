@@ -1,7 +1,8 @@
 # Workbench
 
-Small, self-contained browser tools. Everything runs client-side — nothing is uploaded, and
-each tool keeps working offline once you have opened it.
+Small, self-contained browser tools. Everything runs client-side — your documents and files stay
+in the browser — and each tool keeps working offline once you have opened it. The public site may
+send anonymous page-view analytics to Cloudflare when you are online.
 
 **[peterhewat.github.io/Workbench](https://peterhewat.github.io/Workbench/)**
 

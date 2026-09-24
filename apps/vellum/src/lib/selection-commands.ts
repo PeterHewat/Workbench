@@ -6,12 +6,16 @@ import {
   toPathElement,
   canToggleClosed,
   closeByMerge,
+  closingEnd,
   setClosed,
   splitAt,
   joinPaths,
   canJoin,
   hasTwoHandles,
+  hasHandle,
+  removeHandle,
   setHandlesLinked,
+  togglePointSmooth,
 } from "./model.js";
 import {
   canMergeGroups,
@@ -156,6 +160,42 @@ export function setSelectedHandlesLinked(linked: boolean): void {
   commit(() => mutate(() => setHandlesLinked(p, linked)));
 }
 
+/**
+ * Turns the selected point into a curve, or a curved one back into a corner: what double-clicking
+ * the point does. A line, polyline or polygon becomes a path first, as it has no curves to give.
+ */
+export function toggleSelectedPointCurve(): void {
+  const pe = getState().selection.pathEdit;
+  const el = pe ? findElement(pe.pathId) : undefined;
+  if (!pe || !el || !canToggleClosed(el)) return;
+  commit(() => {
+    setState((s) => {
+      const path = toPathElement(el);
+      togglePointSmooth(path, pe.index);
+      return {
+        ...s,
+        elements: s.elements.map((x) => (x.id === el.id ? path : x)),
+        selection: selectOnly([path.id], { pathId: path.id, kind: "anchor", index: pe.index }),
+      };
+    });
+  });
+}
+
+/** Takes the selected point's last-grabbed curve handle off it. */
+export function removeSelectedHandle(): void {
+  const pe = getState().selection.pathEdit;
+  const el = pe ? findElement(pe.pathId) : undefined;
+  const p = pe && el?.type === "path" ? el.points[pe.index] : undefined;
+  const kind = pe?.handle;
+  if (!pe || !p || !kind || !hasHandle(p, kind)) return;
+  commit(() => {
+    mutate(() => removeHandle(p, kind));
+    setState({
+      selection: selectOnly([pe.pathId], { pathId: pe.pathId, kind: "anchor", index: pe.index }),
+    });
+  });
+}
+
 /** Cuts the selected path at the selected anchor. */
 export function splitAtSelectedPoint(): void {
   const pe = getState().selection.pathEdit;
@@ -284,34 +324,41 @@ export function nudgeSelection(dx: number, dy: number): void {
   );
 }
 
-/** After dragging an endpoint: close the shape onto itself, or join it to another. */
-export function mergeDroppedEnd(el: SceneElement, idx: number, tol: number): void {
-  const merged = closeByMerge(el, idx, tol);
-  if (merged) {
-    setState((s) => ({
-      ...s,
-      elements: s.elements.map((x) => (x.id === el.id ? merged : x)),
-      selection: selectOnly([el.id]),
-    }));
-    return;
-  }
-  if (!canJoinEnds(el, idx)) return;
+/**
+ * What dropping the end `idx` of `el` where it is now would merge it with: its own other end,
+ * which closes it, or an end of another open shape, which joins the two. `point` is that end.
+ */
+export function endDropTarget(
+  el: SceneElement,
+  idx: number,
+  tol: number
+): { point: Point; other: SceneElement | null } | null {
+  const own = closingEnd(el, idx, tol);
+  if (own) return { point: { x: own.x, y: own.y }, other: null };
+  if (!canJoinEnds(el, idx)) return null;
   const pair = ends(el);
-  if (!pair) return;
+  if (!pair) return null;
   const dragged = pair[idx === 0 ? 0 : 1];
   for (const other of getState().elements) {
     if (other.id === el.id || !canJoin(other)) continue;
-    const oe = ends(other);
-    if (!oe?.some((p) => Math.hypot(p.x - dragged.x, p.y - dragged.y) <= tol)) continue;
-    const joined = joinPaths(el, other, tol, tol);
-    if (!joined) continue;
-    setState((s) => ({
-      ...s,
-      elements: s.elements
-        .filter((x) => x.id !== other.id)
-        .map((x) => (x.id === el.id ? joined : x)),
-      selection: selectOnly([joined.id]),
-    }));
-    return;
+    const hit = ends(other)?.find((p) => Math.hypot(p.x - dragged.x, p.y - dragged.y) <= tol);
+    if (hit) return { point: { x: hit.x, y: hit.y }, other };
   }
+  return null;
+}
+
+/** After dragging an endpoint: close the shape onto itself, or join it to another. */
+export function mergeDroppedEnd(el: SceneElement, idx: number, tol: number): void {
+  const target = endDropTarget(el, idx, tol);
+  if (!target) return;
+  const other = target.other;
+  const merged = other ? joinPaths(el, other, tol, tol) : closeByMerge(el, idx, tol);
+  if (!merged) return;
+  setState((s) => ({
+    ...s,
+    elements: s.elements
+      .filter((x) => x.id !== other?.id)
+      .map((x) => (x.id === el.id ? merged : x)),
+    selection: selectOnly([merged.id]),
+  }));
 }

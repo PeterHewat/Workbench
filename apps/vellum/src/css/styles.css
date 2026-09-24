@@ -116,12 +116,31 @@ body {
   background: var(--panel);
 }
 
+/* The view controls, the theme switch and Help sit together at the right of the bar. */
+#group-view {
+  margin-left: auto;
+}
+
+/* Floats top right on the canvas, under the ruler. Light text on a dark halo reads on any
+   artboard, light or dark, and in either theme. */
 .cursor-readout {
-  margin: 0 0 0 auto;
-  padding: 4px 8px;
+  position: absolute;
+  top: calc(var(--ruler-h) + 4px);
+  right: 8px;
+  z-index: 5;
+  margin: 0;
   font-size: 12px;
-  color: var(--muted);
+  font-weight: 600;
+  color: #fff;
+  /* A solid dark outline painted under the glyphs, and a soft halo beyond it: readable on a
+     white artboard as on the dark canvas. */
+  -webkit-text-stroke: 3px rgba(0, 0, 0, 0.85);
+  paint-order: stroke fill;
+  text-shadow:
+    0 0 3px #000,
+    0 1px 4px rgba(0, 0, 0, 0.9);
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .menu {
@@ -728,6 +747,8 @@ body {
   border-width: 0 1px 0 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Room for the scrollbar is kept whether or not it shows, so opening a row never reflows. */
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--scroll) transparent;
   flex-direction: column;
@@ -1184,6 +1205,22 @@ body {
   stroke-width: 3;
 }
 
+/* The end a dragged end will merge with when it is let go. */
+.drop-target {
+  fill: rgba(126, 231, 135, 0.18);
+  stroke: #3fb950;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* The curve handle grabbed last: the one the bar's "Remove this handle" takes off. */
+.handle.handle-in.selected,
+.handle.handle-out.selected {
+  fill: #ffe08a;
+  stroke: #8a6d00;
+}
+
 /* Keeps the shape square or circular while dragged - the modifier-free square/circle. */
 .handle.uniform-handle {
   fill: #7ee787;
@@ -1294,6 +1331,7 @@ body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding-right: 6px;
   font-size: 12.5px;
   line-height: 1.5;
@@ -1391,8 +1429,9 @@ body {
   display: flex;
 }
 
+/* Wide enough for "3200%", so the bar does not change width as the zoom does. */
 .zoom-level {
-  min-width: 48px;
+  min-width: 52px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1786,7 +1825,9 @@ body {
   display: none;
 }
 
-@media (max-width: 760px) {
+/* With a mouse the bar needs about 700px; 720 leaves room for fonts that set wider. Touch targets
+   are 44px rather than 34px, so a touch screen needs about 760px and switches before it wraps. */
+@media (max-width: 720px), (pointer: coarse) and (max-width: 800px) {
   /* Both bars float over the canvas instead of taking a strip of it: on a phone the artboard
      is the scarce thing. The top one starts below the ruler, which it must not cover, and the
      bar itself is transparent and click-through - only the buttons take the pointer, so the
@@ -1850,10 +1891,6 @@ body {
 
   /* Seven controls on one line at 360px, so none of them is behind a menu. They shrink to fit
      rather than being sized to the narrowest phone and left small on every other one. */
-  #group-view {
-    margin-left: auto;
-  }
-
   .top-bar .tool-btn,
   .top-bar .menu-trigger--icon,
   .tool-bar .tool-btn {
@@ -1911,6 +1948,46 @@ body {
     max-width: none;
     bottom: calc(66px + env(safe-area-inset-bottom));
     border-right-width: 0;
+  }
+}
+
+/* A phone with a panel open: the panel covers the canvas, so the rulers and the cursor readout
+   go, and the bar takes the panel's background from the top edge down, reading as its header.
+   The background is on a pseudo-element so the bar's own box stays as it is: the docked panels
+   inside it are positioned against the viewport. */
+@media (max-width: 720px), (pointer: coarse) and (max-width: 800px) {
+  .panel-open .ruler,
+  .panel-open .ruler-corner,
+  .panel-open .cursor-readout {
+    display: none;
+  }
+
+  .panel-open .top-bar {
+    top: 0;
+    padding-top: calc(var(--ruler-h) + 6px);
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    pointer-events: auto;
+  }
+
+  .panel-open .top-bar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--panel);
+  }
+
+  /* Opaque, both of them: a see-through panel over the whole canvas shows a different drawing
+     behind the bar than behind the panel, and the two would never look like one surface. */
+  .panel-open .menu-dropdown--docked {
+    bottom: 0;
+    background: var(--panel);
+  }
+
+  /* The bottom tool bar only exists to reach the canvas; hide it while a panel owns the screen. */
+  .panel-open .tool-bar {
+    display: none;
   }
 }
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { findApp } from "@workbench/catalog";
 import { SITE, appBase } from "@workbench/catalog/site";
 import { THEME_BOOT_SCRIPT, THEME_KEY } from "./theme.js";
-import { headTags, manifestFor, workbenchApp } from "./vite.js";
+import { cfBeaconTag, headTags, manifestFor, workbenchApp } from "./vite.js";
 
 const vellum = findApp("vellum")!;
 
@@ -43,6 +43,23 @@ describe("page head", () => {
 
   test("the index page has no manifest", () => {
     expect(attr(headTags(null), "rel", "manifest")).toBeUndefined();
+  });
+
+  test("the analytics beacon is omitted unless a token is set at build time", () => {
+    const env = {};
+    expect(cfBeaconTag(env)).toBeUndefined();
+    const hasBeacon = (tags: ReturnType<typeof headTags>) =>
+      tags.some((t) => String(t.attrs?.src ?? "").includes("cloudflareinsights"));
+    expect(hasBeacon(headTags(vellum, env))).toBe(false);
+    const withToken = { WORKBENCH_CF_BEACON_TOKEN: "test-token" };
+    const beacon = cfBeaconTag(withToken)!;
+    expect(String(beacon.attrs?.src)).toContain("cloudflareinsights");
+    expect(beacon.attrs?.["data-cf-beacon"]).toBe(JSON.stringify({ token: "test-token" }));
+    expect(
+      headTags(null, withToken).some(
+        (t) => t.attrs?.["data-cf-beacon"] === beacon.attrs?.["data-cf-beacon"]
+      )
+    ).toBe(true);
   });
 
   test("every page applies a stored theme from the head, before it paints", () => {
