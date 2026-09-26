@@ -59,7 +59,7 @@ export interface ActionBarHandlers {
   paste: () => void;
 }
 
-interface Action {
+export interface Action {
   key: string;
   label: string;
   icon?: string;
@@ -68,14 +68,25 @@ interface Action {
   disabled?: boolean;
   /** A switch rather than an action: shown pressed while on. */
   pressed?: boolean;
-  run: () => void;
+  /** Opens a page of its own - align, combine - instead of running anything. */
+  menu?: () => Action[];
+  run?: () => void;
 }
 
 const GAP = 12;
+/**
+ * The most buttons in one row: seven fit across a 360px phone. A longer set shows its first ones,
+ * a "more" button and delete, which stays in reach; the rest are one tap away on a page of their
+ * own, as are the pages a menu button opens. Every page leads with a way back.
+ */
+export const MAX_BUTTONS = 7;
 
 let bar: HTMLElement;
 let handlers: ActionBarHandlers;
 let lastSignature = "";
+/** The pages opened from the bar, by key, innermost last; emptied when the selection changes. */
+let pagePath: string[] = [];
+let pageFor = "";
 
 export function initActionBar(element: HTMLElement, fns: ActionBarHandlers): void {
   bar = element;
@@ -291,15 +302,10 @@ function selectionActions(state: EditorState): Action[] {
     pressed: more,
     run: () => handlers.selectMore(!more),
   });
-  if (state.elements.some((e) => !e.hidden && !ids.has(e.id))) {
-    out.splice(1, 0, {
-      key: "select-all",
-      label: "Select everything",
-      icon: "icon-select-all",
-      run: handlers.selectAll,
-    });
-  }
+  // In the order they matter: what does not fit the row moves behind "more" from the end,
+  // and delete always stays.
   out.push(
+    { key: "duplicate", label: "Duplicate", icon: "icon-copy", run: handlers.duplicate },
     {
       key: "back",
       label: "Send backward (Shift: to the back)",
@@ -313,11 +319,67 @@ function selectionActions(state: EditorState): Action[] {
       glyph: "▲",
       disabled: !canMoveSelectionZ(state.elements, ids, 1),
       run: handlers.forward,
-    },
-    { key: "duplicate", label: "Duplicate", icon: "icon-copy", run: handlers.duplicate },
-    { key: "delete", label: "Delete", icon: "icon-trash", danger: true, run: handlers.remove }
+    }
   );
+  if (state.elements.some((e) => !e.hidden && !ids.has(e.id))) {
+    out.push({
+      key: "select-all",
+      label: "Select everything",
+      icon: "icon-select-all",
+      run: handlers.selectAll,
+    });
+  }
+  out.push({
+    key: "delete",
+    label: "Delete",
+    icon: "icon-trash",
+    danger: true,
+    run: handlers.remove,
+  });
   return out;
+}
+
+const backAction = (): Action => ({
+  key: "page-back",
+  label: "Back",
+  icon: "icon-back",
+  run: () => {
+    pagePath = pagePath.slice(0, -1);
+    lastSignature = "";
+  },
+});
+
+/**
+ * Splits a set of buttons into what fits in one row. The row keeps as many as it can, then a
+ * "more" button, then delete when there is one, so the one destructive button never moves off
+ * the row; what is left over is the page "more" opens.
+ */
+export function paginate(
+  actions: readonly Action[],
+  max = MAX_BUTTONS
+): { row: Action[]; rest: Action[] } {
+  if (actions.length <= max) return { row: [...actions], rest: [] };
+  const last = actions[actions.length - 1]!;
+  const pinned = last.danger ? [last] : [];
+  const others = last.danger ? actions.slice(0, -1) : [...actions];
+  const room = max - 1 - pinned.length;
+  const rest = others.slice(room);
+  const more: Action = { key: "page-more", label: "More", icon: "icon-more", menu: () => rest };
+  return { row: [...others.slice(0, room), more, ...pinned], rest };
+}
+
+/** The row to show: the actions themselves, or the page the bar has been taken to. */
+function currentRow(actions: readonly Action[]): Action[] {
+  let row = paginate(actions).row;
+  for (const key of pagePath) {
+    const opener = row.find((a) => a.key === key);
+    if (!opener?.menu) {
+      pagePath = [];
+      return paginate(actions).row;
+    }
+    row = paginate([backAction(), ...opener.menu()]).row;
+  }
+  return row;
 }
 
 function build(actions: readonly Action[]): void {
@@ -340,7 +402,17 @@ function build(actions: readonly Action[]): void {
       btn.classList.toggle("active", action.pressed);
     }
     btn.disabled = !!action.disabled;
-    btn.addEventListener("click", action.run);
+    if (action.menu) btn.setAttribute("aria-haspopup", "true");
+    btn.addEventListener("click", () => {
+      if (action.menu) {
+        pagePath = [...pagePath, action.key];
+        lastSignature = "";
+      } else {
+        action.run?.();
+      }
+      // A page change redraws at once; an action redraws with the state it changed.
+      if (action.menu || action.key === "page-back") syncActionBar(latest!);
+    });
     bar.appendChild(btn);
   }
 }
@@ -480,6 +552,8 @@ function position(state: EditorState): void {
   bar.style.top = `${Math.max(band.top, Math.min(y, band.bottom - size.height))}px`;
 }
 
+let latest: EditorState | null = null;
+
 /** Called on every state change: shows, rebuilds and repositions the bar as needed. */
 export function syncActionBar(state: EditorState): void {
   const drawing = !!state.drawing?.activePathId;
@@ -492,11 +566,16 @@ export function syncActionBar(state: EditorState): void {
     lastSignature = "";
     return;
   }
-  const actions = drawing
-    ? drawingActions(state)
-    : idle(state)
-      ? idleActions(state)
-      : selectionActions(state);
+  latest = state;
+  // A page opened for one selection means nothing for the next.
+  const owner = `${drawing}|${state.selection.elementIds.join(",")}|${state.selection.pathEdit?.pathId ?? ""}`;
+  if (owner !== pageFor) {
+    pageFor = owner;
+    pagePath = [];
+  }
+  const actions = currentRow(
+    drawing ? drawingActions(state) : idle(state) ? idleActions(state) : selectionActions(state)
+  );
   // Rebuilt only when the set of buttons, or whether they are enabled, actually changes.
   const signature = actions.map((a) => `${a.key}${a.disabled ? "-off" : ""}`).join(",");
   if (signature !== lastSignature) {
