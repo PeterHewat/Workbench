@@ -7,7 +7,7 @@ export function setDrawing(drawing: Drawing): void {
 }
 
 export function clearDrawing(): void {
-  setState({ drawing: null });
+  setState({ drawing: null, dropTarget: null });
 }
 
 export function commit(fn: () => void): void {

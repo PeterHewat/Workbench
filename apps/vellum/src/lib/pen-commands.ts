@@ -4,7 +4,7 @@ import { pushUndo } from "./undo.js";
 import { type EditorState } from "./types.js";
 
 export function setTool(tool: EditorState["tool"]): void {
-  setState({ tool, selection: selectOnly(), drawing: null });
+  setState({ tool, selection: selectOnly(), drawing: null, dropTarget: null });
 }
 
 export function finishPath(): void {
@@ -17,6 +17,7 @@ export function finishPath(): void {
       ...s,
       elements: s.elements.filter((e) => e.id !== activeId),
       drawing: null,
+      dropTarget: null,
     }));
     return;
   }
@@ -24,6 +25,7 @@ export function finishPath(): void {
     ...s,
     elements: s.elements.map((e) => (e.id === path.id ? simplifyPathIfStraight(e) : e)),
     drawing: { ...d, activePathId: null, preview: null },
+    dropTarget: null,
   }));
 }
 
@@ -63,6 +65,7 @@ export function removeLastPenPoint(): void {
       ...s,
       elements: s.elements.filter((e) => e.id !== activeId),
       drawing: null,
+      dropTarget: null,
     }));
     return;
   }

@@ -28,6 +28,7 @@ import {
   type Anchor,
   type EditorState,
   type Marquee,
+  type PathElement,
   type Point,
   type SceneElement,
 } from "./types.js";
@@ -142,6 +143,20 @@ function showDropTarget(elementId: string, index: number | null): void {
     el && index != null ? endDropTarget(el, index, MERGE_REACH / getState().viewport.zoom) : null;
   const prev = getState().dropTarget;
   const next = hit?.point ?? null;
+  if (prev?.x === next?.x && prev?.y === next?.y) return;
+  setState({ dropTarget: next });
+}
+
+/**
+ * Rings the first point of the path being drawn while a click would close onto it: the same
+ * ring a dragged end shows over the end it would merge with, since both close the shape.
+ */
+function showPenCloseTarget(path: PathElement, world: Point): void {
+  const first = path.points[0]!;
+  const closes =
+    path.points.length >= 3 && dist(world, first) <= CLOSE_TOL / getState().viewport.zoom;
+  const next = closes ? { x: first.x, y: first.y } : null;
+  const prev = getState().dropTarget;
   if (prev?.x === next?.x && prev?.y === next?.y) return;
   setState({ dropTarget: next });
 }
@@ -766,7 +781,10 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
 
     if (st.drawing?.activePathId) {
       const path = findElement(st.drawing.activePathId);
-      if (path?.type === "path" && path.points.length) updatePenPreview(path, world);
+      if (path?.type === "path" && path.points.length) {
+        updatePenPreview(path, world);
+        showPenCloseTarget(path, world);
+      }
     } else if (!drag && st.drawing?.shapeStart) {
       if (st.tool === "rect" || st.tool === "ellipse") {
         updateShapePreview(st.tool, st.drawing.shapeStart, world, e.shiftKey);
