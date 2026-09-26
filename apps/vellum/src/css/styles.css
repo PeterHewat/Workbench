@@ -1523,6 +1523,23 @@ body {
   background: var(--accent-dim);
 }
 
+/* Fit artboard and fit selection lead the list, set off from the levels below them. */
+.zoom-menu button[data-fit] {
+  text-align: left;
+  white-space: nowrap;
+}
+
+.zoom-menu li:nth-child(2) {
+  padding-bottom: 3px;
+  margin-bottom: 1px;
+  border-bottom: 1px solid var(--border);
+}
+
+.zoom-menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .grid-step-input {
   width: 48px;
   height: 32px;

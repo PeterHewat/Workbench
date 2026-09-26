@@ -1216,7 +1216,7 @@
             type="button"
             class="tool-btn"
             id="btn-fit-view"
-            title="Fit artboard in view"
+            title="Fit artboard in view (Shift+1)"
             aria-label="Fit view"
           >
             <svg class="ui-icon" aria-hidden="true"><use href="#icon-fit" /></svg>
@@ -1745,8 +1745,12 @@
             <li>
               <b>Zoom</b> is one control: it reads the current level and opens a list to set it, and
               it follows the view however you changed it — a <span data-help="mouse">wheel</span
-              ><span data-help="touch">pinch</span> shows up here too. Beside it, fit the artboard
-              in view, and the eye (<b>Final SVG</b>: hides the grid, guides and reference images).
+              ><span data-help="touch">pinch</span> shows up here too. The list also fits the
+              artboard or the selection in view<span data-help="mouse">
+                (<kbd>Shift</kbd>+<kbd>1</kbd> and <kbd>Shift</kbd>+<kbd>2</kbd>;
+                <kbd>Shift</kbd>+<kbd>0</kbd> is 100%)</span
+              >. Beside it, fit the artboard in view, and the eye (<b>Final SVG</b>: hides the grid,
+              guides and reference images).
             </li>
             <li data-help="touch">
               Nothing in the bar is behind a menu: Document, undo, redo, fit, zoom, Final SVG and
@@ -1836,6 +1840,10 @@
             <tr>
               <td>Esc</td>
               <td>Let go of the picked point, or step out of a group one level</td>
+            </tr>
+            <tr>
+              <td>Shift+0 / 1 / 2</td>
+              <td>Zoom to 100% / fit the artboard / fit the selection</td>
             </tr>
             <tr>
               <td>Delete</td>

@@ -1,5 +1,6 @@
-import { getState, setState } from "./state.js";
-import { fitArtboardInView, zoomAt } from "./viewport.js";
+import { getState, selectedElements, setState } from "./state.js";
+import { fitArtboardInView, fitBoxInView, zoomAt } from "./viewport.js";
+import { unionBox } from "./selection-transform.js";
 import { byId, bySelector } from "@workbench/ui";
 
 /**
@@ -14,10 +15,13 @@ const zoomWrap = byId("zoom-wrap");
 export const zoomBtn = byId("btn-zoom-level");
 export const zoomMenu = byId("zoom-menu");
 
-zoomMenu.innerHTML = ZOOM_LEVELS.map(
-  (z) =>
-    `<li role="option" aria-selected="false"><button type="button" data-zoom="${z}">${Math.round(z * 100)}%</button></li>`
-).join("");
+zoomMenu.innerHTML =
+  `<li role="option" aria-selected="false"><button type="button" data-fit="artboard" title="Shift+1">Fit artboard</button></li>` +
+  `<li role="option" aria-selected="false"><button type="button" data-fit="selection" title="Shift+2">Fit selection</button></li>` +
+  ZOOM_LEVELS.map(
+    (z) =>
+      `<li role="option" aria-selected="false"><button type="button" data-zoom="${z}">${Math.round(z * 100)}%</button></li>`
+  ).join("");
 
 function closeZoomMenu(): void {
   zoomMenu.classList.add("hidden");
@@ -32,10 +36,23 @@ zoomBtn.addEventListener("click", (e) => {
 });
 
 zoomMenu.addEventListener("click", (e) => {
+  const fit = (e.target as HTMLElement).closest<HTMLElement>("[data-fit]");
+  if (fit) {
+    if (fit.dataset.fit === "selection") fitSelection();
+    else setState({ viewport: fitToView() });
+    closeZoomMenu();
+    return;
+  }
   const target = (e.target as HTMLElement).closest<HTMLElement>("[data-zoom]");
   if (!target) return;
   zoomTo(Number(target.dataset.zoom));
   closeZoomMenu();
+});
+
+zoomBtn.addEventListener("click", () => {
+  // Fitting the selection means something only with one.
+  const fit = zoomMenu.querySelector<HTMLButtonElement>('[data-fit="selection"]');
+  if (fit) fit.disabled = !selectedElements().length;
 });
 
 document.addEventListener("pointerdown", (e) => {
@@ -54,12 +71,28 @@ document.addEventListener("keydown", (e) => {
 
 const svg = byId<HTMLElement>("viewport-svg") as unknown as SVGSVGElement;
 
+/** The artboard as large as it fits in what the toolbars leave free. */
+export function fitToView(): ReturnType<typeof fitArtboardInView> {
+  return fitArtboardInView(40, viewInsets());
+}
+
+/** Shows the selection as large as it fits; nothing happens with nothing selected. */
+export function fitSelection(): void {
+  const box = unionBox(selectedElements());
+  if (box) setState({ viewport: fitBoxInView(box, 40, viewInsets()) });
+}
+
+/** 100%, about the middle of the canvas. */
+export function zoomToActualSize(): void {
+  zoomTo(1);
+}
+
 /**
  * How much of the canvas the floating toolbars cover. On a phone they sit over it rather than
- * beside it, so anything that fits the artboard has to know where the free part actually is;
- * on a wider screen the bars are in the flow, the strips measure zero, and nothing changes.
+ * beside it, so anything that fits the view has to know where the free part actually is; on a
+ * wider screen the bars are in the flow, the strips measure zero, and nothing changes.
  */
-export function fitToView(): ReturnType<typeof fitArtboardInView> {
+function viewInsets(): { top: number; bottom: number } {
   const rect = svg.getBoundingClientRect();
   const strip = (el: HTMLElement, edge: "top" | "bottom"): number => {
     // Not offsetParent: that is null for a fixed element, which is exactly the case here.
@@ -68,10 +101,10 @@ export function fitToView(): ReturnType<typeof fitArtboardInView> {
     const covered = edge === "top" ? r.bottom - rect.top : rect.bottom - r.top;
     return covered <= 0 ? 0 : Math.min(covered + 8, rect.height / 3);
   };
-  return fitArtboardInView(40, {
+  return {
     top: strip(bySelector<HTMLElement>(".top-bar"), "top"),
     bottom: strip(byId("tool-bar"), "bottom"),
-  });
+  };
 }
 
 /** Picking a level zooms about the middle of the canvas, the way the wheel works on the cursor. */

@@ -60,7 +60,7 @@ import { writeSessionView } from "./session.js";
 import { canGroup, canMergeGroups, canUngroup } from "./groups.js";
 import { type EditorState } from "./types.js";
 import { restoreLayout } from "./layout.js";
-import { zoomBtn, zoomMenu, fitToView } from "./zoom.js";
+import { zoomBtn, zoomMenu, fitToView, fitSelection, zoomToActualSize } from "./zoom.js";
 import { doUndo, doRedo } from "./edit-commands.js";
 import { imageList } from "./images-panel.js";
 import { primitiveList } from "./primitives-panel.js";
@@ -392,6 +392,19 @@ window.addEventListener("keydown", (e) => {
       e.preventDefault();
       moveZOrder("forward");
     }
+    return;
+  }
+  // The view, as most editors have it: by code, since Shift turns the digit into a symbol.
+  if (e.shiftKey && e.code === "Digit0") {
+    zoomToActualSize();
+    return;
+  }
+  if (e.shiftKey && e.code === "Digit1") {
+    setState({ viewport: fitToView() });
+    return;
+  }
+  if (e.shiftKey && e.code === "Digit2") {
+    fitSelection();
     return;
   }
   if (key === "s") setTool("select");
