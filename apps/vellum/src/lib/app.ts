@@ -128,6 +128,8 @@ subscribe((state, { pointerOnly }) => {
   }
   // Adding to a selection that has gone empty is starting a new one: the switch lets go.
   if (isSelectMore() && !state.selection.elementIds.length) setSelectMore(false);
+  // A document opened with grid snap on keeps it: the snap to shapes the tab had lets go.
+  if (isAlignSnap() && state.grid.snap) setAlignSnap(false);
   renderAll(state);
   // Where you are looking belongs to the tab, not to the drawing: kept so a refresh returns it.
   if (state.viewport !== lastSavedViewport) {
@@ -250,7 +252,9 @@ byId("bg-swatch").addEventListener("click", () => {
 byId("btn-grid").addEventListener("click", () => {
   setState((s) => ({ ...s, grid: { ...s.grid, visible: !s.grid.visible } }));
 });
+/** Grid snap and snap to shapes are one choice: switching this on switches the other off. */
 function setGridSnap(on: boolean): void {
+  if (on) setAlignSnap(false);
   setState((s) => ({ ...s, grid: { ...s.grid, snap: on } }));
 }
 byId("btn-snap").addEventListener("click", () => setGridSnap(!getState().grid.snap));

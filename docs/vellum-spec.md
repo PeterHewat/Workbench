@@ -56,7 +56,9 @@ chrome.
 - **Snap to shapes** (the switch showing a ring on a shape's corner, or Alt held) checks the
   pointer against every point in the document — anchors, handles, line ends, corners, centres,
   vertices — and snaps each axis to the nearest one that lines up within a few screen pixels. A
-  dashed guide marks the matched x and/or y. It replaces grid snapping while it is on. While a
+  dashed guide marks the matched x and/or y. The two switches are exclusive: turning one on
+  turns the other off, and a document opened with grid snap on turns snap to shapes off. Alt held
+  borrows snap to shapes without changing either switch. While a
   curve handle or a rect's corner-radius handle is dragged, Alt keeps its other meaning instead.
 - A marker shows where a snapped point will land.
 - Nothing snaps the camera, colours or typed numbers. Rotation is free; Shift steps it by 15°,

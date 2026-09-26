@@ -27,8 +27,12 @@ export function isAlignSnap(): boolean {
   return alignSnap;
 }
 
+/**
+ * The two snaps are one choice: a point lands on the grid or on another shape's line, never both,
+ * so switching this on switches grid snap off. Alt held borrows it without touching either switch.
+ */
 export function setAlignSnap(on: boolean): void {
   if (alignSnap === on) return;
   alignSnap = on;
-  setState({});
+  setState((s) => (on && s.grid.snap ? { ...s, grid: { ...s.grid, snap: false } } : { ...s }));
 }
