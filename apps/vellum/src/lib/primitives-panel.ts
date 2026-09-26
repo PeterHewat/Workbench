@@ -10,6 +10,7 @@ import {
   translateElement,
   gradientStops,
   keepsRotation,
+  parseDash,
 } from "./model.js";
 import { escapeAttr } from "./utils.js";
 import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
@@ -151,6 +152,7 @@ function primitiveBodyHtml(el: SceneElement): string {
   }
   rows.push(
     `<div class="field-row"><span>Width</span><input type="number" data-field="strokeWidth" min="0" step="0.5" value="${el.strokeWidth}" /></div>`,
+    `<div class="field-row" title="Dash and gap lengths along the stroke, such as 6 4; empty for a solid line"><span>Dash</span><input type="text" data-field="dash" inputmode="decimal" placeholder="solid" value="${escapeAttr((el.dash ?? []).join(" "))}" aria-label="Dash pattern" /></div>`,
     `<div class="field-row"><span>Line cap</span>${selectHtml("linecap", el.linecap, ["round", "butt", "square"])}</div>`,
     `<div class="field-row"><span>Line join</span>${selectHtml("linejoin", el.linejoin, ["round", "miter", "bevel"])}</div>`
   );
@@ -600,6 +602,7 @@ function updatePrimitiveListValues(state: EditorState): void {
     setField(li, "linejoin", el.linejoin);
     setField(li, "fillType", el.fillType ?? "solid");
     setField(li, "fillRule", el.fillRule ?? "nonzero");
+    setField(li, "dash", (el.dash ?? []).join(" "));
     if (el.type === "rect") {
       setField(li, "rx", Math.round(el.rx || 0));
       setField(li, "ry", Math.round(el.ry ?? el.rx ?? 0));
@@ -933,6 +936,13 @@ primitiveListEl.addEventListener("change", (e) => {
   } else if (field === "closed") {
     setElementClosed(id, input.checked);
     primitiveList.invalidate();
+  } else if (field === "dash") {
+    const dash = parseDash(input.value);
+    input.value = (dash ?? []).join(" ");
+    applyToElement(id, (el) => {
+      if (dash) el.dash = dash;
+      else delete el.dash;
+    });
   } else if (field === "fillRule") {
     applyToElement(id, (el) => {
       if (input.value === "evenodd") el.fillRule = "evenodd";

@@ -46,6 +46,7 @@ const STYLE_KEYS: readonly string[] = [
   "groups",
   "hidden",
   "fillRule",
+  "dash",
   ...Object.keys(DEFAULT_STROKE),
 ];
 
@@ -650,6 +651,7 @@ export function styleAttrs(el: SceneElement): AttrMap {
     if (el.strokeOpacity != null && el.strokeOpacity !== 1) {
       attrs["stroke-opacity"] = el.strokeOpacity;
     }
+    if (el.dash?.length) attrs["stroke-dasharray"] = el.dash.join(" ");
   }
   attrs.fill = effectiveFill(el);
   if (el.fillRule === "evenodd") attrs["fill-rule"] = "evenodd";
@@ -665,6 +667,21 @@ export function styleAttrs(el: SceneElement): AttrMap {
     }
   }
   return attrs;
+}
+
+/**
+ * A dash pattern from what someone typed or a file said: lengths separated by spaces or commas.
+ * Absent for a solid line - nothing to read, "none", a negative length, or nothing but zeros,
+ * which SVG draws solid as well.
+ */
+export function parseDash(raw: string | null | undefined): number[] | undefined {
+  const text = (raw ?? "").trim();
+  if (!text || text === "none") return undefined;
+  const parts = text.split(/[\s,]+/).map(Number);
+  if (parts.some((n) => !Number.isFinite(n) || n < 0) || parts.every((n) => n === 0)) {
+    return undefined;
+  }
+  return parts;
 }
 
 /* ---------- Transforms ---------- */

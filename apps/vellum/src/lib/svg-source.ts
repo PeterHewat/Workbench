@@ -32,6 +32,7 @@ const FIELD_ATTRS: Record<string, string[]> = {
   strokeWidth: ["stroke-width", "stroke"],
   linecap: ["stroke-linecap"],
   linejoin: ["stroke-linejoin"],
+  dash: ["stroke-dasharray"],
   fill: ["fill", "fill-opacity"],
   fillEnabled: ["fill", "fill-opacity"],
   fillType: ["fill"],

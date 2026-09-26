@@ -102,6 +102,8 @@ interface ElementBase extends StyleProps {
    * overlap a hole, as many icon files draw a ring or a letter O.
    */
   fillRule?: "evenodd";
+  /** Dash and gap lengths along the stroke, in artboard units (`stroke-dasharray`). Absent is solid. */
+  dash?: number[];
 }
 
 export interface PathElement extends ElementBase {
@@ -317,6 +319,7 @@ export type StyleCarrier = Partial<StyleProps> & {
   groups?: string[];
   hidden?: boolean;
   fillRule?: "evenodd";
+  dash?: number[];
   /** Import only: the gradient arrived in artboard units and still has to be converted. */
   gradUserSpace?: boolean;
 };

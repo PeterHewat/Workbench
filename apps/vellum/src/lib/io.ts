@@ -14,6 +14,7 @@ import {
   geometryOf,
   styleAttrs,
   hasTwoHandles,
+  parseDash,
 } from "./model.js";
 import { ELEMENT_SELECTOR, escapeAttr, escapeXml, uid } from "./utils.js";
 import { groupsOf, normalizeGroups, pruneGroups } from "./groups.js";
@@ -699,6 +700,8 @@ function styleFromNode(node: Element, svg: Element): StyleCarrier {
   }
   if (inheritedProp(node, "display") === "none") style.hidden = true;
   if (inheritedProp(node, "fill-rule") === "evenodd") style.fillRule = "evenodd";
+  const dash = parseDash(inheritedProp(node, "stroke-dasharray"));
+  if (dash) style.dash = dash;
   const ms = inheritedProp(node, "marker-start");
   const me = inheritedProp(node, "marker-end");
   if (ms) style.markerStart = markerFromRef(svg, ms);

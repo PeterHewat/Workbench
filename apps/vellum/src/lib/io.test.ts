@@ -829,3 +829,24 @@ describe("compound paths", () => {
     expect(el!.type === "path" && el!.points.length).toBe(3);
   });
 });
+
+describe("dash patterns", () => {
+  test("a dash pattern is written, read back, and stable", () => {
+    const line = createLine(0, 0, 100, 0);
+    line.dash = [6, 4];
+    const first = formatExportSvg(doc([line]), true);
+    expect(first).toContain('stroke-dasharray="6 4"');
+    const back = importSvgFile(first, { keepIds: true });
+    expect(back.elements[0]!.dash).toEqual([6, 4]);
+    expect(formatExportSvg({ artboard: back.artboard!, elements: back.elements }, true)).toBe(
+      first
+    );
+  });
+
+  test("none, negatives and all zeros are a solid line", () => {
+    for (const d of ["none", "4 -2", "0 0", ""]) {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><line x1="0" y1="0" x2="9" y2="0" stroke="#000" stroke-dasharray="${d}"/></svg>`;
+      expect(importSvgFile(svg).elements[0]!.dash).toBeUndefined();
+    }
+  });
+});
