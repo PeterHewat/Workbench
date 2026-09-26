@@ -47,6 +47,7 @@ export interface ActionBarHandlers {
   linkHandles: (linked: boolean) => void;
   togglePointCurve: () => void;
   removeHandle: () => void;
+  removePoint: () => void;
   join: () => void;
   editText: (id: string) => void;
   finishPath: () => void;
@@ -105,7 +106,7 @@ function drawingActions(state: EditorState): Action[] {
       key: "close",
       label: "Close the path and finish",
       icon: "icon-close-path",
-      disabled: points < 3,
+      disabled: points < 2,
       run: handlers.closeAndFinishPath,
     },
     {
@@ -236,7 +237,7 @@ function pointActions(el: SceneElement, index: number, handle?: "in" | "out"): A
     label: "Delete this point",
     icon: "icon-trash",
     danger: true,
-    run: handlers.remove,
+    run: handlers.removePoint,
   });
   return out;
 }

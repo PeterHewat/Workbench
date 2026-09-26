@@ -341,6 +341,12 @@ describe("topology", () => {
     expect(setClosed(pl, true).type).toBe("polyline");
   });
 
+  test("a path closes from two points, a lens once it curves", () => {
+    const lens = createPath([anchor(0, 0, null, { x: 5, y: -8 }), anchor(10, 0)], false);
+    const closed = setClosed(lens, true);
+    expect(closed.type === "path" && closed.closed).toBe(true);
+  });
+
   test("splitting an open shape at a middle vertex gives two shapes", () => {
     const pl = createPolyline([
       { x: 0, y: 0 },

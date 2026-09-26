@@ -1069,7 +1069,8 @@ export function isClosedShape(el: SceneElement): boolean {
 export function setClosed(el: SceneElement, closed: boolean): SceneElement {
   if (!canToggleClosed(el) || isClosedShape(el) === closed) return el;
   const n = el.points.length;
-  if (closed && n < 3) return el;
+  // Two points close into a lens once either segment curves; straight, they need a third.
+  if (closed && n < (el.type === "path" ? 2 : 3)) return el;
   if (el.type === "path") {
     el.closed = closed;
     return el;

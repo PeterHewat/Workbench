@@ -95,9 +95,17 @@ export function ungroupSelection(): void {
   setState((s) => ({ ...s, elements: ungroupElements(s.elements, ids) }));
 }
 
-export function deleteSelection(): void {
+/**
+ * Delete. With a curve handle picked it takes that handle and leaves its point; `handleFirst`
+ * false skips that, for the bar's "Delete this point", which says what it deletes.
+ */
+export function deleteSelection(handleFirst = true): void {
   const st = getState();
   const pe = st.selection.pathEdit;
+  if (handleFirst && pe?.handle) {
+    removeSelectedHandle();
+    return;
+  }
   if (pe && pe.kind === "anchor") {
     commit(() => {
       setState((s) => {

@@ -73,6 +73,7 @@ initTextEdit(wrap, () => primitiveList.invalidate());
 initActionBar(byId("action-bar"), {
   duplicate: () => duplicateSelection(),
   remove: () => deleteSelection(),
+  removePoint: () => deleteSelection(false),
   forward: () => moveZOrder("forward"),
   back: () => moveZOrder("back"),
   toggleClosed: (id, closed) => {

@@ -155,7 +155,7 @@ function showDropTarget(elementId: string, index: number | null): void {
 function showPenCloseTarget(path: PathElement, world: Point): void {
   const first = path.points[0]!;
   const closes =
-    path.points.length >= 3 && dist(world, first) <= CLOSE_TOL / getState().viewport.zoom;
+    path.points.length >= 2 && dist(world, first) <= CLOSE_TOL / getState().viewport.zoom;
   const next = closes ? { x: first.x, y: first.y } : null;
   const prev = getState().dropTarget;
   if (prev?.x === next?.x && prev?.y === next?.y) return;
@@ -604,7 +604,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     if (!pathId || path?.type !== "path") return;
     const activeId = pathId;
 
-    if (path.points.length >= 3 && dist(world, path.points[0]!) <= CLOSE_TOL / st.viewport.zoom) {
+    if (path.points.length >= 2 && dist(world, path.points[0]!) <= CLOSE_TOL / st.viewport.zoom) {
       commit(() => {
         setState((s) => {
           const p = findElement(activeId);

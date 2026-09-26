@@ -31,7 +31,10 @@ export async function pasteFromClipboard(): Promise<void> {
 
 export function cutSelection(): string | null {
   const text = copySelectionText();
-  if (text) deleteSelection();
+  if (!text) return null;
+  // What was copied is the shapes, so the shapes go - not a point or handle picked on one.
+  setState((st) => ({ ...st, selection: selectOnly(st.selection.elementIds) }));
+  deleteSelection();
   return text;
 }
 

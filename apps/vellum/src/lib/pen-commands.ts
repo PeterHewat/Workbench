@@ -33,7 +33,7 @@ export function finishPath(): void {
 export function closeAndFinishPath(): void {
   const activeId = getState().drawing?.activePathId;
   const path = findElement(activeId);
-  if (!activeId || path?.type !== "path" || path.points.length < 3) return;
+  if (!activeId || path?.type !== "path" || path.points.length < 2) return;
   pushUndo();
   mutate(() => {
     const p = findElement(activeId);
