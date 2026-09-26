@@ -22,6 +22,7 @@ import {
   groupElements,
   ungroupElements,
   selectionContext,
+  parentSelection,
   drillTarget,
   topLevelBlocks,
 } from "./groups.js";
@@ -395,5 +396,18 @@ describe("grouping inside a group", () => {
       "e:g1",
       "d:",
     ]);
+  });
+});
+
+describe("stepping out of a group", () => {
+  // g1 holds a, and the nested group g2 of b and c; d stands outside.
+  const list = [el("a", "g1"), el("b", "g1", "g2"), el("c", "g1", "g2"), el("d")];
+  const sel = (...x: string[]) => new Set(x);
+
+  test("climbs one level at a time, to nothing past the top", () => {
+    expect(parentSelection(list, sel("b"))).toEqual(["b", "c"]);
+    expect(parentSelection(list, sel("b", "c"))).toEqual(["a", "b", "c"]);
+    expect(parentSelection(list, sel("a", "b", "c"))).toBeNull();
+    expect(parentSelection(list, sel("d"))).toBeNull();
   });
 });

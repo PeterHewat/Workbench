@@ -25,6 +25,7 @@ import {
   setSelectedHandlesLinked,
   toggleSelectedPointCurve,
   removeSelectedHandle,
+  stepOutSelection,
 } from "./selection-commands.js";
 import { pushUndo, canUndo, canRedo } from "./undo.js";
 import { formatExportSvg, importSvgFile } from "./io.js";
@@ -369,8 +370,9 @@ window.addEventListener("keydown", (e) => {
   if (key === "t") setTool("text");
   if (key === "g") setGridSnap(!getState().grid.snap);
   if (key === "escape") {
+    const st = getState();
     if (isTextEditing()) endTextEdit(false);
-    else cancelOperation();
+    else if (st.drawing || st.tool !== "select" || !stepOutSelection()) cancelOperation();
   }
   if (key === "enter" && getState().tool === "pen") {
     pushUndo();

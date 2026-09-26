@@ -421,6 +421,19 @@ export function selectionContext(
 }
 
 /**
+ * One level out from a selection made inside a group: every member of the innermost group that
+ * holds it (what Esc selects). Null for a selection made from the top, which has nowhere to go.
+ */
+export function parentSelection(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>
+): string[] | null {
+  const gid = selectionContext(elements, selected).at(-1);
+  if (!gid) return null;
+  return elements.filter((e) => groupsOf(e).includes(gid)).map((e) => e.id);
+}
+
+/**
  * Runs `fn` on the members of the group that `context` ends in, as if that group were the whole
  * document - `context` taken off the front of their chains - and puts the result back in its
  * place. With an empty context, `fn` sees the document itself.

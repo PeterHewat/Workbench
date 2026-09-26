@@ -29,6 +29,7 @@ import {
   mergeGroups,
   moveSelectionZ,
   normalizeGroups,
+  parentSelection,
   selectionContext,
   ungroupElements,
   type ZDirection,
@@ -84,6 +85,22 @@ export function mergeSelection(): void {
       : [...ids];
     return { ...s, elements, selection: selectOnly(selected) };
   });
+}
+
+/**
+ * Esc on a selection: from a picked point back to its shape, and from inside a group out to the
+ * whole of that group, one level at a time. False when there is no level left to climb.
+ */
+export function stepOutSelection(): boolean {
+  const { selection, elements } = getState();
+  if (selection.pathEdit) {
+    setState({ selection: selectOnly(selection.elementIds) });
+    return true;
+  }
+  const parent = parentSelection(elements, new Set(selection.elementIds));
+  if (!parent) return false;
+  setState({ selection: selectOnly(parent) });
+  return true;
 }
 
 /** Peels off the outermost group of the selection, leaving any nested groups inside it intact. */
