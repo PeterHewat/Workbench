@@ -27,7 +27,7 @@ chrome.
 ┌─────────────────────────────────────────┐
 │  Pointer layer (hover, snap mark)       │  never exported
 ├─────────────────────────────────────────┤
-│  Overlay (handles, selection)           │  never exported
+│  Overlay (guides, handles, selection)   │  never exported
 ├─────────────────────────────────────────┤
 │  Grid                                   │  never exported
 ├─────────────────────────────────────────┤
@@ -55,11 +55,19 @@ chrome.
   top-left of moved shapes. Off by default with a mouse, on with touch.
 - **Snap to shapes** (the switch showing a ring on a shape's corner, or Alt held) checks the
   pointer against every point in the document — anchors, handles, line ends, corners, centres,
-  vertices — and snaps each axis to the nearest one that lines up within a few screen pixels. A
+  vertices, the middle of every segment and every place two shapes cross (`snapFeatures`,
+  worked out once per gesture and without crossings past 600 segments) — and snaps each axis to
+  the nearest one that lines up within a few screen pixels. A
   dashed guide marks the matched x and/or y. The two switches are exclusive: turning one on
   turns the other off, and a document opened with grid snap on turns snap to shapes off. Alt held
   borrows snap to shapes without changing either switch. While a
   curve handle or a rect's corner-radius handle is dragged, Alt keeps its other meaning instead.
+- **Guides** (`guides.ts`): dragged out of the top ruler (horizontal) or the left one
+  (vertical); moved by dragging, and taken away by dropping one back on its ruler or
+  double-clicking it. With either snap switch on, a point lands on a guide in reach before the grid
+  or another shape, and a moved shape lines up its nearest edge or centre with one. Saved with the
+  document (`guides`), never exported. The rulers are hidden on a phone, so guides are made on a
+  wider screen.
 - A marker shows where a snapped point will land.
 - Nothing snaps the camera, colours or typed numbers. Rotation is free; Shift steps it by 15°,
   and touch or pen catches on each 15° within 3° of it (`magnetTurn`).
@@ -72,6 +80,9 @@ chrome.
 - An image has no name of its own: its row shows the file it came from, and clicking that replaces
   the file.
 - Stored in the document as data URLs, so a document carries its images.
+- The colour picker's dropper picks a colour from them (`eyedropper.ts`): the next press on the
+  canvas reads the topmost visible image's own pixel there - not blended with its opacity - and
+  keeps the colour's alpha as it was. It shows only when the document has an image.
 
 ## 5. Shapes and styles
 
@@ -79,7 +90,7 @@ chrome.
 
 | Tool    | Makes                                                            | Notes                                                                              |
 | ------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Pen     | `<path>`, or `<line>` / `<polyline>` / `<polygon>` when straight | One tool for every freeform shape (§6).                                            |
+| Pen     | `<path>`, or `<line>` / `<polyline>` / `<polygon>` when straight | One tool for every freeform shape (§6). A path may hold several outlines (§5.4).   |
 | Rect    | `<rect>`                                                         | Shift for a square. Corner radius `rx`/`ry`.                                       |
 | Ellipse | `<ellipse>`, or `<circle>` when its radii are equal              | Shift for a circle. There is no circle tool.                                       |
 | Text    | `<text>`                                                         | Click to place, typed in place on the canvas; size, font and alignment in its row. |
@@ -100,6 +111,9 @@ Every element carries a complete style, edited in its row of the Primitives list
   with any number of stops (colour, opacity, offset). The first stop is also the solid colour.
   Where a gradient runs is two handles on the shape, stored as fractions of its bounding box so it
   follows the shape.
+- A dash pattern (`dash`, exported as `stroke-dasharray`): dash and gap lengths in artboard units.
+  Empty, `none`, negative or all-zero is a solid line.
+- The fill rule (`fillRule`, exported as `fill-rule`): non-zero, the default, or even-odd.
 - Line-end markers (arrow, dot, square, diamond) on lines, polylines and paths.
 - Opacities of 1 are not exported. Markers and gradients go into `<defs>`, with ids derived from
   the element id.
@@ -112,6 +126,24 @@ The eye on a row hides a shape: it is not drawn, cannot be clicked, marquee-sele
 Ctrl+A or snapped to, and leaves the selection. It is still in the document and exported as
 `display="none"`, because the SVG panel re-imports its own output; `display="none"` on a shape or
 an ancestor imports as hidden.
+
+### 5.4 Paths of several outlines
+
+A path holds one outline or several: `points` has every outline's anchors one after another, and
+`subpaths` lists where each outline after the first starts. Every outline of a path is closed or
+open with it (`closed`). This is how a shape with a hole is drawn - what combining shapes makes,
+and what icons with a letter O or a ring are made of. Each outline exports as a subpath of its own
+(`M … Z M … Z`), and every `M` in an imported `d` starts one; a `d` mixing open and closed
+outlines imports as one path of each. Point editing, inserting and deleting points keep to a
+point's own outline, and an outline down to one point goes. Splitting and joining are for
+single-outline paths.
+
+### 5.5 Locked shapes
+
+A locked shape (`locked`) is out of reach on the canvas: it is not clicked, box-selected, selected
+with Ctrl+A or dragged along with the rest, and shows no handles. It is still snapped to, still
+selectable from its row (which shows a padlock), and the bar then offers to unlock it. The lock
+lives in the document, not in the exported SVG; the SVG panel's re-import keeps it by id.
 
 ## 6. The pen and point editing
 
@@ -152,8 +184,13 @@ an ancestor imports as hidden.
 - **Shift+click** (or the bar's **add to the selection** switch) toggles shapes in and out.
 - **Drag on empty canvas:** a marquee (touch: hold still first, as one finger otherwise pans).
 - **Ctrl+A** selects every visible shape.
-- **Click a point or handle** to pick it: the selection narrows to its shape, and the bar moves
-  beside the point and offers only what acts on it.
+- **Click a point or handle** to pick it: the bar moves beside the point and offers only what
+  acts on it. The shapes selected with it stay selected, so their points can be added.
+- **Several points** (`points.ts`): with a point picked, Shift+click (or the add switch) adds or
+  removes points of the selected shapes, and a marquee picks the points inside it (with no point
+  inside, it selects shapes as usual). Dragging one of them, or the arrow keys, moves them all;
+  Delete removes them; the bar makes them all curves or all corners, or aligns them. A plain click
+  on one of them picks it alone again.
 - A multi-selection shows each member's handles until the total passes a budget, then boxes only.
 
 ## 8. Transforming
@@ -177,6 +214,19 @@ an ancestor imports as hidden.
   coordinates (`selection-transform.ts`) — so the angle is a turn by so many degrees, a rotated
   rect or ellipse stretched off its own axes becomes a path, a circle stretched unevenly an
   ellipse, and stroke widths do not scale.
+
+- **Align and distribute** (`align.ts`): the six alignments, and even spacing across or down
+  for three or more. What moves is the selection's blocks - a group selected whole moves as one -
+  against the box they share, or, for a single block, against the artboard. Picked points align
+  and spread the same way.
+- **Combine** (`boolean.ts`): union, subtract (the others from the backmost), intersect and
+  exclude, for two or more paths, polygons, polylines, rects and ellipses. Curves stay curves:
+  every segment is cut where another meets it, each piece is kept when the result lies on one
+  side of it only - found by testing a point just either side against every operand - turned so
+  the result is on its left, and chained into outlines; pieces of one curve are joined again and
+  straight pieces in line merged. Shared edges and identical shapes need no special case. The
+  result is one path (a polygon when it is straight and single), with the non-zero rule, in the
+  backmost shape's place, name and style. Nothing left is reported and changes nothing.
 
 ## 9. Groups
 
@@ -205,7 +255,9 @@ fold, and which are open is remembered for the tab.
 - **Documents:** one row per stored document (§12).
 - **Reference images:** one row per image (§4).
 - **SVG:** artboard size, grid visibility and step, background, and the live SVG source, with
-  import, export and copy buttons. The source is editable: about half a second after typing stops,
+  import, export and copy buttons, and **Export PNG** (`png-export.ts`): a width from presets
+  (32-1024) or typed (up to 8192), the height in proportion, drawn from the exported SVG so it
+  shows exactly what that does. Named `Name-<width>.png`. The source is editable: about half a second after typing stops,
   or on blur, it is re-imported with its ids kept (`importSvgFile(text, { keepIds: true })`);
   invalid markup shows an error and changes nothing. Shapes whose markup did not change keep their
   exact geometry. Putting the cursor in a shape's line selects it; selected shapes' lines are
@@ -229,14 +281,16 @@ chosen, a checkbox otherwise), name, preview, eye, ▲ ▼, delete.
   and snap switches move to a bottom bar under the thumb. An open panel covers the canvas, so
   opening one closes the other, and the rulers and cursor readout are hidden. The theme switch
   moves into the Help panel.
-- **Zoom** is one control: a button reading the level that opens a list of presets (25%–800%);
-  wheel and pinch go from 10% to 1600%.
+- **Zoom** is one control: a button reading the level that opens a list - fit the artboard, fit
+  the selection, then presets (25%–800%); wheel and pinch go from 10% to 1600%.
 - **Touch:** handles have ~44px targets (shrunk where points crowd), a drag starts only past a
   threshold (10px touch, 6px pen, 4px mouse) so a tap never nudges or spends an undo step, one
   finger pans empty canvas and two pinch, pan and rotate. Nothing needs a modifier or a keyboard:
   the bar beside the selection carries delete, duplicate, z-order, close/open, group, merge,
-  ungroup, split and join, an **add to the selection** switch and **select everything**; with
-  nothing selected on a touch screen it offers select everything and paste. These switches are
+  ungroup, split, join, lock, an **add to the selection** switch and **select everything**, and
+  **Align** and **Combine**, each a button opening a page of its own with a way back; with nothing
+  selected on a touch screen it offers select everything and paste. Up to seven buttons sit in one
+  row, as many as fit across a 360px phone; more split into even rows, eight as two of four. These switches are
   session state (`modes.ts`), so undo never flips them.
 - **Help** (`?`) explains everything for the pointer it detects, switchable between mouse and
   touch, and carries an About section.
@@ -266,11 +320,12 @@ chosen, a checkbox otherwise), name, preview, eye, ▲ ▼, delete.
 `ProjectFile`, versioned by `PROJECT_VERSION` (`types.ts`). Every released version stays readable:
 `readProject` (`io.ts`) brings an older document up to date step by step, and refuses one from a
 newer Vellum with a message to reload. The database has its own `DB_VERSION` (`storage.ts`) for
-its stores.
+its stores. Version 2 added paths of several outlines, the fill rule, dash patterns, locked shapes
+and guides, all optional; a version 1 document reads as it was.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "artboard": { "width": 512, "height": 512 },
   "background": { "color": "#ffffff", "opacity": 0 },
   "grid": { "step": 16, "visible": true, "snap": false },
@@ -290,10 +345,12 @@ its stores.
     }
   ],
   "elements": [
-    /* in z-order: type, id, name, geometry, full style, optional groups/rotation/hidden */
+    /* in z-order: type, id, name, geometry, full style, and optional groups, rotation,
+       hidden, locked, fillRule, dash, and a path's subpaths */
   ],
   "groupNames": { "group-57cc1c37": "top view" },
   "groupHues": { "group-57cc1c37": 210 },
+  "guides": { "x": [256], "y": [64, 448] },
   "viewport": { "panX": 0, "panY": 0, "zoom": 1 },
   "tool": "select",
   "finalOnly": false
@@ -321,7 +378,8 @@ Documents move between browsers as files (`document-files.ts`):
   grid, no editor metadata. Pretty-printed, as the SVG panel shows it. Named `Name.svg`.
 - **Import** reads `path`, `line`, `polyline`, `polygon`, `rect`, `circle`, `ellipse` and `text`,
   with nested `<g>`. A path's `Q`, `T`, `S` and `A` commands and implicit repeats are read, arcs
-  converted to cubics (`arc.ts`). A `transform` on an element or a `<g>` is baked into the
+  converted to cubics (`arc.ts`), and each `M` starts an outline (§5.4). `fill-rule` and
+  `stroke-dasharray` are read. A `transform` on an element or a `<g>` is baked into the
   coordinates (`transform.ts`); a shape keeps its type when the transform is one it can express
   (a rotation on a rect becomes its stored angle). Fill defaults to off when a shape has no `fill`
   at all. Images, patterns, clip paths, masks, filters and stylesheets are skipped.
@@ -356,10 +414,11 @@ Documents move between browsers as files (`document-files.ts`):
 | Ctrl+[ / Ctrl+]       | Send backward / bring forward                                      |
 | Ctrl+Z / Ctrl+Y       | Undo / redo (Ctrl+Shift+Z also redoes)                             |
 | Ctrl+S / Ctrl+Shift+S | Save now / export SVG                                              |
+| Shift+0 / 1 / 2       | Zoom to 100% / fit the artboard / fit the selection                |
 
 ## 14. Not supported
 
 - Multi-line text, patterns, clip paths and masks.
-- Selecting several points at once; align and distribute.
 - A transform stored on a group (see §8 for what is done instead).
+- Creating guides on a phone, where the rulers are hidden.
 - Dragging gradient stops along the gradient on the canvas; they are typed as percentages.
