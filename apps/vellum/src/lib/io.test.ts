@@ -850,3 +850,13 @@ describe("dash patterns", () => {
     }
   });
 });
+
+describe("guides", () => {
+  test("are saved with the document only when there are any, and never exported", () => {
+    const state = createInitialState();
+    expect(serializeProject(state)).not.toHaveProperty("guides");
+    const withGuides = { ...state, guides: { x: [100], y: [50] } };
+    expect(serializeProject(withGuides).guides).toEqual({ x: [100], y: [50] });
+    expect(formatExportSvg(withGuides, true)).not.toContain("100");
+  });
+});

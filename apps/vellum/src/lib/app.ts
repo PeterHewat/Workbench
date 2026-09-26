@@ -1,7 +1,7 @@
 import { getState, setState, subscribe, selectOnly } from "./state.js";
 import { initViewport } from "./viewport.js";
 import { initRender, renderAll, renderPointer } from "./render.js";
-import { bindInteraction, cancelOperation } from "./interaction.js";
+import { bindInteraction, bindRulerGuides, cancelOperation } from "./interaction.js";
 import {
   setTool,
   finishPath,
@@ -124,6 +124,7 @@ setColorSampler({ available: canPickFromImages, pick: () => pickFromImages(wrap,
 setTouchFinishPathHandler(() => finishPath());
 bindTouch(svg);
 
+bindRulerGuides(byId<HTMLCanvasElement>("ruler-top"), byId<HTMLCanvasElement>("ruler-left"));
 initRulers({
   topCanvas: byId<HTMLCanvasElement>("ruler-top"),
   leftCanvas: byId<HTMLCanvasElement>("ruler-left"),

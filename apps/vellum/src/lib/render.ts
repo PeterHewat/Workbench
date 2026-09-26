@@ -798,10 +798,31 @@ function showsAnchors(sel: readonly SceneElement[]): boolean {
   return true;
 }
 
+/** The guides, each a thin line over the whole canvas with a wider target to grab it by. */
+function renderGuides(state: EditorState): void {
+  const line = (axis: "x" | "y", at: number, index: number | null) => {
+    const attrs =
+      axis === "x" ? { x1: at, y1: -1e5, x2: at, y2: 1e5 } : { x1: -1e5, y1: at, x2: 1e5, y2: at };
+    add(els.overlay, "line", { class: `guide${index == null ? " guide-draft" : ""}`, ...attrs });
+    if (index == null) return;
+    add(els.overlay, "line", {
+      class: `guide-hit guide-hit-${axis}`,
+      ...attrs,
+      "data-guide-axis": axis,
+      "data-guide-index": index,
+    });
+  };
+  state.guides.x.forEach((at, i) => line("x", at, i));
+  state.guides.y.forEach((at, i) => line("y", at, i));
+  const draft = state.drawing?.guide;
+  if (draft) line(draft.axis, draft.at, null);
+}
+
 function renderOverlay(state: EditorState): void {
   clearChildren(els.overlay);
   zoom = state.viewport.zoom;
   if (state.finalOnly) return;
+  renderGuides(state);
 
   const activePathId = state.drawing?.activePathId ?? null;
   if (activePathId) {

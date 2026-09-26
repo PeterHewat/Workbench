@@ -274,6 +274,7 @@ export function serializeProject(state: EditorState): ProjectFile {
     elements: state.elements,
     ...namesInUse(state.elements, state.groupNames),
     ...huesInUse(state.elements, state.groupHues),
+    ...(state.guides.x.length || state.guides.y.length ? { guides: state.guides } : {}),
     viewport: state.viewport,
     tool: state.tool,
     finalOnly: state.finalOnly,
@@ -340,8 +341,9 @@ export function readProject(raw: unknown): ProjectFile {
   }
   if (!isInert(json)) throw new Error("This document is damaged and cannot be opened.");
   let doc = json as unknown as ProjectFile;
-  // 1 -> 2: what version 2 added is all optional - paths of several outlines (`subpaths`) and
-  // the fill rule. A version 1 document means the same with none of it, so only its number moves.
+  // 1 -> 2: what version 2 added is all optional - paths of several outlines (`subpaths`), the
+  // fill rule, dash patterns, locked shapes and guides. A version 1 document means the same with
+  // none of them, so only its number moves.
   if ((version as number) === 1) doc = { ...doc, version: 2 };
   return doc;
 }
@@ -358,6 +360,10 @@ export function loadProject(raw: ProjectFile): void {
     elements: json.elements || [],
     groupNames: json.groupNames ?? {},
     groupHues: json.groupHues ?? {},
+    guides: {
+      x: (json.guides?.x ?? []).filter(Number.isFinite),
+      y: (json.guides?.y ?? []).filter(Number.isFinite),
+    },
     viewport: json.viewport || base.viewport,
     tool: json.tool || "select",
     finalOnly: json.finalOnly || false,

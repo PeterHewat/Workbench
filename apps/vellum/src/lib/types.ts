@@ -231,6 +231,11 @@ export interface Selection {
   points?: PointRef[];
 }
 
+export interface Guides {
+  x: number[];
+  y: number[];
+}
+
 export interface Viewport {
   panX: number;
   panY: number;
@@ -278,6 +283,8 @@ export interface Drawing {
   marquee?: Marquee;
   shapeStart?: Point;
   rotateHandle?: RotateHandle;
+  /** A guide being dragged out of a ruler, not placed yet. */
+  guide?: { axis: "x" | "y"; at: number };
 }
 
 export interface EditorState {
@@ -295,6 +302,11 @@ export interface EditorState {
    * so it does not change as groups move. Editor-only: never exported to the SVG.
    */
   groupHues: Record<string, number>;
+  /**
+   * Guides dragged out of the rulers: vertical lines at each `x`, horizontal ones at each `y`,
+   * in artboard units. Editor-only, like the grid: saved with the document, never exported.
+   */
+  guides: Guides;
   images: ReferenceImage[];
   viewport: Viewport;
   tool: ToolName;
@@ -351,6 +363,8 @@ export interface ProjectFile {
   groupNames?: Record<string, string>;
   /** Absent when there are no groups. */
   groupHues?: Record<string, number>;
+  /** Absent when there are none. */
+  guides?: Guides;
   viewport: Viewport;
   tool: ToolName;
   finalOnly: boolean;

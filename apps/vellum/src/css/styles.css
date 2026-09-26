@@ -1289,7 +1289,15 @@ body {
 .ruler {
   position: absolute;
   z-index: 5;
-  pointer-events: none;
+}
+
+/* Guides come out of the rulers: the top one gives a horizontal guide, the left a vertical one. */
+.ruler-top {
+  cursor: ns-resize;
+}
+
+.ruler-left {
+  cursor: ew-resize;
 }
 
 .ruler-top {
@@ -2234,4 +2242,36 @@ body {
 
 #png-error:empty {
   display: none;
+}
+
+/* Guides: a thin line across the canvas, with a wider target to drag it by. */
+.guide {
+  stroke: #1fb6d1;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.guide-draft {
+  stroke-dasharray: 4 3;
+}
+
+.guide-hit {
+  stroke: transparent;
+  stroke-width: 9px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: stroke;
+}
+
+.guide-hit-x {
+  cursor: ew-resize;
+}
+
+.guide-hit-y {
+  cursor: ns-resize;
+}
+
+/* Only the select tool picks guides up: while drawing, a press on one draws. */
+.canvas-wrap:not(.mode-select) .guide-hit {
+  pointer-events: none;
 }

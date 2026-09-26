@@ -30,6 +30,7 @@ export function createInitialState(): EditorState {
     elements: [],
     groupNames: {},
     groupHues: {},
+    guides: { x: [], y: [] },
     images: [],
     viewport: { panX: 40, panY: 40, zoom: 1 },
     tool: "select",

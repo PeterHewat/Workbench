@@ -39,6 +39,7 @@ import { endDropTarget, expandGroups, mergeDroppedEnd } from "./selection-comman
 import { applyResize } from "./resize.js";
 import { boxCorners, rotateAll, scaleAllByCorner, unionBox } from "./selection-transform.js";
 import { SELECTION_HANDLE_ID } from "./render.js";
+import { boxToGuides, movedGuide, nearestGuide, withGuide, type GuideAxis } from "./guides.js";
 import {
   byShape,
   isPicked,
@@ -93,6 +94,7 @@ type DragState =
       active: boolean;
     }
   | { type: "shape-drag"; tool: ShapeTool; start: Point; current: Point }
+  | { type: "guide"; axis: GuideAxis; index: number }
   | {
       /** Several picked points, moved together. */
       type: "points";
@@ -196,6 +198,49 @@ function showPenCloseTarget(path: PathElement, world: Point): void {
   const prev = getState().dropTarget;
   if (prev?.x === next?.x && prev?.y === next?.y) return;
   setState({ dropTarget: next });
+}
+
+/** Whether a press or release is over the ruler a guide on `axis` comes out of. */
+function overRuler(axis: GuideAxis, e: PointerEvent): boolean {
+  const ruler = document.getElementById(axis === "y" ? "ruler-top" : "ruler-left");
+  const r = ruler?.getBoundingClientRect();
+  if (!r || !r.width || !r.height) return false;
+  return axis === "y" ? e.clientY <= r.bottom : e.clientX <= r.right;
+}
+
+/**
+ * Dragging a new guide out of a ruler: the top ruler gives a horizontal one, the left a vertical
+ * one. It follows the pointer as a dashed line and is placed where it is let go - unless that is
+ * back on the ruler, which is how a guide pulled out by mistake goes away again.
+ */
+export function bindRulerGuides(top: HTMLCanvasElement, left: HTMLCanvasElement): void {
+  const start = (axis: GuideAxis, canvas: HTMLCanvasElement) => (e: PointerEvent) => {
+    const st = getState();
+    if (e.button !== 0 || st.drawing?.activePathId) return;
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    const place = (ev: PointerEvent) => {
+      const s = getState();
+      const raw = screenToWorld(ev.clientX, ev.clientY)[axis];
+      const step = Math.max(1, s.grid.step);
+      const at = s.grid.snap ? Math.round(raw / step) * step : raw;
+      setState({ drawing: { guide: { axis, at } } });
+    };
+    const up = (ev: PointerEvent) => {
+      canvas.removeEventListener("pointermove", place);
+      canvas.removeEventListener("pointerup", up);
+      canvas.removeEventListener("pointercancel", up);
+      const draft = getState().drawing?.guide;
+      clearDrawing();
+      if (!draft || ev.type === "pointercancel" || overRuler(axis, ev)) return;
+      commit(() => setState((s) => ({ ...s, guides: withGuide(s.guides, axis, draft.at) })));
+    };
+    canvas.addEventListener("pointermove", place);
+    canvas.addEventListener("pointerup", up);
+    canvas.addEventListener("pointercancel", up);
+  };
+  top.addEventListener("pointerdown", start("y", top));
+  left.addEventListener("pointerdown", start("x", left));
 }
 
 export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
@@ -353,6 +398,14 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       x = Math.round(x / step) * step;
       y = Math.round(y / step) * step;
     }
+    // A guide in reach wins over the grid and over other shapes: it was put there to be used.
+    if ((alignOn || snapOn) && drag?.type !== "guide") {
+      const tol = ALIGN_TOL_PX / s.viewport.zoom;
+      const gx = nearestGuide(w.x, s.guides.x, tol);
+      const gy = nearestGuide(w.y, s.guides.y, tol);
+      if (gx != null) x = gx;
+      if (gy != null) y = gy;
+    }
     setState({
       cursor: { x: p.x, y: p.y, snapX: x, snapY: y, snapActive: alignOn || snapOn },
       align: { x: guideX, y: guideY },
@@ -401,6 +454,20 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
 
     if (st.spacePan) {
       startPan(e);
+      return;
+    }
+
+    // A guide, with the select tool: dragged to move it, dropped on its ruler or double-clicked
+    // to take it away.
+    const guideHit = (e.target as Element).closest?.("[data-guide-axis]");
+    if (guideHit && st.tool === "select") {
+      const axis = guideHit.getAttribute("data-guide-axis") as GuideAxis;
+      const index = Number(guideHit.getAttribute("data-guide-index"));
+      if (isDouble) {
+        commit(() => setState((s) => ({ ...s, guides: movedGuide(s.guides, axis, index, null) })));
+        return;
+      }
+      arm(e, { type: "guide", axis, index });
       return;
     }
 
@@ -825,6 +892,19 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           dy = Math.round((first.y + dy) / step) * step - first.y;
         }
       }
+      // With snapping on, an edge or the centre of what is dragged lines up with a guide.
+      if (st.grid.snap || e.altKey || isAlignSnap()) {
+        const box = unionBox(Object.values(d.bases));
+        if (box) {
+          const fit = boxToGuides(
+            { ...box, x: box.x + dx, y: box.y + dy },
+            st.guides,
+            ALIGN_TOL_PX / st.viewport.zoom
+          );
+          dx += fit.dx;
+          dy += fit.dy;
+        }
+      }
       mutate(() => {
         for (const id of d.ids) {
           const el = findElement(id);
@@ -874,6 +954,16 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         }),
       });
       showDropTarget(d.pathId, d.kind === "anchor" ? d.index : null);
+      return;
+    }
+
+    if (drag?.type === "guide") {
+      const d = drag;
+      const raw = screenToWorld(e.clientX, e.clientY)[d.axis];
+      const at = st.grid.snap
+        ? Math.round(raw / Math.max(1, st.grid.step)) * Math.max(1, st.grid.step)
+        : raw;
+      setState((s) => ({ ...s, guides: movedGuide(s.guides, d.axis, d.index, at) }));
       return;
     }
 
@@ -1059,6 +1149,15 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       drag = null;
       const el = idx != null ? findElement(id) : undefined;
       if (el && idx != null) mergeDroppedEnd(el, idx, MERGE_REACH / st.viewport.zoom);
+      return;
+    }
+
+    if (drag?.type === "guide") {
+      const d = drag;
+      drag = null;
+      if (overRuler(d.axis, e)) {
+        setState((s) => ({ ...s, guides: movedGuide(s.guides, d.axis, d.index, null) }));
+      }
       return;
     }
 
