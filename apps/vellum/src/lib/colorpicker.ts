@@ -29,6 +29,19 @@ interface PickerEls {
   alphaThumb: HTMLElement;
   hex: HTMLInputElement;
   alphaNum: HTMLInputElement;
+  dropper: HTMLButtonElement;
+}
+
+/** Where the dropper takes a colour from: the reference images, wired in by the app. */
+export interface ColorSampler {
+  available: () => boolean;
+  pick: () => Promise<string | null>;
+}
+
+let sampler: ColorSampler | null = null;
+
+export function setColorSampler(s: ColorSampler): void {
+  sampler = s;
 }
 
 let root: HTMLDivElement | null = null;
@@ -99,6 +112,9 @@ function build(): HTMLDivElement {
     <div class="cp-slider cp-hue"><div class="cp-thumb"></div></div>
     <div class="cp-slider cp-alpha"><div class="cp-alpha-fill"></div><div class="cp-thumb"></div></div>
     <div class="cp-row">
+      <button type="button" class="cp-dropper" title="Pick a colour from the reference image" aria-label="Pick a colour from the reference image">
+        <svg class="ui-icon" aria-hidden="true"><use href="#icon-dropper" /></svg>
+      </button>
       <input type="text" class="cp-hex" maxlength="7" spellcheck="false" />
       <input type="number" class="cp-alpha-num" min="0" max="100" step="1" />
       <span class="cp-pct">%</span>
@@ -115,7 +131,26 @@ function build(): HTMLDivElement {
     alphaThumb: q(el, ".cp-alpha .cp-thumb"),
     hex: q<HTMLInputElement>(el, ".cp-hex"),
     alphaNum: q<HTMLInputElement>(el, ".cp-alpha-num"),
+    dropper: q<HTMLButtonElement>(el, ".cp-dropper"),
   };
+
+  // The popover steps aside while the pick is on, so the image under it can be reached, and
+  // comes back with the colour picked - its opacity is left as it was.
+  els.dropper.addEventListener("click", () => {
+    const picking = current;
+    if (!picking || !sampler) return;
+    el.classList.add("hidden");
+    void sampler.pick().then((hex) => {
+      if (current !== picking) return;
+      el.classList.remove("hidden");
+      if (!hex) return;
+      const hsv = rgbToHsv(hexToRgb(hex));
+      picking.h = hsv.s && hsv.v ? hsv.h : picking.h;
+      picking.s = hsv.s;
+      picking.v = hsv.v;
+      emit();
+    });
+  });
 
   // Clicks inside the popover must not reach the document-level "close menus" handler.
   el.addEventListener("click", (e) => e.stopPropagation());
@@ -262,6 +297,7 @@ export function openColorPicker({
     onClose,
   };
   root.classList.remove("hidden");
+  els.dropper.hidden = !sampler?.available();
   sync();
   position(anchor);
 }

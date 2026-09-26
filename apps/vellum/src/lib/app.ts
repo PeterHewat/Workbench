@@ -36,7 +36,13 @@ import { formatExportSvg, importSvgFile } from "./io.js";
 import { canJoin } from "./model.js";
 import { THEME_EVENT, bindThemeToggle, byId, copyText, downloadText } from "@workbench/ui";
 import { bindTouch, setTouchFinishPathHandler } from "./touch.js";
-import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
+import {
+  openColorPicker,
+  closeColorPicker,
+  isColorPickerOpenFor,
+  setColorSampler,
+} from "./colorpicker.js";
+import { canPickFromImages, pickFromImages } from "./eyedropper.js";
 import { initRulers, renderRulers } from "./rulers.js";
 import { initActionBar, syncActionBar } from "./actionbar.js";
 import {
@@ -110,6 +116,7 @@ initActionBar(byId("action-bar"), {
   paste: () => void pasteFromClipboard(),
 });
 bindInteraction(svg, wrap);
+setColorSampler({ available: canPickFromImages, pick: () => pickFromImages(wrap, svg) });
 setTouchFinishPathHandler(() => finishPath());
 bindTouch(svg);
 

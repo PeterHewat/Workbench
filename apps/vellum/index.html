@@ -795,6 +795,17 @@
             stroke-width="1.5"
           />
         </symbol>
+        <!-- An eyedropper: pick a colour from the reference image. -->
+        <symbol id="icon-dropper" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M14 6l4 4M16.5 3.5a2.1 2.1 0 013 3L18 8l-2-2 .5-2.5zM15 7l-9 9-1.5 4.5L9 19l9-9"
+          />
+        </symbol>
         <!-- Back from a page of the bar, such as Combine's. -->
         <symbol id="icon-back" viewBox="0 0 24 24">
           <path
@@ -1427,11 +1438,15 @@
             <li>
               <b>Stroke / Fill</b> — <span data-help="mouse">click</span
               ><span data-help="touch">tap</span> a swatch for the colour picker (hue, saturation,
-              brightness, hex and alpha). The Fill checkbox turns fill on or off.
+              brightness, hex and alpha). With a reference image in the document, its dropper picks
+              a colour from the image: press it, then <span data-help="mouse">click</span
+              ><span data-help="touch">tap</span> the image where the colour is. The Fill checkbox
+              turns fill on or off.
             </li>
             <li>
-              <b>Fill type</b> — Solid, Linear Gradient (with Angle) or Radial Gradient; both
-              gradient colors have their own alpha.
+              <b>Fill type</b> — Solid, Linear Gradient or Radial Gradient. A gradient has as many
+              stops as you add, each with its own colour, alpha and position, and two handles on the
+              shape set where it runs.
             </li>
             <li>
               <b>Width, Line cap, Line join</b> — stroke geometry. Width 0 exports as no stroke.

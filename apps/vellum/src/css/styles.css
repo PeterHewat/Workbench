@@ -1081,6 +1081,35 @@ body {
   font-size: 12px;
 }
 
+.cp-dropper {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.cp-dropper:hover {
+  border-color: var(--accent);
+}
+
+.cp-dropper[hidden] {
+  display: none;
+}
+
+/* While a colour is being picked from the reference image, the canvas takes aim. */
+#canvas-wrap.mode-pick,
+#canvas-wrap.mode-pick * {
+  cursor: crosshair !important;
+}
+
 .cp-hex {
   flex: 1;
   min-width: 0;
