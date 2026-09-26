@@ -1,0 +1,38 @@
+name: Bug
+description: A tool does the wrong thing.
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: app
+    attributes:
+      label: Where
+      options:
+        - Vellum
+        - The index page
+        - The site as a whole
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did
+      description: The steps that lead to it. A file that shows it (an SVG, a `.vellum.json`) helps most.
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: Firefox 150 on Windows, mouse
