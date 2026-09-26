@@ -305,7 +305,7 @@ chosen, a checkbox otherwise), name, preview, eye, ▲ ▼, delete.
 ### 12.1 Storage
 
 - Documents autosave to **IndexedDB** about a second after a change, never mid-drag; Ctrl+S saves
-  at once. Two stores: `meta` (id, name, order, updated) and `data` (the document, images
+  at once. Two stores: `meta` (id, name, order, updated, tags) and `data` (the document, images
   included). A dot in the Documents header shows a save is pending.
 - The list is in the order the user sets. A new, duplicated or imported document goes to the top,
   and saving moves nothing.
@@ -313,6 +313,15 @@ chosen, a checkbox otherwise), name, preview, eye, ▲ ▼, delete.
   empty) and focuses its name. Click the open document's name to rename it; click anywhere else on
   another row to open it. Row actions: duplicate, export, ▲ ▼, delete (asked first unless the
   document is empty). Deleting the open document opens the first remaining one, or a new one.
+- **Tags and details** (`doc-list.ts`): a row's ▶ opens its tags - typed with commas, trimmed,
+  without repeats (`Icons` and `icons` are one), at most 20 of 32 characters - and its stats:
+  shapes, groups, points (path anchors, polyline vertices, line ends), reference images, size and
+  when it was saved. Tags live in `meta`, so the list and the search never load a document;
+  stats of a closed document load it once and are kept until it changes. Which rows are open
+  belongs to the session.
+- **Search**: the magnifying glass in the header shows a field; a document stays in the list when
+  every word typed is found, ignoring case, in its name or one of its tags. ▲ ▼ are off while the
+  list is filtered. Esc clears the field, and a second Esc closes it.
 - The last open document reopens at start. The first start, with an empty library, creates
   **Vellum Workbench** from `public/art.svg` (512 × 320, Vellum's own export, also the index
   page's card art); a `vellum.welcomed` flag keeps it from coming back once deleted.
@@ -365,11 +374,13 @@ its stores.
 Documents move between browsers as files (`document-files.ts`):
 
 - A row's export writes `Name.vellum.json`:
-  `{ "tag": "vellum/document", "version": 1, "exported", "name", "data" }`.
+  `{ "tag": "vellum/document", "version": 1, "exported", "name", "tags"?, "data" }`,
+  with `tags` only when there are some.
 - The header's export writes every document, in list order, as one library file:
-  `{ "tag": "vellum/library", "version": 1, "exported", "documents": [{ "name", "data" }] }`.
+  `{ "tag": "vellum/library", "version": 1, "exported", "documents": [{ "name", "tags"?, "data" }] }`.
 - Import takes any number of files of either kind. Every document in them is read by `readProject`
-  and added at the top of the list, in the order the file gives, with a fresh id and a free name:
+  and added at the top of the list, in the order the file gives, with a fresh id, a free name and
+  its tags, cleaned as if typed:
   an import never replaces or merges with an existing document. Files that cannot be read are
   listed; the rest still import.
 

@@ -13,7 +13,7 @@ const data = serializeProject(createInitialState());
 
 describe("document files", () => {
   test("a single document reads back as one", () => {
-    const text = JSON.stringify(documentFile("Logo", data));
+    const text = JSON.stringify(documentFile({ name: "Logo", data }));
     expect(readDocumentFile(text)).toEqual([{ name: "Logo", data }]);
   });
 
@@ -27,8 +27,16 @@ describe("document files", () => {
     expect(readDocumentFile(text).map((d) => d.name)).toEqual(["One", "Two"]);
   });
 
+  test("tags travel with a document, cleaned; none are written when there are none", () => {
+    const text = JSON.stringify(documentFile({ name: "Logo", tags: ["icons", "Icons "], data }));
+    expect(readDocumentFile(text)[0]!.tags).toEqual(["icons"]);
+    expect(documentFile({ name: "Logo", tags: [], data })).not.toHaveProperty("tags");
+    const lib = JSON.stringify(libraryFile([{ name: "One", tags: ["a"], data }]));
+    expect(readDocumentFile(lib)[0]!.tags).toEqual(["a"]);
+  });
+
   test("a document without a name is still imported, as Untitled", () => {
-    const text = JSON.stringify({ ...documentFile("x", data), name: " " });
+    const text = JSON.stringify({ ...documentFile({ name: "x", data }), name: " " });
     expect(readDocumentFile(text)[0]!.name).toBe("Untitled");
   });
 
@@ -36,7 +44,7 @@ describe("document files", () => {
     expect(() => readDocumentFile("not json")).toThrow("not valid JSON");
     expect(() => readDocumentFile(JSON.stringify({ tag: "other" }))).toThrow("not a Vellum");
     const newer = JSON.stringify(
-      documentFile("x", { ...data, version: 99 as typeof data.version })
+      documentFile({ name: "x", data: { ...data, version: 99 as typeof data.version } })
     );
     expect(() => readDocumentFile(newer)).toThrow("newer Vellum");
   });

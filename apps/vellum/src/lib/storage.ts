@@ -21,6 +21,8 @@ export interface DocumentMeta {
   updated: number;
   /** Place in the Documents list, lowest first. Set by the person, not by recency. */
   order: number;
+  /** Labels to find it by; absent when it has none. */
+  tags?: string[];
 }
 
 interface DataRecord {
@@ -94,6 +96,8 @@ const topOrder = (all: readonly DocumentMeta[]) => Math.min(0, ...all.map((m) =>
 export async function saveDocument(doc: {
   id: string;
   name: string;
+  /** Given for a document coming in from a file; an autosave leaves the stored ones alone. */
+  tags?: string[];
   data: ProjectFile;
 }): Promise<void> {
   const db = await openDb();
@@ -108,6 +112,7 @@ export async function saveDocument(doc: {
     updated: Date.now(),
     order: existing?.order ?? topOrder(all),
   };
+  if (doc.tags?.length) record.tags = doc.tags;
   meta.put(record);
   tx.objectStore(DATA).put({ id: doc.id, data: doc.data });
   await done(tx);
@@ -149,6 +154,20 @@ export async function renameDocument(id: string, name: string): Promise<void> {
   await done(tx);
 }
 
+/** Replaces a document's tags; none takes the field away. */
+export async function setDocumentTags(id: string, tags: readonly string[]): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(META, "readwrite");
+  const store = tx.objectStore(META);
+  const rec = await request<DocumentMeta | undefined>(store.get(id));
+  if (rec) {
+    const next: DocumentMeta = { ...rec, tags: [...tags] };
+    if (!tags.length) delete next.tags;
+    store.put(next);
+  }
+  await done(tx);
+}
+
 export async function duplicateDocument(id: string, newId: string, name: string): Promise<void> {
   const db = await openDb();
   const rec = await request<DataRecord | undefined>(db.transaction(DATA).objectStore(DATA).get(id));
@@ -156,8 +175,15 @@ export async function duplicateDocument(id: string, newId: string, name: string)
   const tx = db.transaction([META, DATA], "readwrite");
   const meta = tx.objectStore(META);
   const all = await request<DocumentMeta[]>(meta.getAll());
-  // A copy goes on top, like any new document.
-  meta.put({ id: newId, name, updated: Date.now(), order: topOrder(all) });
+  const tags = all.find((m) => m.id === id)?.tags;
+  // A copy goes on top, like any new document, and keeps the original's tags.
+  meta.put({
+    id: newId,
+    name,
+    updated: Date.now(),
+    order: topOrder(all),
+    ...(tags?.length ? { tags: [...tags] } : {}),
+  });
   tx.objectStore(DATA).put({ id: newId, data: rec.data });
   await done(tx);
 }

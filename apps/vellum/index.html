@@ -435,6 +435,17 @@
             d="M12 15V3M7 8l5-5 5 5M5 21h14"
           />
         </symbol>
+        <!-- A magnifying glass: search. -->
+        <symbol id="icon-search" viewBox="0 0 24 24">
+          <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2" />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M15.5 15.5L20 20"
+          />
+        </symbol>
         <symbol id="icon-copy" viewBox="0 0 24 24">
           <rect
             x="9"
@@ -900,6 +911,17 @@
                   <div class="menu-panel-toolbar-actions">
                     <button
                       type="button"
+                      id="btn-doc-search"
+                      class="icon-btn"
+                      title="Search the documents by name and tag"
+                      aria-label="Search documents"
+                      aria-expanded="false"
+                      aria-controls="doc-search-row"
+                    >
+                      <svg class="ui-icon" aria-hidden="true"><use href="#icon-search" /></svg>
+                    </button>
+                    <button
+                      type="button"
                       id="btn-doc-export-all"
                       class="icon-btn"
                       title="Export every document, in one file"
@@ -928,7 +950,17 @@
                   </div>
                 </div>
                 <div class="doc-section-body">
+                  <div id="doc-search-row" class="doc-search hidden">
+                    <input
+                      type="search"
+                      id="doc-search"
+                      placeholder="Name or tag"
+                      aria-label="Search documents by name or tag"
+                      autocomplete="off"
+                    />
+                  </div>
                   <ul id="doc-list" class="doc-list"></ul>
+                  <p id="doc-no-match" class="doc-no-match" hidden>No document matches.</p>
                 </div>
               </section>
 
@@ -1691,6 +1723,13 @@
               list keeps the order you give it; saving never reshuffles it. <b>+</b> starts a new
               document at the top (named Untitled, Untitled 2, …; the current one is already saved).
               The last document reopens when you start the app.
+            </li>
+            <li>
+              A lot of documents? The ▶ at the start of a row opens its <b>tags</b> — words to find
+              it by, separated by commas — and what is in it: shapes, groups, points, reference
+              images, size and when it was saved. The magnifying glass in the <b>Documents</b>
+              header searches the list: every word typed must be in a document's name or tags. While
+              the list is filtered, ▲ ▼ rest.
             </li>
             <li>
               Documents live in this browser only, so move them out as files: the ⬆ on a row saves

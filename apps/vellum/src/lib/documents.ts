@@ -8,6 +8,7 @@ import {
   renameDocument,
   duplicateDocument,
   reorderDocuments,
+  setDocumentTags,
   libraryReset,
   type DocumentMeta,
 } from "./storage.js";
@@ -30,6 +31,7 @@ import { fitToView } from "./zoom.js";
 import { invalidateLists, rowDotHtml } from "./accordion.js";
 import { hydrateImageDimensions } from "./images-panel.js";
 import { WELCOME_NAME, loadWelcome } from "./welcome.js";
+import { cleanTags, docStats, matchesSearch, statsText } from "./doc-list.js";
 
 /** The document on the canvas. Read by the rest of the app; only this module replaces it. */
 export let currentDoc: { id: string | null; name: string } = { id: null, name: "" };
@@ -92,11 +94,17 @@ async function refreshDocList(): Promise<void> {
     docsCache = [];
   }
   const active = document.activeElement as HTMLInputElement | null;
-  // Don't rebuild the list under a name that is being edited.
-  if (active?.classList?.contains("doc-title-input")) {
-    const docId = active.closest<HTMLElement>("[data-doc-id]")?.dataset.docId;
-    const stored = docsCache.find((d) => d.id === docId)?.name;
-    if (active.value !== stored) return;
+  // Don't rebuild the list under a name or tags being edited.
+  const editing = active?.closest<HTMLElement>("#doc-list [data-doc-id]")?.dataset.docId;
+  if (editing) {
+    const stored = docsCache.find((d) => d.id === editing);
+    if (active!.classList.contains("doc-title-input") && active!.value !== stored?.name) return;
+    if (
+      active!.classList.contains("doc-tags-input") &&
+      cleanTags(active!.value).join(", ") !== (stored?.tags ?? []).join(", ")
+    ) {
+      return;
+    }
   }
   docListEl.innerHTML = "";
   const last = docsCache.length - 1;
@@ -104,13 +112,17 @@ async function refreshDocList(): Promise<void> {
     const isCurrent = d.id === currentDoc.id;
     const li = document.createElement("li");
     li.dataset.docId = d.id;
-    li.className = `acc-item doc-row${isCurrent ? " current" : ""}`;
+    const open = expandedDocs.has(d.id);
+    li.className = `acc-item doc-row${isCurrent ? " current" : ""}${open ? " expanded" : ""}`;
     const when = new Date(d.updated).toLocaleString([], {
       dateStyle: "short",
       timeStyle: "short",
     });
     li.title = isCurrent ? `Open since ${when}` : `Open (last saved ${when})`;
     li.innerHTML = `<div class="acc-header-row">
+        <button type="button" class="acc-expand-btn" data-doc-expand aria-expanded="${open}" aria-label="Tags and details" title="Tags and details">
+          <span class="chevron" aria-hidden="true">▶</span>
+        </button>
         ${rowDotHtml("radio", isCurrent, isCurrent ? "This is the open document" : "Open")}
         <input type="text" class="acc-title-input doc-title-input" value="${escapeAttr(d.name)}" maxlength="80" aria-label="Document name"${isCurrent ? "" : ' readonly tabindex="-1"'} />
         <button type="button" class="acc-icon-btn doc-act" data-doc-dup title="Duplicate" aria-label="Duplicate document">
@@ -124,10 +136,107 @@ async function refreshDocList(): Promise<void> {
         <button type="button" class="acc-icon-btn acc-trash doc-del" data-doc-delete title="Delete" aria-label="Delete document">
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-trash" /></svg>
         </button>
+      </div>
+      <div class="acc-body doc-body">
+        <label class="field-row field-row--wide"><span>Tags</span><input type="text" class="doc-tags-input" value="${escapeAttr((d.tags ?? []).join(", "))}" placeholder="e.g. icons, arrows" aria-label="Tags, separated by commas" /></label>
+        <p class="doc-stats"></p>
       </div>`;
     docListEl.appendChild(li);
+    if (open) void fillStats(li, d);
   }
+  applyDocSearch();
 }
+
+/**
+ * Documents showing their tags and details. Where you are, not part of any document: kept for
+ * the session only.
+ */
+const expandedDocs = new Set<string>();
+
+/** Stats of stored documents, kept while the document is unchanged: reading one loads it whole. */
+const statsCache = new Map<string, { updated: number; text: string }>();
+
+async function fillStats(li: HTMLElement, d: DocumentMeta): Promise<void> {
+  const out = li.querySelector<HTMLElement>(".doc-stats");
+  if (!out) return;
+  const when = new Date(d.updated).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  let text: string;
+  if (d.id === currentDoc.id) {
+    text = statsText(docStats(getState()));
+  } else {
+    const cached = statsCache.get(d.id);
+    if (cached?.updated === d.updated) {
+      text = cached.text;
+    } else {
+      let data: ProjectFile | null;
+      try {
+        data = await loadDocument(d.id);
+      } catch {
+        data = null;
+      }
+      text = statsText(docStats(data));
+      statsCache.set(d.id, { updated: d.updated, text });
+    }
+  }
+  out.textContent = `${text} · saved ${when}`;
+}
+
+/* ---------- Search: names and tags ---------- */
+
+const docSearchBtn = byId("btn-doc-search");
+const docSearchRow = byId("doc-search-row");
+const docSearchInput = byId<HTMLInputElement>("doc-search");
+const docNoMatch = byId("doc-no-match");
+
+/**
+ * Shows only the documents matching the search. ▲ and ▼ step through the whole list, so they
+ * rest while it is filtered: a step past a hidden document would look like nothing happened.
+ */
+function applyDocSearch(): void {
+  const query = docSearchRow.classList.contains("hidden") ? "" : docSearchInput.value.trim();
+  let shown = 0;
+  for (const li of docListEl.querySelectorAll<HTMLElement>("[data-doc-id]")) {
+    const d = docsCache.find((m) => m.id === li.dataset.docId);
+    const match = !d || matchesSearch(d, query);
+    li.hidden = !match;
+    if (match) shown++;
+    li.querySelectorAll<HTMLButtonElement>("[data-doc-move]").forEach((b) => {
+      if (query) b.disabled = true;
+    });
+  }
+  docNoMatch.hidden = !query || shown > 0;
+}
+
+function setDocSearch(open: boolean): void {
+  docSearchRow.classList.toggle("hidden", !open);
+  docSearchBtn.classList.toggle("active", open);
+  docSearchBtn.setAttribute("aria-expanded", String(open));
+  if (open) {
+    setSectionOpen("documents", true);
+    docSearchInput.focus();
+    docSearchInput.select();
+  } else {
+    docSearchInput.value = "";
+  }
+  // Leaving the search gives ▲ and ▼ back, which only a rebuild works out.
+  void refreshDocList();
+}
+
+docSearchBtn.addEventListener("click", () =>
+  setDocSearch(docSearchRow.classList.contains("hidden"))
+);
+docSearchInput.addEventListener("input", applyDocSearch);
+docSearchInput.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  e.stopPropagation();
+  if (docSearchInput.value) {
+    docSearchInput.value = "";
+    applyDocSearch();
+  } else {
+    setDocSearch(false);
+    docSearchBtn.focus();
+  }
+});
 
 function rememberLast(id: string | null): void {
   try {
@@ -279,8 +388,24 @@ docListEl.addEventListener("keydown", (e) => {
     target.blur();
   }
 });
+docListEl.addEventListener("keydown", (e) => {
+  const target = e.target as HTMLInputElement;
+  if (target.classList?.contains("doc-tags-input") && e.key === "Enter") target.blur();
+});
 docListEl.addEventListener("change", async (e) => {
   const target = e.target as HTMLInputElement;
+  const id = target.closest<HTMLElement>("[data-doc-id]")?.dataset.docId;
+  if (id && target.classList?.contains("doc-tags-input")) {
+    const tags = cleanTags(target.value);
+    target.value = tags.join(", ");
+    try {
+      await setDocumentTags(id, tags);
+    } catch (err) {
+      storageError(err);
+    }
+    await refreshDocList();
+    return;
+  }
   if (!target.classList?.contains("doc-title-input")) return;
   if (!target.value.trim()) target.value = currentDoc.name;
   else await renameCurrent(target.value);
@@ -358,6 +483,13 @@ docListEl.addEventListener("click", async (e) => {
   const li = target.closest<HTMLElement>("[data-doc-id]");
   const id = li?.dataset.docId;
   if (!id) return;
+  if (target.closest("[data-doc-expand]")) {
+    if (!expandedDocs.delete(id)) expandedDocs.add(id);
+    await refreshDocList();
+    return;
+  }
+  // The details under a row are for reading and typing tags, not a way to open the document.
+  if (!target.closest(".acc-header-row")) return;
   const move = target.closest<HTMLElement>("[data-doc-move]");
   if (move) await moveDoc(id, Number(move.dataset.docMove));
   else if (target.closest("[data-doc-dup]")) await duplicateDoc(id);
@@ -388,10 +520,11 @@ async function exportDoc(id: string): Promise<void> {
   if (id === currentDoc.id) await flushSave();
   const data = await storedData(id);
   if (!data) return;
-  const name = docsCache.find((d) => d.id === id)?.name ?? "Untitled";
+  const meta = docsCache.find((d) => d.id === id);
+  const name = meta?.name ?? "Untitled";
   downloadText(
     documentFileName(name),
-    JSON.stringify(documentFile(name, data)),
+    JSON.stringify(documentFile({ name, tags: meta?.tags, data })),
     "application/json"
   );
 }
@@ -403,7 +536,7 @@ async function exportAll(): Promise<void> {
   for (const d of docsCache) {
     const data = await storedData(d.id);
     if (!data) return;
-    documents.push({ name: d.name, data });
+    documents.push({ name: d.name, tags: d.tags, data });
   }
   if (!documents.length) return;
   downloadText(libraryFileName(), JSON.stringify(libraryFile(documents)), "application/json");
@@ -447,7 +580,7 @@ async function addDocuments(incoming: readonly ImportedDocument[]): Promise<void
     for (const doc of [...incoming].reverse()) {
       const id = uid("doc");
       // Named against everything stored so far, this import's other documents included.
-      await saveDocument({ id, name: uniqueName(doc.name), data: doc.data });
+      await saveDocument({ id, name: uniqueName(doc.name), tags: doc.tags, data: doc.data });
       docsCache = await listDocuments();
       firstId = id;
     }

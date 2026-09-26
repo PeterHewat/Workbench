@@ -2208,3 +2208,45 @@ body {
   opacity: 0.55;
   cursor: default;
 }
+
+/* Documents: the search under the section's head, and a row's tags and details. */
+.doc-search {
+  margin: 0 0 8px;
+}
+
+.doc-search input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+}
+
+.doc-no-match {
+  margin: 4px 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.doc-list .doc-body {
+  display: none;
+}
+
+.doc-list li.expanded .doc-body {
+  display: block;
+}
+
+/* Tags take the row: a list of words wants the width a number does not. */
+.doc-list .doc-body {
+  --field-w: none;
+}
+
+.doc-stats {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}

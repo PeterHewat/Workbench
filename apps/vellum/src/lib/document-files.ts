@@ -7,6 +7,7 @@
  */
 
 import { readProject } from "./io.js";
+import { cleanTags } from "./doc-list.js";
 import type { ProjectFile } from "./types.js";
 
 const DOC_TAG = "vellum/document";
@@ -18,6 +19,7 @@ export interface DocumentFile {
   version: 1;
   exported: string;
   name: string;
+  tags?: string[];
   data: ProjectFile;
 }
 
@@ -26,17 +28,23 @@ export interface LibraryFile {
   tag: typeof LIBRARY_TAG;
   version: 1;
   exported: string;
-  documents: { name: string; data: ProjectFile }[];
+  documents: ImportedDocument[];
 }
 
 /** A document read from a file, ready to store. */
 export interface ImportedDocument {
   name: string;
+  /** Only when there are any: a document without tags is written as it always was. */
+  tags?: string[];
   data: ProjectFile;
 }
 
-export function documentFile(name: string, data: ProjectFile, now = new Date()): DocumentFile {
-  return { tag: DOC_TAG, version: 1, exported: now.toISOString(), name, data };
+/** A document and its tags, kept only when there are some. */
+const entry = ({ name, tags, data }: ImportedDocument): ImportedDocument =>
+  tags?.length ? { name, tags: [...tags], data } : { name, data };
+
+export function documentFile(doc: ImportedDocument, now = new Date()): DocumentFile {
+  return { tag: DOC_TAG, version: 1, exported: now.toISOString(), ...entry(doc) };
 }
 
 export function libraryFile(documents: readonly ImportedDocument[], now = new Date()): LibraryFile {
@@ -44,7 +52,7 @@ export function libraryFile(documents: readonly ImportedDocument[], now = new Da
     tag: LIBRARY_TAG,
     version: 1,
     exported: now.toISOString(),
-    documents: documents.map(({ name, data }) => ({ name, data })),
+    documents: documents.map(entry),
   };
 }
 
@@ -76,13 +84,16 @@ export function readDocumentFile(text: string): ImportedDocument[] {
   const file = (parsed ?? {}) as Partial<DocumentFile> & Partial<LibraryFile>;
   const entries =
     file.tag === DOC_TAG && file.data
-      ? [{ name: file.name, data: file.data }]
+      ? [{ name: file.name, tags: file.tags, data: file.data }]
       : file.tag === LIBRARY_TAG && Array.isArray(file.documents)
         ? file.documents
         : null;
   if (!entries) throw new Error("It is not a Vellum document file.");
-  return entries.map((entry) => ({
-    name: typeof entry?.name === "string" && entry.name.trim() ? entry.name.trim() : "Untitled",
-    data: readProject(entry?.data),
-  }));
+  return entries.map((doc) =>
+    entry({
+      name: typeof doc?.name === "string" && doc.name.trim() ? doc.name.trim() : "Untitled",
+      tags: cleanTags(doc?.tags),
+      data: readProject(doc?.data),
+    })
+  );
 }
