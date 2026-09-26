@@ -20,14 +20,17 @@ import {
   hasPoint,
 } from "./model.js";
 import {
+  canGroup,
   canMergeGroups,
+  canUngroup,
   expandToGroups,
+  groupElements,
   groupsOf,
   mergeGroups,
   moveSelectionZ,
   normalizeGroups,
-  outerGroup,
-  pruneGroups,
+  selectionContext,
+  ungroupElements,
   type ZDirection,
 } from "./groups.js";
 import { uid } from "./utils.js";
@@ -50,27 +53,15 @@ export function expandGroups(ids: string[]): string[] {
 }
 
 /**
- * Wraps the selection in a new group. The selection is always whole groups (selecting a member
- * selects its group), so grouping two groups nests them rather than flattening either.
+ * Wraps the selection in a new group. Groups selected whole nest inside it rather than being
+ * flattened; a selection made inside a group is grouped inside that group.
  */
 export function groupSelection(): void {
   const st = getState();
   const ids = new Set(st.selection.elementIds);
-  if (st.elements.filter((e) => ids.has(e.id)).length < 2) return;
-  const gid = uid("group");
+  if (!canGroup(st.elements, ids)) return;
   pushUndo();
-  setState((s) => {
-    const lastIdx = Math.max(...s.elements.map((e, i) => (ids.has(e.id) ? i : -1)));
-    const rest = s.elements.filter((e) => !ids.has(e.id));
-    const before = s.elements.slice(0, lastIdx + 1).filter((e) => !ids.has(e.id)).length;
-    const grouped = s.elements
-      .filter((e) => ids.has(e.id))
-      .map((e) => ({ ...e, groups: [gid, ...groupsOf(e)] }));
-    return {
-      ...s,
-      elements: normalizeGroups([...rest.slice(0, before), ...grouped, ...rest.slice(before)]),
-    };
-  });
+  setState((s) => ({ ...s, elements: groupElements(s.elements, ids, uid("group")) }));
 }
 
 /**
@@ -81,38 +72,27 @@ export function mergeSelection(): void {
   const st = getState();
   const ids = new Set(st.selection.elementIds);
   if (!canMergeGroups(st.elements, ids)) return;
+  const depth = selectionContext(st.elements, ids).length;
   pushUndo();
   setState((s) => {
     const elements = mergeGroups(s.elements, ids, s.groupNames);
-    return { ...s, elements, selection: selectOnly(expandToGroups(elements, [...ids])) };
+    // The merged group is the one the selection now shares at its own level.
+    const first = elements.find((e) => ids.has(e.id));
+    const gid = groupsOf(first)[depth];
+    const selected = gid
+      ? elements.filter((e) => groupsOf(e).includes(gid)).map((e) => e.id)
+      : [...ids];
+    return { ...s, elements, selection: selectOnly(selected) };
   });
 }
 
 /** Peels off the outermost group of the selection, leaving any nested groups inside it intact. */
 export function ungroupSelection(): void {
   const st = getState();
-  const gids = new Set(
-    st.elements
-      .filter((e) => st.selection.elementIds.includes(e.id))
-      .map(outerGroup)
-      .filter((g): g is string => !!g)
-  );
-  if (!gids.size) return;
+  const ids = new Set(st.selection.elementIds);
+  if (!canUngroup(st.elements, ids)) return;
   pushUndo();
-  setState((s) => ({
-    ...s,
-    elements: pruneGroups(
-      s.elements.map((e) => {
-        const chain = groupsOf(e);
-        if (!chain.length || !gids.has(chain[0]!)) return e;
-        const rest = chain.slice(1);
-        const next = { ...e };
-        if (rest.length) next.groups = rest;
-        else delete next.groups;
-        return next;
-      })
-    ),
-  }));
+  setState((s) => ({ ...s, elements: ungroupElements(s.elements, ids) }));
 }
 
 export function deleteSelection(): void {
@@ -266,19 +246,21 @@ export function setElementClosed(id: string, closed: boolean): void {
   });
 }
 
-/** Copies elements with fresh ids and fresh group ids, offset by `off`. */
 /**
  * Fresh copies of `elements`, shifted by `off`, in fresh groups. The copied groups keep their
- * names, returned by their new ids so the caller can add them to the document.
+ * names, returned by their new ids so the caller can add them to the document. Groups in `keep`
+ * are not copied: the copies join them, as a duplicate of one member joins its group.
  */
 export function copyElements(
   elements: readonly SceneElement[],
   off: number,
-  groupNames: Readonly<Record<string, string>> = {}
+  groupNames: Readonly<Record<string, string>> = {},
+  keep: ReadonlySet<string> = new Set()
 ): { copies: SceneElement[]; groupNames: Record<string, string> } {
   const groupMap = new Map<string, string>();
   const names: Record<string, string> = {};
   const remap = (gid: string) => {
+    if (keep.has(gid)) return gid;
     if (!groupMap.has(gid)) {
       const next = uid("group");
       groupMap.set(gid, next);
@@ -303,10 +285,16 @@ export function duplicateSelection(): void {
       const source = s.selection.elementIds
         .map((id) => findElement(id))
         .filter((e): e is SceneElement => !!e);
-      const { copies, groupNames } = copyElements(source, s.grid.step, s.groupNames);
+      // A group only partly selected - one member picked inside it - takes the copies in, right
+      // above its other members; a group selected whole is copied along with its members.
+      const picked = new Set(source.map((e) => e.id));
+      const partial = new Set(
+        s.elements.filter((e) => !picked.has(e.id)).flatMap((e) => groupsOf(e))
+      );
+      const { copies, groupNames } = copyElements(source, s.grid.step, s.groupNames, partial);
       return {
         ...s,
-        elements: [...s.elements, ...copies],
+        elements: normalizeGroups([...s.elements, ...copies]),
         groupNames: { ...s.groupNames, ...groupNames },
         selection: selectOnly(copies.map((c) => c.id)),
       };

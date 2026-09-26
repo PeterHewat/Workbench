@@ -27,7 +27,7 @@ import {
   localBBox,
   toWorldPoint,
 } from "./model.js";
-import { canMergeGroups, canMoveSelectionZ, groupsOf, outerGroup } from "./groups.js";
+import { canGroup, canMergeGroups, canMoveSelectionZ, canUngroup } from "./groups.js";
 import { worldToScreen } from "./viewport.js";
 import { isCoarsePointer } from "./pointer.js";
 import { isSelectMore } from "./modes.js";
@@ -264,11 +264,11 @@ function selectionActions(state: EditorState): Action[] {
     out.push({ key: "join", label: "Join the two paths", icon: "icon-join", run: handlers.join });
   }
 
-  const groups = new Set(sel.map((e) => outerGroup(e) ?? ""));
-  if (sel.length > 1 && !(groups.size === 1 && !groups.has(""))) {
+  const selected = new Set(state.selection.elementIds);
+  if (canGroup(state.elements, selected)) {
     out.push({ key: "group", label: "Group", icon: "icon-group", run: handlers.group });
   }
-  if (canMergeGroups(state.elements, new Set(state.selection.elementIds))) {
+  if (canMergeGroups(state.elements, selected)) {
     out.push({
       key: "merge",
       label: "Merge into one group",
@@ -276,7 +276,7 @@ function selectionActions(state: EditorState): Action[] {
       run: handlers.merge,
     });
   }
-  if (sel.some((e) => groupsOf(e).length)) {
+  if (canUngroup(state.elements, selected)) {
     out.push({ key: "ungroup", label: "Ungroup", icon: "icon-ungroup", run: handlers.ungroup });
   }
 

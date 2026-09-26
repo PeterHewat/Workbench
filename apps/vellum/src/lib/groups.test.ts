@@ -16,6 +16,13 @@ import {
   pruneGroups,
   pruneGroupsInPlace,
   expandToGroups,
+  clickTarget,
+  canGroup,
+  canUngroup,
+  groupElements,
+  ungroupElements,
+  selectionContext,
+  drillTarget,
   topLevelBlocks,
 } from "./groups.js";
 import type { SceneElement } from "./types.js";
@@ -315,5 +322,78 @@ describe("selectedGroups", () => {
     expect([...selectedGroups(list, new Set(["b", "c"])).keys()]).toEqual(["g2"]);
     expect([...selectedGroups(list, new Set(["a", "b", "c"])).keys()].sort()).toEqual(["g1", "g2"]);
     expect(selectedGroups(list, new Set(["a", "b"])).size).toBe(0);
+  });
+});
+
+describe("clicking into a group", () => {
+  // g1 holds a, and the nested group g2 of b and c; d stands outside.
+  const list = [el("a", "g1"), el("b", "g1", "g2"), el("c", "g1", "g2"), el("d")];
+  const sel = (...x: string[]) => new Set(x);
+  const sorted = (t: { ids: string[] } | null) => t && [...t.ids].sort();
+
+  test("from outside, a click takes the whole outermost group", () => {
+    expect(sorted(clickTarget(list, sel(), "b"))).toEqual(["a", "b", "c"]);
+    expect(sorted(clickTarget(list, sel("d"), "a"))).toEqual(["a", "b", "c"]);
+    expect(clickTarget(list, sel(), "d")).toEqual({ ids: ["d"], gid: null });
+  });
+
+  test("a second click on a selected group steps one level in", () => {
+    expect(drillTarget(list, sel("a", "b", "c"), "b")).toEqual({ ids: ["b", "c"], gid: "g2" });
+    expect(drillTarget(list, sel("b", "c"), "b")).toEqual({ ids: ["b"], gid: null });
+    expect(drillTarget(list, sel("a", "b", "c"), "a")).toEqual({ ids: ["a"], gid: null });
+    expect(drillTarget(list, sel("b"), "b")).toBeNull();
+    expect(drillTarget(list, sel("a", "b", "c", "d"), "a")).toBeNull();
+  });
+
+  test("once inside, a click on another member stays at that level", () => {
+    expect(clickTarget(list, sel("a"), "b")).toEqual({ ids: ["b", "c"], gid: "g2" });
+    expect(clickTarget(list, sel("b"), "c")).toEqual({ ids: ["c"], gid: null });
+    expect(clickTarget(list, sel("b"), "a")).toEqual({ ids: ["a"], gid: null });
+    expect(clickTarget(list, sel("a"), "d")).toEqual({ ids: ["d"], gid: null });
+  });
+});
+
+describe("grouping inside a group", () => {
+  // g1 holds a, b and c; d stands outside.
+  const list = [el("a", "g1"), el("b", "g1"), el("c", "g1"), el("d")];
+  const sel = (...x: string[]) => new Set(x);
+  const chains = (l: readonly SceneElement[]) =>
+    l.map((e) => `${e.id}:${(e.groups ?? []).join("/")}`);
+
+  test("a group selected whole is no context; members picked inside it are", () => {
+    expect(selectionContext(list, sel("a", "b", "c"))).toEqual([]);
+    expect(selectionContext(list, sel("a", "b"))).toEqual(["g1"]);
+    expect(selectionContext(list, sel("a", "d"))).toEqual([]);
+  });
+
+  test("grouping two members nests the new group inside theirs", () => {
+    expect(canGroup(list, sel("a", "b"))).toBe(true);
+    expect(chains(groupElements(list, sel("a", "b"), "n"))).toEqual([
+      "a:g1/n",
+      "b:g1/n",
+      "c:g1",
+      "d:",
+    ]);
+  });
+
+  test("ungrouping a nested group leaves the outer one standing", () => {
+    const nested = groupElements(list, sel("a", "b"), "n");
+    expect(canUngroup(nested, sel("a", "b"))).toBe(true);
+    expect(chains(ungroupElements(nested, sel("a", "b")))).toEqual(["a:g1", "b:g1", "c:g1", "d:"]);
+    // A member picked alone has nothing of its own to ungroup.
+    expect(canUngroup(list, sel("a"))).toBe(false);
+  });
+
+  test("merging a loose member into a nested group stays inside the outer group", () => {
+    const wider = [...list.slice(0, 3), el("e", "g1"), el("d")];
+    const nested = groupElements(wider, sel("a", "b"), "n");
+    expect(canMergeGroups(nested, sel("a", "b", "c"))).toBe(true);
+    expect(chains(mergeGroups(nested, sel("a", "b", "c")))).toEqual([
+      "a:g1/n",
+      "b:g1/n",
+      "c:g1/n",
+      "e:g1",
+      "d:",
+    ]);
   });
 });

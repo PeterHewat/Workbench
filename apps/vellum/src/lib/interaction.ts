@@ -36,6 +36,7 @@ import { setDrawing, clearDrawing, commit, pointIndexForRole } from "./ops.js";
 import { finishPath } from "./pen-commands.js";
 import { endDropTarget, expandGroups, mergeDroppedEnd } from "./selection-commands.js";
 import { applyResize } from "./resize.js";
+import { clickTarget, drillTarget } from "./groups.js";
 import {
   type ShapeTool,
   updatePenPreview,
@@ -166,6 +167,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   let pending: PendingDrag | null = null;
   let holdTimer = 0;
   let lastDown = { t: 0, x: 0, y: 0 };
+  /** The selected shape pressed, while that press may still turn out to be a click. */
+  let drillId: string | null = null;
 
   function cancelHold(): void {
     if (holdTimer) window.clearTimeout(holdTimer);
@@ -319,6 +322,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       return;
     }
     if (e.button !== 0) return;
+    drillId = null;
     svg.setPointerCapture(e.pointerId);
     const st = getState();
     const world = pointerWorld(e);
@@ -440,8 +444,12 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           drag = null;
           return;
         }
-        const members = expandGroups([elId]);
         const additive = e.shiftKey || isSelectMore();
+        const wasSelected = st.selection.elementIds.includes(elId);
+        const members = clickTarget(st.elements, new Set(st.selection.elementIds), elId).ids;
+        // Pressing a shape already selected keeps the selection, so it can be dragged; if the
+        // press turns out to be a click, it steps into the group instead (see pointerup).
+        drillId = !additive && wasSelected ? elId : null;
         setState((s) => {
           let ids = s.selection.elementIds;
           if (additive) {
@@ -797,7 +805,14 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     // A press that never passed the slop threshold was a click: the selection it made stands,
     // but nothing moved and no undo step was spent.
     const heldMarquee = pending?.drag.type === "marquee";
+    const clickedSelected = pending?.drag.type === "move-elements" ? drillId : null;
     pending = null;
+    drillId = null;
+    if (clickedSelected) {
+      const s = getState();
+      const inner = drillTarget(s.elements, new Set(s.selection.elementIds), clickedSelected);
+      if (inner) setState({ selection: selectOnly(inner.ids) });
+    }
     cancelHold();
     if (heldMarquee) clearDrawing();
     if (drag?.type === "pan") {

@@ -24,7 +24,7 @@ import {
   ROTATE_REACH_FINE,
 } from "./pointer.js";
 import { buildDefsMarkup } from "./io.js";
-import { expandToGroups, groupColor, groupsOf, outerGroup, selectedGroups } from "./groups.js";
+import { clickTarget, groupColor, groupsOf, selectedGroups } from "./groups.js";
 import type {
   BBox,
   EditorState,
@@ -644,22 +644,21 @@ function renderGroupBoxes(state: EditorState, groups: Map<string, SceneElement[]
  *
  * Hover used to redraw the shape in blue, which borrowed the one channel the shape owns - its
  * stroke - so it said nothing on a shape with no stroke, and nothing at all on a blue one. The
- * selection outline is honest about the target instead, and for a grouped shape it outlines the
- * whole group, because that is what the click will select.
+ * selection outline is honest about the target instead: for a grouped shape it outlines the group
+ * the click will select, or, once you are inside that group, the member it will.
  */
 function renderHover(state: EditorState): void {
   const hoverId = state.hoverId;
   if (!hoverId || state.drawing?.rotateHandle) return;
-  const ids = expandToGroups(state.elements, [hoverId]);
+  const { ids, gid } = clickTarget(state.elements, new Set(state.selection.elementIds), hoverId);
   if (ids.some((id) => state.selection.elementIds.includes(id))) return;
-  if (ids.length === 1) {
+  if (!gid) {
     const el = findElement(hoverId);
     if (el) renderSelectionBox(els.pointer, el, "selection-box hover-box");
     return;
   }
   // A grouped shape: the click will select the group, so the hover shows the group's box.
-  const gid = outerGroup(findElement(hoverId));
-  const hue = gid ? state.groupHues[gid] : undefined;
+  const hue = state.groupHues[gid];
   const box = unionOf(state.elements.filter((e) => ids.includes(e.id)));
   if (!box) return;
   outline(
