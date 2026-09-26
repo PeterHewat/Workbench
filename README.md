@@ -74,7 +74,8 @@ ES modules that will still work off any file server in ten years.
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md). `bun run verify` is the check CI runs.
+See [CONTRIBUTING.md](./CONTRIBUTING.md). `bun run verify` is the check CI runs. Everyone taking part
+follows the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## License
 

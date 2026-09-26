@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad-c3015c7b" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#e3f3ff" stop-opacity="1"/>
+      <stop offset="1" stop-color="#8ec5ee" stop-opacity="1"/>
+    </linearGradient>
+  </defs>
+  <rect id="c3015c7b_backdrop" x="0" y="0" width="512" height="512" stroke="none" fill="url(#grad-c3015c7b)"/>
+  <g id="group-0e009118_starfish">
+    <path id="b1868289_star" d="M 234 59 C 250 39 262 39 278 59 C 293 78 299 154 330 176 C 360 197 435 181 457 189 C 482 199 484 210 471 230 C 457 252 387 281 375 316 C 365 351 403 416 402 441 C 401 467 391 473 367 467 C 343 460 293 403 256 403 C 219 403 169 460 145 467 C 121 473 111 467 110 441 C 109 416 149 351 137 316 C 126 281 55 252 41 230 C 28 210 32 199 55 189 C 79 181 152 197 182 176 C 213 154 219 78 234 59 Z" stroke="#9a5b12" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round" fill="#ffc444"/>
+    <circle id="deeb93c5_dot-1" cx="256" cy="156" r="11" stroke="none" fill="#ffe39a"/>
+    <circle id="e5b8d131_dot-2" cx="256" cy="108" r="8" stroke="none" fill="#ffe39a"/>
+    <circle id="c05d77cf_dot-3" cx="371" cy="240" r="11" stroke="none" fill="#ffe39a"/>
+    <circle id="b9a97eed_dot-4" cx="416" cy="225" r="8" stroke="none" fill="#ffe39a"/>
+    <circle id="b6fc1d24_dot-5" cx="327" cy="375" r="11" stroke="none" fill="#ffe39a"/>
+    <circle id="f3331d87_dot-6" cx="355" cy="413" r="8" stroke="none" fill="#ffe39a"/>
+    <circle id="d61411a3_dot-7" cx="185" cy="375" r="11" stroke="none" fill="#ffe39a"/>
+    <circle id="c634fdcd_dot-8" cx="157" cy="413" r="8" stroke="none" fill="#ffe39a"/>
+    <circle id="ea3cc9f3_dot-9" cx="141" cy="240" r="11" stroke="none" fill="#ffe39a"/>
+    <circle id="ab6556c0_dot-10" cx="96" cy="225" r="8" stroke="none" fill="#ffe39a"/>
+    <path id="cf21d995_shine" d="M 220 147 C 234 115 228 88 251 70" stroke="#ffffff" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.6" fill="none"/>
+  </g>
+  <g id="group-c3f7cc02_face">
+    <ellipse id="a50765ad_eye-left" cx="225" cy="275" rx="12" ry="16" stroke="none" fill="#4a2a08"/>
+    <ellipse id="ac5523fe_eye-right" cx="287" cy="275" rx="12" ry="16" stroke="none" fill="#4a2a08"/>
+    <circle id="cf2b6ffc_shine-left" cx="228" cy="269" r="5" stroke="none" fill="#ffffff"/>
+    <circle id="f2f888af_shine-right" cx="291" cy="269" r="5" stroke="none" fill="#ffffff"/>
+    <path id="d695cdb1_smile" d="M 242 308 C 249 321 263 321 270 308" stroke="#4a2a08" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <ellipse id="ef3ef032_blush-left" cx="196" cy="306" rx="17" ry="8" stroke="none" fill="#ff9f7a" fill-opacity="0.85"/>
+    <ellipse id="e06428ef_blush-right" cx="316" cy="306" rx="17" ry="8" stroke="none" fill="#ff9f7a" fill-opacity="0.85"/>
+  </g>
+</svg>

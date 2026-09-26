@@ -51,6 +51,8 @@ interface AccHeaderOptions {
   dot?: { on: boolean; title: string };
   /** The eye, when the row can be shown and hidden. */
   eye?: { visible: boolean; title: string };
+  /** The padlock, when the row can be locked out of reach on the canvas. */
+  lock?: { locked: boolean; title: string };
   /** The editable name, unless `titleHtml` replaces the field with something else. */
   name?: string;
   placeholder?: string;
@@ -101,6 +103,13 @@ export function eyeHtml(
     </button>`;
 }
 
+/** The padlock: whether a thing can be reached on the canvas. Faint while it can. */
+function lockHtml(locked: boolean, title: string): string {
+  return `<button type="button" class="btn-visibility btn-lock${locked ? "" : " is-off"}" data-action="toggle-lock" title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}" aria-pressed="${locked}">
+      <svg class="ui-icon" aria-hidden="true"><use href="#${locked ? "icon-lock" : "icon-unlock"}" /></svg>
+    </button>`;
+}
+
 export function accHeaderHtml(o: AccHeaderOptions): string {
   return `<div class="acc-header-row">
       <button type="button" class="acc-expand-btn" data-action="toggle-expand" aria-label="Expand" title="Expand / collapse">
@@ -109,6 +118,7 @@ export function accHeaderHtml(o: AccHeaderOptions): string {
       ${o.dot ? rowDotHtml("check", o.dot.on, o.dot.title, ' data-action="toggle-dot"') : ""}
       ${o.titleHtml ?? `<input type="text" class="acc-title-input" data-field="name" value="${escapeAttr(o.name ?? "")}" placeholder="${escapeAttr(o.placeholder ?? "")}" />`}
       ${o.extra ?? ""}
+      ${o.lock ? lockHtml(o.lock.locked, o.lock.title) : ""}
       ${o.eye ? eyeHtml(o.eye.visible, o.eye.title) : ""}
       <button type="button" class="acc-icon-btn acc-move" data-action="move-up" title="Bring forward (Shift: to the front)" aria-label="Bring forward"${(o.canUp ?? o.index > 0) ? "" : " disabled"}>▲</button>
       <button type="button" class="acc-icon-btn acc-move" data-action="move-down" title="Send backward (Shift: to the back)" aria-label="Send backward"${(o.canDown ?? o.index < o.count - 1) ? "" : " disabled"}>▼</button>
@@ -122,6 +132,7 @@ interface AccHandlers {
   onExpand: () => void;
   onDot?: () => void;
   onEye?: () => void;
+  onLock?: () => void;
   onDelete: () => void;
   onMove: (dir: number, toEnd: boolean) => void;
 }
@@ -137,6 +148,7 @@ export function wireAccRow(li: HTMLElement, h: AccHandlers): void {
       });
   on("toggle-dot", h.onDot);
   on("toggle-eye", h.onEye);
+  on("toggle-lock", h.onLock);
   li.querySelector('[data-action="delete"]')!.addEventListener("click", h.onDelete);
   li.querySelector('[data-action="move-up"]')!.addEventListener("click", (e) =>
     h.onMove(-1, (e as MouseEvent).shiftKey)

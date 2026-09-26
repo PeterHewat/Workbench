@@ -1,7 +1,7 @@
 import { getState, setState, subscribe, selectOnly } from "./state.js";
 import { initViewport } from "./viewport.js";
 import { initRender, renderAll, renderPointer } from "./render.js";
-import { bindInteraction, cancelOperation } from "./interaction.js";
+import { bindInteraction, bindRulerGuides, cancelOperation } from "./interaction.js";
 import {
   setTool,
   finishPath,
@@ -25,13 +25,28 @@ import {
   setSelectedHandlesLinked,
   toggleSelectedPointCurve,
   removeSelectedHandle,
+  stepOutSelection,
+  combineSelection,
+  setSelectionLocked,
+  alignSelection,
+  distributeSelection,
+  alignableCount,
 } from "./selection-commands.js";
 import { pushUndo, canUndo, canRedo } from "./undo.js";
 import { formatExportSvg, importSvgFile } from "./io.js";
+import { initPngExport } from "./png-export.js";
+import { forgetTurns } from "./turn-tally.js";
+import { fileBase } from "./document-files.js";
 import { canJoin } from "./model.js";
 import { THEME_EVENT, bindThemeToggle, byId, copyText, downloadText } from "@workbench/ui";
 import { bindTouch, setTouchFinishPathHandler } from "./touch.js";
-import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
+import {
+  openColorPicker,
+  closeColorPicker,
+  isColorPickerOpenFor,
+  setColorSampler,
+} from "./colorpicker.js";
+import { canPickFromImages, pickFromImages } from "./eyedropper.js";
 import { initRulers, renderRulers } from "./rulers.js";
 import { initActionBar, syncActionBar } from "./actionbar.js";
 import {
@@ -43,10 +58,10 @@ import {
 } from "./textedit.js";
 import { initPointerKind } from "./pointer.js";
 import { writeSessionView } from "./session.js";
-import { canMergeGroups, groupsOf, outerGroup } from "./groups.js";
+import { canGroup, canMergeGroups, canUngroup } from "./groups.js";
 import { type EditorState } from "./types.js";
 import { restoreLayout } from "./layout.js";
-import { zoomBtn, zoomMenu, fitToView } from "./zoom.js";
+import { zoomBtn, zoomMenu, fitToView, fitSelection, zoomToActualSize } from "./zoom.js";
 import { doUndo, doRedo } from "./edit-commands.js";
 import { imageList } from "./images-panel.js";
 import { primitiveList } from "./primitives-panel.js";
@@ -73,6 +88,12 @@ initTextEdit(wrap, () => primitiveList.invalidate());
 initActionBar(byId("action-bar"), {
   duplicate: () => duplicateSelection(),
   remove: () => deleteSelection(),
+  removePoint: () => deleteSelection(false),
+  combine: (op) => combineSelection(op),
+  lock: (locked) => setSelectionLocked(locked),
+  align: (mode) => alignSelection(mode),
+  distribute: (axis) => distributeSelection(axis),
+  alignable: () => alignableCount(),
   forward: () => moveZOrder("forward"),
   back: () => moveZOrder("back"),
   toggleClosed: (id, closed) => {
@@ -100,9 +121,11 @@ initActionBar(byId("action-bar"), {
   paste: () => void pasteFromClipboard(),
 });
 bindInteraction(svg, wrap);
+setColorSampler({ available: canPickFromImages, pick: () => pickFromImages(wrap, svg) });
 setTouchFinishPathHandler(() => finishPath());
 bindTouch(svg);
 
+bindRulerGuides(byId<HTMLCanvasElement>("ruler-top"), byId<HTMLCanvasElement>("ruler-left"));
 initRulers({
   topCanvas: byId<HTMLCanvasElement>("ruler-top"),
   leftCanvas: byId<HTMLCanvasElement>("ruler-left"),
@@ -116,6 +139,7 @@ document
   .forEach((btn) => bindThemeToggle(btn, "ui-icon"));
 
 let lastSavedViewport: EditorState["viewport"] | null = null;
+let lastSelection = "";
 
 subscribe((state, { pointerOnly }) => {
   if (pointerOnly) {
@@ -126,6 +150,14 @@ subscribe((state, { pointerOnly }) => {
   }
   // Adding to a selection that has gone empty is starting a new one: the switch lets go.
   if (isSelectMore() && !state.selection.elementIds.length) setSelectMore(false);
+  // A document opened with grid snap on keeps it: the snap to shapes the tab had lets go.
+  if (isAlignSnap() && state.grid.snap) setAlignSnap(false);
+  // A Rotate field counts from 0 again for whatever is chosen next.
+  const selection = state.selection.elementIds.join(",");
+  if (selection !== lastSelection) {
+    lastSelection = selection;
+    forgetTurns();
+  }
   renderAll(state);
   // Where you are looking belongs to the tab, not to the drawing: kept so a refresh returns it.
   if (state.viewport !== lastSavedViewport) {
@@ -194,11 +226,9 @@ function syncPanel(state: EditorState): void {
 function syncGroupButtons(state: EditorState): void {
   const ids = new Set(state.selection.elementIds);
   const sel = state.elements.filter((e) => ids.has(e.id));
-  const groups = new Set(sel.map((e) => outerGroup(e) ?? ""));
-  const allInOneGroup = groups.size === 1 && !groups.has("");
-  byId<HTMLButtonElement>("btn-group").disabled = sel.length < 2 || allInOneGroup;
+  byId<HTMLButtonElement>("btn-group").disabled = !canGroup(state.elements, ids);
   byId<HTMLButtonElement>("btn-merge").disabled = !canMergeGroups(state.elements, ids);
-  byId<HTMLButtonElement>("btn-ungroup").disabled = !sel.some((e) => groupsOf(e).length);
+  byId<HTMLButtonElement>("btn-ungroup").disabled = !canUngroup(state.elements, ids);
   byId<HTMLButtonElement>("btn-join").disabled = !(sel.length === 2 && sel.every(canJoin));
 }
 
@@ -250,17 +280,19 @@ byId("bg-swatch").addEventListener("click", () => {
 byId("btn-grid").addEventListener("click", () => {
   setState((s) => ({ ...s, grid: { ...s.grid, visible: !s.grid.visible } }));
 });
+/** Grid snap and snap to shapes are one choice: switching this on switches the other off. */
 function setGridSnap(on: boolean): void {
+  if (on) setAlignSnap(false);
   setState((s) => ({ ...s, grid: { ...s.grid, snap: on } }));
 }
 byId("btn-snap").addEventListener("click", () => setGridSnap(!getState().grid.snap));
 byId("btn-align").addEventListener("click", () => setAlignSnap(!isAlignSnap()));
 
-/** Every shape that is showing: hidden ones stay out of it, as they do out of a click. */
+/** Every shape that is showing and not locked: the ones a click could reach. */
 function selectAll(): void {
   setState((s) => ({
     ...s,
-    selection: selectOnly(s.elements.filter((el) => !el.hidden).map((el) => el.id)),
+    selection: selectOnly(s.elements.filter((el) => !el.hidden && !el.locked).map((el) => el.id)),
     tool: "select",
   }));
 }
@@ -270,6 +302,11 @@ byId("btn-final").addEventListener("click", () => {
 
 byId("btn-save-svg").addEventListener("click", () => {
   downloadText(svgFileName(), formatExportSvg(getState(), true), "image/svg+xml");
+});
+initPngExport({
+  artboard: () => getState().artboard,
+  svg: () => formatExportSvg(getState(), true),
+  baseName: () => fileBase(currentDoc.name),
 });
 byId("btn-copy-svg").addEventListener("click", async (e) => {
   e.stopPropagation();
@@ -363,6 +400,19 @@ window.addEventListener("keydown", (e) => {
     }
     return;
   }
+  // The view, as most editors have it: by code, since Shift turns the digit into a symbol.
+  if (e.shiftKey && e.code === "Digit0") {
+    zoomToActualSize();
+    return;
+  }
+  if (e.shiftKey && e.code === "Digit1") {
+    setState({ viewport: fitToView() });
+    return;
+  }
+  if (e.shiftKey && e.code === "Digit2") {
+    fitSelection();
+    return;
+  }
   if (key === "s") setTool("select");
   if (key === "p") setTool("pen");
   if (key === "r") setTool("rect");
@@ -370,8 +420,9 @@ window.addEventListener("keydown", (e) => {
   if (key === "t") setTool("text");
   if (key === "g") setGridSnap(!getState().grid.snap);
   if (key === "escape") {
+    const st = getState();
     if (isTextEditing()) endTextEdit(false);
-    else cancelOperation();
+    else if (st.drawing || st.tool !== "select" || !stepOutSelection()) cancelOperation();
   }
   if (key === "enter" && getState().tool === "pen") {
     pushUndo();

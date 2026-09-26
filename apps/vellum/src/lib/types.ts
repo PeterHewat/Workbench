@@ -97,12 +97,33 @@ interface ElementBase extends StyleProps {
    * the SVG panel re-imports its own output, so a shape left out of it would be deleted.
    */
   hidden?: boolean;
+  /**
+   * How overlapping outlines fill: absent is SVG's default, nonzero; "evenodd" makes every other
+   * overlap a hole, as many icon files draw a ring or a letter O.
+   */
+  fillRule?: "evenodd";
+  /** Dash and gap lengths along the stroke, in artboard units (`stroke-dasharray`). Absent is solid. */
+  dash?: number[];
+  /**
+   * Out of reach on the canvas - not clicked, box-selected or selected with the rest - so what
+   * is traced over it can be drawn without moving it. Still selectable from its row, still
+   * snapped to. Editor-only: not in the exported SVG.
+   */
+  locked?: boolean;
 }
 
 export interface PathElement extends ElementBase {
   type: "path";
+  /** Every outline's anchors, one outline after another. */
   points: Anchor[];
+  /** Whether every outline is closed. A file with open and closed outlines imports as several paths. */
   closed: boolean;
+  /**
+   * Where each outline after the first starts in `points`, ascending; absent for a path of one
+   * outline. A shape with a hole is two outlines - what combining shapes produces, and what
+   * icons with a letter O or a ring are made of.
+   */
+  subpaths?: number[];
 }
 
 export interface LineElement extends ElementBase {
@@ -196,9 +217,23 @@ export interface PathEdit {
   handle?: "in" | "out";
 }
 
+/** One point of a shape: point `index` of a path, polyline or polygon, or end `index` of a line. */
+export interface PointRef {
+  pathId: string;
+  index: number;
+}
+
 export interface Selection {
   elementIds: string[];
+  /** The point picked last: the bar sits beside it, and its handles are the ones to edit. */
   pathEdit: PathEdit | null;
+  /** Other points picked with it, for moving or deleting several at once. Absent for none. */
+  points?: PointRef[];
+}
+
+export interface Guides {
+  x: number[];
+  y: number[];
 }
 
 export interface Viewport {
@@ -248,6 +283,8 @@ export interface Drawing {
   marquee?: Marquee;
   shapeStart?: Point;
   rotateHandle?: RotateHandle;
+  /** A guide being dragged out of a ruler, not placed yet. */
+  guide?: { axis: "x" | "y"; at: number };
 }
 
 export interface EditorState {
@@ -265,6 +302,11 @@ export interface EditorState {
    * so it does not change as groups move. Editor-only: never exported to the SVG.
    */
   groupHues: Record<string, number>;
+  /**
+   * Guides dragged out of the rulers: vertical lines at each `x`, horizontal ones at each `y`,
+   * in artboard units. Editor-only, like the grid: saved with the document, never exported.
+   */
+  guides: Guides;
   images: ReferenceImage[];
   viewport: Viewport;
   tool: ToolName;
@@ -294,6 +336,9 @@ export type StyleCarrier = Partial<StyleProps> & {
   name?: string;
   groups?: string[];
   hidden?: boolean;
+  fillRule?: "evenodd";
+  dash?: number[];
+  locked?: boolean;
   /** Import only: the gradient arrived in artboard units and still has to be converted. */
   gradUserSpace?: boolean;
 };
@@ -318,6 +363,8 @@ export interface ProjectFile {
   groupNames?: Record<string, string>;
   /** Absent when there are no groups. */
   groupHues?: Record<string, number>;
+  /** Absent when there are none. */
+  guides?: Guides;
   viewport: Viewport;
   tool: ToolName;
   finalOnly: boolean;

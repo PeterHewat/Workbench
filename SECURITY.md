@@ -1,7 +1,8 @@
 # Security Policy
 
-These are static, client-side tools. There is no server, no account and no data collection:
-everything a tool stores stays in your own browser.
+These are static, client-side tools. There is no server and no account: everything a tool stores
+stays in your own browser, and nothing you draw or import is sent anywhere. The public site may
+send anonymous page-view analytics to Cloudflare.
 
 ## Reporting
 

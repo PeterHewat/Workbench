@@ -8,12 +8,13 @@ import {
   createPolyline,
   createPolygon,
   createText,
-  MARKER_TYPES,
+  hasMarkers,
   isGradient,
   gradientStops,
   geometryOf,
   styleAttrs,
   hasTwoHandles,
+  parseDash,
 } from "./model.js";
 import { ELEMENT_SELECTOR, escapeAttr, escapeXml, uid } from "./utils.js";
 import { groupsOf, normalizeGroups, pruneGroups } from "./groups.js";
@@ -53,12 +54,25 @@ const BACKGROUND_ID = "background";
 const n3 = (n: number) => String(+Number(n).toFixed(3));
 
 interface MarkerDef {
-  refX: number;
+  /** Where on the marker the line's end point falls, in its 10-unit box. */
+  refX: number | ((cap: SceneElement["linecap"]) => number);
   markup: (fill: string) => string;
 }
 
+/**
+ * The arrow's tip goes past the end point far enough to cover the line's cap: the head is four
+ * stroke widths long and wide (2.5 box units to a width), so the stroke under it is hidden only
+ * where the head is wider than the line. A round cap is a half disc of half a width, covered from
+ * 1.12 widths back from the tip (1.2 taken); a butt end needs 1 width; a square cap, reaching half
+ * a width further, 1.5.
+ */
+const ARROW_REF_X: Record<SceneElement["linecap"], number> = { round: 7, butt: 7.5, square: 6.25 };
+
 const MARKER_SHAPE_DEFS: Record<string, MarkerDef> = {
-  arrow: { refX: 9, markup: (f) => `<path d="M0,0 L10,5 L0,10 z" ${f}/>` },
+  arrow: {
+    refX: (cap) => ARROW_REF_X[cap] ?? 7,
+    markup: (f) => `<path d="M0,0 L10,5 L0,10 z" ${f}/>`,
+  },
   dot: { refX: 5, markup: (f) => `<circle cx="5" cy="5" r="5" ${f}/>` },
   square: { refX: 5, markup: (f) => `<rect width="10" height="10" ${f}/>` },
   diamond: { refX: 5, markup: (f) => `<path d="M5,0 L10,5 L5,10 L0,5 z" ${f}/>` },
@@ -116,7 +130,7 @@ function buildDefsLines(elements: readonly SceneElement[]): Line[] {
         lines.push({ indent: 0, text: "</linearGradient>" });
       }
     }
-    if (MARKER_TYPES.includes(el.type)) {
+    if (hasMarkers(el)) {
       for (const end of ["start", "end"] as const) {
         const shape = MARKER_SHAPE_DEFS[end === "start" ? el.markerStart : el.markerEnd];
         if (!shape) continue;
@@ -126,7 +140,7 @@ function buildDefsLines(elements: readonly SceneElement[]): Line[] {
             : "";
         lines.push({
           indent: 0,
-          text: `<marker id="mk-${escapeAttr(el.id)}-${end}" viewBox="0 0 10 10" refX="${shape.refX}" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">`,
+          text: `<marker id="mk-${escapeAttr(el.id)}-${end}" viewBox="0 0 10 10" refX="${typeof shape.refX === "number" ? shape.refX : shape.refX(el.linecap)}" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">`,
         });
         lines.push({ indent: 1, text: shape.markup(`fill="${escapeAttr(el.stroke)}"${opacity}`) });
         lines.push({ indent: 0, text: "</marker>" });
@@ -273,6 +287,7 @@ export function serializeProject(state: EditorState): ProjectFile {
     elements: state.elements,
     ...namesInUse(state.elements, state.groupNames),
     ...huesInUse(state.elements, state.groupHues),
+    ...(state.guides.x.length || state.guides.y.length ? { guides: state.guides } : {}),
     viewport: state.viewport,
     tool: state.tool,
     finalOnly: state.finalOnly,
@@ -353,6 +368,10 @@ export function loadProject(raw: ProjectFile): void {
     elements: json.elements || [],
     groupNames: json.groupNames ?? {},
     groupHues: json.groupHues ?? {},
+    guides: {
+      x: (json.guides?.x ?? []).filter(Number.isFinite),
+      y: (json.guides?.y ?? []).filter(Number.isFinite),
+    },
     viewport: json.viewport || base.viewport,
     tool: json.tool || "select",
     finalOnly: json.finalOnly || false,
@@ -371,9 +390,13 @@ export function loadProject(raw: ProjectFile): void {
  * previous control point. Commands also repeat implicitly - `L 1 1 2 2` is two line segments,
  * and a repeated `M` continues as `L` - which is how most tools write their output.
  */
-function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
+export function parsePathD(d: string): { points: Anchor[]; closed: boolean }[] {
   const tokens = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? [];
   const points: Anchor[] = [];
+  // Each subpath - each M - is an outline of its own: where it starts, and whether a Z closed it.
+  const outlines: { start: number; closed: boolean }[] = [];
+  // After a Z, drawing on without an M starts a new subpath at the one just closed.
+  let afterClose = false;
   let i = 0;
   let cx = 0;
   let cy = 0;
@@ -388,7 +411,17 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
   const last = (): Anchor | undefined => points[points.length - 1];
   const isCommand = (t: string | undefined) => !!t && /^[a-zA-Z]$/.test(t);
 
+  /** Starts a new outline when the current one is closed, as a drawing command after Z does. */
+  const reopen = () => {
+    if (!afterClose) return;
+    afterClose = false;
+    outlines.push({ start: points.length, closed: false });
+    const at = subStart ?? { x: cx, y: cy };
+    points.push({ x: at.x, y: at.y, smooth: false, hIn: null, hOut: null });
+  };
+
   const corner = (x: number, y: number) => {
+    reopen();
     points.push({ x, y, smooth: false, hIn: null, hOut: null });
     lastControl = null;
     lastCurve = "";
@@ -396,6 +429,7 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
 
   /** Appends a cubic segment from the current point to (x, y). */
   const cubic = (c1: Point, c2: Point, x: number, y: number, kind: "cubic" | "quad") => {
+    reopen();
     const from = last();
     if (from) {
       from.hOut = { x: c1.x, y: c1.y };
@@ -446,6 +480,11 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
       cx = readNum() + ox;
       cy = readNum() + oy;
       subStart = { x: cx, y: cy };
+      afterClose = false;
+      // A move with nothing drawn since the last one replaces it rather than leaving a stray point.
+      const open = outlines[outlines.length - 1];
+      if (open && open.start === points.length - 1 && !open.closed) points.pop();
+      else outlines.push({ start: points.length, closed: false });
       corner(cx, cy);
     } else if (c === "L") {
       cx = readNum() + ox;
@@ -486,7 +525,8 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
       cx = x;
       cy = y;
     } else if (c === "Z") {
-      const first = points[0];
+      const outline = outlines[outlines.length - 1];
+      const first = outline ? points[outline.start] : undefined;
       const end = last();
       if (subStart && first && end && end !== first && end.x === first.x && end.y === first.y) {
         // A closing curve drawn back onto the start ends on the first anchor. It is that anchor,
@@ -501,13 +541,20 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
       cy = subStart?.y ?? cy;
       lastControl = null;
       lastCurve = "";
+      if (outline && !afterClose) outline.closed = true;
+      afterClose = true;
     } else {
       // An unrecognised command: skip its numbers rather than reading them as coordinates.
       while (i < tokens.length && !isCommand(tokens[i])) i++;
     }
   }
   for (const p of points) if (hasTwoHandles(p)) p.smooth = handlesInLine(p);
-  return { points, closed: /z/i.test(d) };
+  return outlines
+    .map((o, k) => ({
+      points: points.slice(o.start, outlines[k + 1]?.start ?? points.length),
+      closed: o.closed,
+    }))
+    .filter((o) => o.points.length);
 }
 
 /**
@@ -666,6 +713,9 @@ function styleFromNode(node: Element, svg: Element): StyleCarrier {
     else style.fill = normalizeColor(fillAttr);
   }
   if (inheritedProp(node, "display") === "none") style.hidden = true;
+  if (inheritedProp(node, "fill-rule") === "evenodd") style.fillRule = "evenodd";
+  const dash = parseDash(inheritedProp(node, "stroke-dasharray"));
+  if (dash) style.dash = dash;
   const ms = inheritedProp(node, "marker-start");
   const me = inheritedProp(node, "marker-end");
   if (ms) style.markerStart = markerFromRef(svg, ms);
@@ -712,12 +762,42 @@ function nameFromNode(node: Element, nodeId: string | null): string | null {
   return AUTO_ID.test(nodeId) ? null : nodeId;
 }
 
-function elementFromNode(node: Element, tag: string, style: StyleCarrier): SceneElement | null {
+/**
+ * The outlines of one `<path>` as elements: one path holding them all when they are all closed or
+ * all open, which is how a shape with holes is drawn. The model closes a path's outlines together,
+ * so a `d` that mixes open and closed outlines becomes one path of each kind, side by side.
+ */
+function pathsFromOutlines(
+  outlines: readonly { points: Anchor[]; closed: boolean }[],
+  style: StyleCarrier
+): SceneElement | SceneElement[] | null {
+  if (!outlines.length) return null;
+  const build = (group: readonly { points: Anchor[] }[], closed: boolean, id?: string) => {
+    const points: Anchor[] = [];
+    const subpaths: number[] = [];
+    for (const o of group) {
+      if (points.length) subpaths.push(points.length);
+      points.push(...o.points);
+    }
+    const path = createPath(points, closed, id ? style : { ...style, id: undefined });
+    if (subpaths.length) path.subpaths = subpaths;
+    return path;
+  };
+  const closed = outlines.filter((o) => o.closed);
+  const open = outlines.filter((o) => !o.closed);
+  if (!open.length || !closed.length) return build(outlines, !!closed.length, style.id);
+  return [build(closed, true, style.id), build(open, false)];
+}
+
+function elementFromNode(
+  node: Element,
+  tag: string,
+  style: StyleCarrier
+): SceneElement | SceneElement[] | null {
   const num = (a: string) => parseFloat(node.getAttribute(a) ?? "");
   switch (tag) {
     case "path": {
-      const { points, closed } = parsePathD(node.getAttribute("d") ?? "");
-      return createPath(points, closed, style);
+      return pathsFromOutlines(parsePathD(node.getAttribute("d") ?? ""), style);
     }
     case "line":
       return createLine(num("x1"), num("y1"), num("x2"), num("y2"), style);
@@ -818,19 +898,22 @@ export function importSvgFile(text: string, { keepIds = false } = {}): ImportRes
     if (name) style.name = name;
     const { chain, matrix } = ancestry(node, svg, groupIds, groupNames, keepIds);
     if (chain.length) style.groups = chain;
-    const el = elementFromNode(node, node.tagName.toLowerCase(), style);
-    if (!el) return;
-    if (keepIds) {
-      const rid = elementIdFromSvgId(nodeId);
-      if (rid && !usedIds.has(rid)) el.id = rid;
-      usedIds.add(el.id);
-    }
-    // An element's own transform, and every <g transform> above it, are baked into the
-    // coordinates here: the scene graph has no transform of its own.
+    const made = elementFromNode(node, node.tagName.toLowerCase(), style);
+    if (!made) return;
     const own = multiply(matrix, parseTransform(node.getAttribute("transform")));
-    const placed = isIdentity(own) ? el : transformElement(el, own);
-    if (style.gradUserSpace) toBoundingBoxUnits(placed);
-    imported.push(placed);
+    (Array.isArray(made) ? made : [made]).forEach((el, k) => {
+      // The id the markup names goes to the first element it became.
+      if (keepIds && k === 0) {
+        const rid = elementIdFromSvgId(nodeId);
+        if (rid && !usedIds.has(rid)) el.id = rid;
+        usedIds.add(el.id);
+      }
+      // An element's own transform, and every <g transform> above it, are baked into the
+      // coordinates here: the scene graph has no transform of its own.
+      const placed = isIdentity(own) ? el : transformElement(el, own);
+      if (style.gradUserSpace) toBoundingBoxUnits(placed);
+      imported.push(placed);
+    });
   });
 
   const elements = normalizeGroups(pruneGroups(imported));

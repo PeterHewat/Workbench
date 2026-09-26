@@ -18,6 +18,7 @@
   --accent-dim: #3d5a9e;
   --danger: #e85d5d;
   --current-row: #364159;
+  --search-hit: #ffd21f;
   --sel-text: #6cb2ff;
   --attr-bg: rgba(255, 214, 102, 0.28);
   --attr-text: #ffd666;
@@ -57,6 +58,7 @@
     --accent-dim: #d3e1fb;
     --danger: #cf3b3b;
     --current-row: #dfe8fb;
+    --search-hit: #ffd21f;
     --sel-text: #1f5fcf;
     --attr-bg: rgba(240, 180, 0, 0.22);
     --attr-text: #8a5d00;
@@ -82,6 +84,7 @@
   --accent-dim: #d3e1fb;
   --danger: #cf3b3b;
   --current-row: #dfe8fb;
+  --search-hit: #ffd21f;
   --sel-text: #1f5fcf;
   --attr-bg: rgba(240, 180, 0, 0.22);
   --attr-text: #8a5d00;
@@ -1081,6 +1084,35 @@ body {
   font-size: 12px;
 }
 
+.cp-dropper {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.cp-dropper:hover {
+  border-color: var(--accent);
+}
+
+.cp-dropper[hidden] {
+  display: none;
+}
+
+/* While a colour is being picked from the reference image, the canvas takes aim. */
+#canvas-wrap.mode-pick,
+#canvas-wrap.mode-pick * {
+  cursor: crosshair !important;
+}
+
 .cp-hex {
   flex: 1;
   min-width: 0;
@@ -1227,6 +1259,13 @@ body {
   stroke: #2f8f46;
 }
 
+/* Scales a path from the opposite corner of its box: hollow, so it reads as the box's, not a point. */
+.handle.box-handle {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
 /* Where the gradient runs: two handles and the line between them. */
 .handle.grad-handle {
   fill: #fff;
@@ -1253,7 +1292,15 @@ body {
 .ruler {
   position: absolute;
   z-index: 5;
-  pointer-events: none;
+}
+
+/* Guides come out of the rulers: the top one gives a horizontal guide, the left a vertical one. */
+.ruler-top {
+  cursor: ns-resize;
+}
+
+.ruler-left {
+  cursor: ew-resize;
 }
 
 .ruler-top {
@@ -1479,6 +1526,23 @@ body {
   background: var(--accent-dim);
 }
 
+/* Fit artboard and fit selection lead the list, set off from the levels below them. */
+.zoom-menu button[data-fit] {
+  text-align: left;
+  white-space: nowrap;
+}
+
+.zoom-menu li:nth-child(2) {
+  padding-bottom: 3px;
+  margin-bottom: 1px;
+  border-bottom: 1px solid var(--border);
+}
+
+.zoom-menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .grid-step-input {
   width: 48px;
   height: 32px;
@@ -1514,35 +1578,22 @@ body {
   background: transparent;
 }
 
+/* Anywhere on another document's row opens it, bar its buttons. */
+.doc-list li:not(.current) .acc-header-row {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .doc-list li:not(.current):hover .acc-header-row {
+    background: var(--hover);
+  }
+}
+
 /* The icons take the trash width, so they read as a column with it; the ▲ ▼ keep the narrow
    width they have in the other lists. */
 .doc-list li .doc-act,
 .doc-list li .doc-del {
   width: 30px;
-}
-
-.doc-open {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 6px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.doc-open:hover {
-  color: var(--accent);
-}
-
-.doc-open small {
-  display: block;
-  color: var(--muted);
-  font-size: 10.5px;
 }
 
 /* Row actions are always there. A mouse dims them until the row is hovered, so the list stays
@@ -1571,16 +1622,6 @@ body {
 
 .doc-list li .doc-act:hover {
   color: var(--accent);
-}
-
-.doc-list li.draft .doc-open {
-  color: var(--muted);
-  font-style: italic;
-  cursor: default;
-}
-
-.doc-list li.draft .doc-open {
-  font-style: normal;
 }
 
 .doc-title-input {
@@ -1647,6 +1688,11 @@ body {
 
 .acc-body > .field-row--wide {
   grid-column: 1 / -1;
+}
+
+/* Starts a line, so the field after it sits beside it: Dash and its Pattern. */
+.acc-body > .field-row--line-start {
+  grid-column-start: 1;
 }
 
 /* One label column for the whole body, whether the label is a word or a word and a checkbox,
@@ -1995,10 +2041,11 @@ body {
 .action-bar {
   position: fixed;
   z-index: 70;
-  display: flex;
-  /* Wraps rather than scrolls: on a phone a bar that scrolled sideways hid its last button,
-     which is delete, behind an edge nothing pointed at. */
-  flex-wrap: wrap;
+  /* Rows rather than a scroller: on a phone a bar that scrolled sideways hid its last button,
+     which is delete, behind an edge nothing pointed at. The script sets how many go in a row,
+     so a long set splits into even rows. */
+  display: grid;
+  grid-template-columns: repeat(var(--bar-cols, 7), auto);
   justify-content: center;
   gap: 4px;
   max-width: calc(100vw - 16px);
@@ -2120,4 +2167,175 @@ body {
   stroke-opacity: 0.55;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
+}
+
+/* A locked shape: a dashed box when it is selected. */
+.selection-box.locked-box {
+  stroke-dasharray: 4 3;
+}
+
+/* Guides: a thin line across the canvas, with a wider target to drag it by. */
+.guide {
+  stroke: #1fb6d1;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.guide-draft {
+  stroke-dasharray: 4 3;
+}
+
+.guide-hit {
+  stroke: transparent;
+  stroke-width: 9px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: stroke;
+}
+
+.guide-hit-x {
+  cursor: ew-resize;
+}
+
+.guide-hit-y {
+  cursor: ns-resize;
+}
+
+/* Only the select tool picks guides up: while drawing, a press on one draws. */
+.canvas-wrap:not(.mode-select) .guide-hit {
+  pointer-events: none;
+}
+
+/* A field that shows a value it does not take: the Pattern of a named dash style. */
+.acc-body .field-row input:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Documents: the search under the section's head, and a row's tags and details. */
+.doc-search {
+  position: relative;
+  margin: 0 0 8px;
+}
+
+.doc-search input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 36px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+}
+
+/* The magnifying glass - a cross once there is text - sits inside the field, at its end. */
+.doc-search-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.doc-search-btn:hover {
+  color: var(--text);
+}
+
+.doc-search-btn .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* A name marks what the search found, from a copy laid over it: an input cannot hold markup. */
+.doc-name {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-name .doc-name-marks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: transparent;
+  white-space: pre;
+  pointer-events: none;
+  background: transparent;
+}
+
+.doc-name-marks:empty {
+  display: none;
+}
+
+/* Solid yellow under near-black, in either theme: the one pairing that reads at a glance. The
+   copy's own letters are clear, so only the marked ones are drawn, over the field's. */
+.doc-name-marks mark,
+.doc-tag-hits mark {
+  border-radius: 2px;
+  background: var(--search-hit);
+  color: #1a1a1a;
+}
+
+/* The tags that matched, under a folded row: otherwise nothing would show why it is there. */
+.doc-tag-hits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px 6px 60px;
+}
+
+.doc-list li.expanded .doc-tag-hits {
+  display: none;
+}
+
+.doc-tag {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.doc-no-match {
+  margin: 4px 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.doc-list .doc-body {
+  display: none;
+}
+
+.doc-list li.expanded .doc-body {
+  display: block;
+}
+
+/* Tags take the row: a list of words wants the width a number does not. */
+.doc-list .doc-body {
+  --field-w: none;
+}
+
+.doc-stats > span {
+  display: block;
+}
+
+.doc-stats {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.doc-tag-hits[hidden] {
+  display: none;
 }

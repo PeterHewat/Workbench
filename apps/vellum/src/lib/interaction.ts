@@ -1,4 +1,4 @@
-import { getState, setState, mutate, findElement, selectOnly } from "./state.js";
+import { getState, setState, mutate, findElement, selectOnly, selectedElements } from "./state.js";
 import { isAlignSnap, isSelectMore } from "./modes.js";
 import {
   createPath,
@@ -24,17 +24,35 @@ import {
 import { screenToWorld, zoomAt } from "./viewport.js";
 import { deepClone, dist } from "./utils.js";
 import { pushUndo } from "./undo.js";
+import { addTurn } from "./turn-tally.js";
 import {
   type Anchor,
   type EditorState,
   type Marquee,
+  type PathElement,
   type Point,
+  type PointRef,
   type SceneElement,
 } from "./types.js";
 import { setDrawing, clearDrawing, commit, pointIndexForRole } from "./ops.js";
 import { finishPath } from "./pen-commands.js";
 import { endDropTarget, expandGroups, mergeDroppedEnd } from "./selection-commands.js";
 import { applyResize } from "./resize.js";
+import { boxCorners, rotateAll, scaleAllByCorner, unionBox } from "./selection-transform.js";
+import { SELECTION_HANDLE_ID } from "./render.js";
+import { snapFeatures } from "./boolean.js";
+import { boxToGuides, movedGuide, nearestGuide, withGuide, type GuideAxis } from "./guides.js";
+import {
+  byShape,
+  isPicked,
+  movePoints,
+  onePoint,
+  pickedPoints,
+  pickPoints,
+  pointsInMarquee,
+  togglePoint,
+} from "./points.js";
+import { clickTarget, drillTarget } from "./groups.js";
 import {
   type ShapeTool,
   updatePenPreview,
@@ -77,7 +95,33 @@ type DragState =
       radius: number;
       active: boolean;
     }
-  | { type: "shape-drag"; tool: ShapeTool; start: Point; current: Point };
+  | { type: "shape-drag"; tool: ShapeTool; start: Point; current: Point }
+  | { type: "guide"; axis: GuideAxis; index: number }
+  | {
+      /** Several picked points, moved together. */
+      type: "points";
+      start: Point;
+      refs: PointRef[];
+      bases: Map<string, SceneElement>;
+    }
+  | {
+      /** A corner of the box several selected shapes share. */
+      type: "sel-scale";
+      role: string;
+      bases: SceneElement[];
+      grab: Point;
+    }
+  | {
+      type: "sel-rotate";
+      bases: SceneElement[];
+      cx: number;
+      cy: number;
+      startAngle: number;
+      radius: number;
+      active: boolean;
+      /** How far it has turned so far, in degrees. */
+      degrees: number;
+    };
 
 function hitElement(target: EventTarget | null): string | null {
   let node = target as Node | null;
@@ -103,7 +147,7 @@ function elementsInMarquee(m: Marquee): string[] {
   const y2 = Math.max(m.y1, m.y2);
   const ids: string[] = [];
   for (const el of getState().elements) {
-    if (el.hidden) continue;
+    if (el.hidden || el.locked) continue;
     const box = elementBBox(el);
     if (!box) continue;
     const cx = box.x + box.width / 2;
@@ -146,11 +190,109 @@ function showDropTarget(elementId: string, index: number | null): void {
   setState({ dropTarget: next });
 }
 
+/**
+ * Rings the first point of the path being drawn while a click would close onto it: the same
+ * ring a dragged end shows over the end it would merge with, since both close the shape.
+ */
+function showPenCloseTarget(path: PathElement, world: Point): void {
+  const first = path.points[0]!;
+  const closes =
+    path.points.length >= 2 && dist(world, first) <= CLOSE_TOL / getState().viewport.zoom;
+  const next = closes ? { x: first.x, y: first.y } : null;
+  const prev = getState().dropTarget;
+  if (prev?.x === next?.x && prev?.y === next?.y) return;
+  setState({ dropTarget: next });
+}
+
+/** Whether a press or release is over the ruler a guide on `axis` comes out of. */
+function overRuler(axis: GuideAxis, e: PointerEvent): boolean {
+  const ruler = document.getElementById(axis === "y" ? "ruler-top" : "ruler-left");
+  const r = ruler?.getBoundingClientRect();
+  if (!r || !r.width || !r.height) return false;
+  return axis === "y" ? e.clientY <= r.bottom : e.clientX <= r.right;
+}
+
+/**
+ * Where a guide dragged to `raw` settles. Snapping to shapes (the switch, or Alt) puts it in line
+ * with the nearest point of a shape - corners, centres, midpoints, crossings - within reach; grid
+ * snap puts it on the grid. `points` is asked only when shapes are snapped to, as working out
+ * crossings is not free.
+ */
+function guideAt(
+  axis: GuideAxis,
+  raw: number,
+  e: PointerEvent,
+  points: (s: EditorState) => readonly Point[]
+): number {
+  const s = getState();
+  if (isAlignSnap() || e.altKey) {
+    let at = raw;
+    let best = ALIGN_TOL_PX / s.viewport.zoom;
+    for (const p of points(s)) {
+      const d = Math.abs(p[axis] - raw);
+      if (d < best) {
+        best = d;
+        at = p[axis];
+      }
+    }
+    return at;
+  }
+  if (!s.grid.snap) return raw;
+  const step = Math.max(1, s.grid.step);
+  return Math.round(raw / step) * step;
+}
+
+/** Every point of the document a guide can line up with. */
+function guideTargets(s: EditorState): Point[] {
+  return [...collectAlignPoints(s.elements, {}), ...snapFeatures(s.elements, new Set())];
+}
+
+/**
+ * Dragging a new guide out of a ruler: the top ruler gives a horizontal one, the left a vertical
+ * one. It follows the pointer as a dashed line and is placed where it is let go - unless that is
+ * back on the ruler, which is how a guide pulled out by mistake goes away again.
+ */
+export function bindRulerGuides(top: HTMLCanvasElement, left: HTMLCanvasElement): void {
+  const start = (axis: GuideAxis, canvas: HTMLCanvasElement) => (e: PointerEvent) => {
+    const st = getState();
+    if (e.button !== 0 || st.drawing?.activePathId) return;
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    // The shapes stay put while a guide is dragged, so their points are worked out once.
+    let targets: Point[] | null = null;
+    const place = (ev: PointerEvent) => {
+      const raw = screenToWorld(ev.clientX, ev.clientY)[axis];
+      const at = guideAt(axis, raw, ev, (s) => (targets ??= guideTargets(s)));
+      setState({ drawing: { guide: { axis, at } } });
+    };
+    const up = (ev: PointerEvent) => {
+      canvas.removeEventListener("pointermove", place);
+      canvas.removeEventListener("pointerup", up);
+      canvas.removeEventListener("pointercancel", up);
+      const draft = getState().drawing?.guide;
+      clearDrawing();
+      if (!draft || ev.type === "pointercancel" || overRuler(axis, ev)) return;
+      commit(() => setState((s) => ({ ...s, guides: withGuide(s.guides, axis, draft.at) })));
+    };
+    canvas.addEventListener("pointermove", place);
+    canvas.addEventListener("pointerup", up);
+    canvas.addEventListener("pointercancel", up);
+  };
+  top.addEventListener("pointerdown", start("y", top));
+  left.addEventListener("pointerdown", start("x", left));
+}
+
 export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   let drag: DragState | null = null;
   let pending: PendingDrag | null = null;
   let holdTimer = 0;
   let lastDown = { t: 0, x: 0, y: 0 };
+  /** The selected shape pressed, while that press may still turn out to be a click. */
+  let drillId: string | null = null;
+  /** A picked point pressed among several, while that press may still turn out to be a click. */
+  let pointClick: PointRef | null = null;
+  /** Empty canvas pressed with a point picked: a marquee picks points, a click lets go of them. */
+  let pointMarquee = false;
 
   function cancelHold(): void {
     if (holdTimer) window.clearTimeout(holdTimer);
@@ -182,6 +324,9 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     if (!drag) return {};
     if (drag.type === "move-elements") return { excludeElementIds: new Set(drag.ids) };
     if (drag.type === "resize") return { excludeElementIds: new Set([drag.elementId]) };
+    if (drag.type === "sel-scale")
+      return { excludeElementIds: new Set(drag.bases.map((b) => b.id)) };
+    if (drag.type === "points") return { excludeElementIds: new Set(drag.bases.keys()) };
     if (drag.type === "handle" || drag.type === "pen-handle") {
       return { excludePoint: { elementId: drag.pathId, index: drag.index } };
     }
@@ -202,6 +347,17 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     const cy = Number(handle.getAttribute("cy"));
     if (!Number.isFinite(cx) || !Number.isFinite(cy)) return { x: 0, y: 0 };
     return { x: cx - world.x, y: cy - world.y };
+  }
+
+  /**
+   * A box handle stands off its corner, so the drag works from the corner itself: the offset
+   * from the pointer to the bounding box's corner, not to the handle.
+   */
+  function boxGrab(el: SceneElement, role: string, world: Point): Point {
+    const box = elementBBox(el);
+    if (!box) return { x: 0, y: 0 };
+    const { corner } = boxCorners(box, role);
+    return { x: corner.x - world.x, y: corner.y - world.y };
   }
 
   /**
@@ -246,9 +402,33 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     }
   });
 
+  /**
+   * Segment midpoints and crossings to snap to, worked out once per gesture: a drag changes only
+   * what it moves, and that is left out of them.
+   */
+  let featureCache: { elements: readonly SceneElement[]; key: string; points: Point[] } | null =
+    null;
+  function features(s: EditorState): Point[] {
+    const ex = alignExcludes();
+    const ids = new Set(ex.excludeElementIds ?? []);
+    if (ex.excludePoint) ids.add(ex.excludePoint.elementId);
+    const key = [...ids].sort().join(",");
+    if (featureCache?.elements !== s.elements || featureCache.key !== key) {
+      featureCache = { elements: s.elements, key, points: snapFeatures(s.elements, ids) };
+    }
+    return featureCache.points;
+  }
+
   function pointerWorld(e: PointerEvent): Point {
-    const w = screenToWorld(e.clientX, e.clientY);
+    const p = screenToWorld(e.clientX, e.clientY);
     const s = getState();
+    // A box handle stands off the corner it drags, so the corner is what snaps and aligns:
+    // everything below works on it, and the pointer is given back at the same offset.
+    const g =
+      (drag?.type === "resize" && drag.role.startsWith("box-")) || drag?.type === "sel-scale"
+        ? drag.grab
+        : { x: 0, y: 0 };
+    const w = { x: p.x + g.x, y: p.y + g.y };
     // While dragging a curve handle, Alt breaks its symmetry instead of aligning. The align
     // switch has no second meaning to give way to, so it aligns whatever is being dragged.
     const alignOn =
@@ -262,7 +442,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     let guideY: number | null = null;
     if (alignOn) {
       const tol = ALIGN_TOL_PX / s.viewport.zoom;
-      const aligned = alignToPoints(w, collectAlignPoints(s.elements, alignExcludes()), tol);
+      const candidates = [...collectAlignPoints(s.elements, alignExcludes()), ...features(s)];
+      const aligned = alignToPoints(w, candidates, tol);
       ({ x, y, guideX, guideY } = aligned);
     }
     const snapOn =
@@ -274,11 +455,19 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       x = Math.round(x / step) * step;
       y = Math.round(y / step) * step;
     }
+    // A guide in reach wins over the grid and over other shapes: it was put there to be used.
+    if ((alignOn || snapOn) && drag?.type !== "guide") {
+      const tol = ALIGN_TOL_PX / s.viewport.zoom;
+      const gx = nearestGuide(w.x, s.guides.x, tol);
+      const gy = nearestGuide(w.y, s.guides.y, tol);
+      if (gx != null) x = gx;
+      if (gy != null) y = gy;
+    }
     setState({
-      cursor: { x: w.x, y: w.y, snapX: x, snapY: y, snapActive: alignOn || snapOn },
+      cursor: { x: p.x, y: p.y, snapX: x, snapY: y, snapActive: alignOn || snapOn },
       align: { x: guideX, y: guideY },
     });
-    return { x, y };
+    return { x: x - g.x, y: y - g.y };
   }
 
   svg.addEventListener("pointerleave", () => {
@@ -304,6 +493,10 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       return;
     }
     if (e.button !== 0) return;
+    featureCache = null;
+    drillId = null;
+    pointClick = null;
+    pointMarquee = false;
     svg.setPointerCapture(e.pointerId);
     const st = getState();
     const world = pointerWorld(e);
@@ -319,6 +512,20 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
 
     if (st.spacePan) {
       startPan(e);
+      return;
+    }
+
+    // A guide, with the select tool: dragged to move it, dropped on its ruler or double-clicked
+    // to take it away.
+    const guideHit = (e.target as Element).closest?.("[data-guide-axis]");
+    if (guideHit && st.tool === "select") {
+      const axis = guideHit.getAttribute("data-guide-axis") as GuideAxis;
+      const index = Number(guideHit.getAttribute("data-guide-index"));
+      if (isDouble) {
+        commit(() => setState((s) => ({ ...s, guides: movedGuide(s.guides, axis, index, null) })));
+        return;
+      }
+      arm(e, { type: "guide", axis, index });
       return;
     }
 
@@ -341,9 +548,19 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         if (isDouble && (h.kind === "in" || h.kind === "out") && anchor) {
           commit(() => mutate(() => removeHandle(anchor, h.kind as "in" | "out")));
           setState({
-            selection: selectOnly([h.pathId], { pathId: h.pathId, kind: "anchor", index: h.index }),
+            selection: onePoint(getState().selection, {
+              pathId: h.pathId,
+              kind: "anchor",
+              index: h.index,
+            }),
           });
           drag = null;
+          return;
+        }
+        if (
+          h.kind === "anchor" &&
+          pointGesture(e, st, { pathId: h.pathId, index: h.index }, world)
+        ) {
           return;
         }
         const p = path.points[h.index];
@@ -359,7 +576,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         // then offers to link or break the pair, which is how touch gets at a cusp, or to
         // remove the handle grabbed.
         setState({
-          selection: selectOnly([h.pathId], {
+          selection: onePoint(getState().selection, {
             pathId: h.pathId,
             kind: "anchor",
             index: h.index,
@@ -368,6 +585,12 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         });
         return;
       }
+    }
+
+    const selHandle = target.closest?.("[data-selection-handle]");
+    if (selHandle) {
+      startSelectionDrag(e, selHandle.getAttribute("data-handle-role") ?? "", world);
+      return;
     }
 
     const resizeHandle = target.closest?.("[data-handle-role]");
@@ -382,6 +605,13 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         return;
       }
       const ptIndex = pointIndexForRole(role);
+      if (
+        !isDouble &&
+        ptIndex != null &&
+        pointGesture(e, st, { pathId: elementId, index: ptIndex }, world)
+      ) {
+        return;
+      }
       if (isDouble && ptIndex != null) {
         commit(() => {
           setState((s) => {
@@ -404,15 +634,15 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         elementId,
         role,
         base: deepClone(resizeTarget),
-        grab: grabOffset(resizeHandle, world),
+        grab: role.startsWith("box-")
+          ? boxGrab(resizeTarget, role, world)
+          : grabOffset(resizeHandle, world),
       });
       setState({
-        selection: selectOnly(
-          [elementId],
-          role.startsWith("pt-") && ptIndex != null
-            ? { pathId: elementId, kind: "anchor", index: ptIndex }
-            : null
-        ),
+        selection:
+          ptIndex != null
+            ? onePoint(getState().selection, { pathId: elementId, kind: "anchor", index: ptIndex })
+            : selectOnly([elementId]),
       });
       return;
     }
@@ -425,8 +655,12 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           drag = null;
           return;
         }
-        const members = expandGroups([elId]);
         const additive = e.shiftKey || isSelectMore();
+        const wasSelected = st.selection.elementIds.includes(elId);
+        const members = clickTarget(st.elements, new Set(st.selection.elementIds), elId).ids;
+        // Pressing a shape already selected keeps the selection, so it can be dragged; if the
+        // press turns out to be a click, it steps into the group instead (see pointerup).
+        drillId = !additive && wasSelected ? elId : null;
         setState((s) => {
           let ids = s.selection.elementIds;
           if (additive) {
@@ -438,7 +672,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           }
           return { ...s, selection: selectOnly(ids) };
         });
-        const ids = getState().selection.elementIds;
+        // A locked shape selected from its row stays put while the others are dragged.
+        const ids = getState().selection.elementIds.filter((id) => !findElement(id)?.locked);
         const bases: Record<string, SceneElement> = {};
         for (const id of ids) {
           const found = findElement(id);
@@ -471,7 +706,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       } else {
         arm(e, marquee, { undo: false, grab: false });
       }
-      if (!e.shiftKey && !isSelectMore()) setState({ selection: selectOnly() });
+      pointMarquee = !!st.selection.pathEdit;
+      if (!e.shiftKey && !isSelectMore() && !pointMarquee) setState({ selection: selectOnly() });
       return;
     }
 
@@ -527,6 +763,69 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     return true;
   }
 
+  /** Arms a stretch or a turn of every selected shape at once, from their shared box's handles. */
+  function startSelectionDrag(e: PointerEvent, role: string, world: Point): void {
+    const bases = selectedElements().map((el) => deepClone(el));
+    const box = unionBox(bases);
+    if (!box) return;
+    if (role === "rotate") {
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      arm(e, {
+        type: "sel-rotate",
+        bases,
+        cx,
+        cy,
+        startAngle: Math.atan2(world.y - cy, world.x - cx),
+        radius: Math.max(20, Math.hypot(world.x - cx, world.y - cy)),
+        active: false,
+        degrees: 0,
+      });
+      return;
+    }
+    const { corner } = boxCorners(box, role);
+    arm(e, {
+      type: "sel-scale",
+      role,
+      bases,
+      grab: { x: corner.x - world.x, y: corner.y - world.y },
+    });
+  }
+
+  /** Puts `next` in place of the shapes with the same ids. */
+  function replaceElements(next: readonly SceneElement[], drawing?: EditorState["drawing"]): void {
+    const byId = new Map(next.map((el) => [el.id, el]));
+    setState((s) => ({
+      ...s,
+      elements: s.elements.map((x) => byId.get(x.id) ?? x),
+      ...(drawing === undefined ? {} : { drawing }),
+    }));
+  }
+
+  /**
+   * A press on a point that picks several: with Shift (or the add switch), and a point already
+   * picked, it adds this one or takes it out; on one of several picked, it arms a drag of them
+   * all, and a click narrows the pick to it. False leaves the press to pick the point alone.
+   */
+  function pointGesture(e: PointerEvent, st: EditorState, ref: PointRef, world: Point): boolean {
+    const sel = st.selection;
+    const additive = e.shiftKey || isSelectMore();
+    if (additive && sel.pathEdit && sel.elementIds.includes(ref.pathId)) {
+      setState({ selection: togglePoint(sel, ref) });
+      return true;
+    }
+    const picked = pickedPoints(sel);
+    if (picked.length < 2 || !isPicked(sel, ref)) return false;
+    const bases = new Map<string, SceneElement>();
+    for (const id of byShape(picked).keys()) {
+      const el = findElement(id);
+      if (el) bases.set(id, deepClone(el));
+    }
+    arm(e, { type: "points", start: world, refs: picked, bases });
+    pointClick = ref;
+    return true;
+  }
+
   function startRotate(e: PointerEvent, el: SceneElement, world: Point): void {
     const box = elementBBox(el);
     if (!box || !canRotate(el)) return;
@@ -564,7 +863,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     if (!pathId || path?.type !== "path") return;
     const activeId = pathId;
 
-    if (path.points.length >= 3 && dist(world, path.points[0]!) <= CLOSE_TOL / st.viewport.zoom) {
+    if (path.points.length >= 2 && dist(world, path.points[0]!) <= CLOSE_TOL / st.viewport.zoom) {
       commit(() => {
         setState((s) => {
           const p = findElement(activeId);
@@ -652,6 +951,19 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           dy = Math.round((first.y + dy) / step) * step - first.y;
         }
       }
+      // With snapping on, an edge or the centre of what is dragged lines up with a guide.
+      if (st.grid.snap || e.altKey || isAlignSnap()) {
+        const box = unionBox(Object.values(d.bases));
+        if (box) {
+          const fit = boxToGuides(
+            { ...box, x: box.x + dx, y: box.y + dy },
+            st.guides,
+            ALIGN_TOL_PX / st.viewport.zoom
+          );
+          dx += fit.dx;
+          dy += fit.dy;
+        }
+      }
       mutate(() => {
         for (const id of d.ids) {
           const el = findElement(id);
@@ -693,7 +1005,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         mutate(() => applyHandleDrag(p, world, e.altKey));
       }
       setState({
-        selection: selectOnly([d.pathId], {
+        selection: onePoint(getState().selection, {
           pathId: d.pathId,
           kind: "anchor",
           index: d.index,
@@ -701,6 +1013,55 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         }),
       });
       showDropTarget(d.pathId, d.kind === "anchor" ? d.index : null);
+      return;
+    }
+
+    if (drag?.type === "guide") {
+      const d = drag;
+      const raw = screenToWorld(e.clientX, e.clientY)[d.axis];
+      const at = guideAt(d.axis, raw, e, (s) => [
+        ...collectAlignPoints(s.elements, {}),
+        ...features(s),
+      ]);
+      setState((s) => ({ ...s, guides: movedGuide(s.guides, d.axis, d.index, at) }));
+      return;
+    }
+
+    if (drag?.type === "points") {
+      const d = drag;
+      replaceElements(movePoints(d.bases, d.refs, world.x - d.start.x, world.y - d.start.y));
+      return;
+    }
+
+    if (drag?.type === "sel-scale") {
+      const d = drag;
+      const at = { x: world.x + d.grab.x, y: world.y + d.grab.y };
+      replaceElements(scaleAllByCorner(d.bases, d.role, at, e.shiftKey));
+      return;
+    }
+
+    if (drag?.type === "sel-rotate") {
+      const d = drag;
+      let delta = Math.atan2(world.y - d.cy, world.x - d.cx) - d.startAngle;
+      if (e.shiftKey) {
+        const step = Math.PI / 12;
+        delta = Math.round(delta / step) * step;
+      } else if (e.pointerType !== "mouse") {
+        delta = magnetTurn(delta);
+      }
+      if (!d.active && Math.abs(delta) < 0.01) return;
+      d.active = true;
+      const a = d.startAngle + delta;
+      d.degrees = (delta * 180) / Math.PI;
+      replaceElements(rotateAll(d.bases, d.degrees, d.cx, d.cy), {
+        rotateHandle: {
+          elementId: SELECTION_HANDLE_ID,
+          cx: d.cx,
+          cy: d.cy,
+          x: d.cx + Math.cos(a) * d.radius,
+          y: d.cy + Math.sin(a) * d.radius,
+        },
+      });
       return;
     }
 
@@ -737,7 +1098,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       const d = drag;
       const el = findElement(d.elementId);
       const at = { x: world.x + d.grab.x, y: world.y + d.grab.y };
-      if (el) mutate(() => applyResize(el, d.role, at, d.base, e.altKey));
+      if (el) mutate(() => applyResize(el, d.role, at, d.base, e.altKey, e.shiftKey));
       showDropTarget(d.elementId, pointIndexForRole(d.role));
       return;
     }
@@ -766,7 +1127,10 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
 
     if (st.drawing?.activePathId) {
       const path = findElement(st.drawing.activePathId);
-      if (path?.type === "path" && path.points.length) updatePenPreview(path, world);
+      if (path?.type === "path" && path.points.length) {
+        updatePenPreview(path, world);
+        showPenCloseTarget(path, world);
+      }
     } else if (!drag && st.drawing?.shapeStart) {
       if (st.tool === "rect" || st.tool === "ellipse") {
         updateShapePreview(st.tool, st.drawing.shapeStart, world, e.shiftKey);
@@ -779,7 +1143,28 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     // A press that never passed the slop threshold was a click: the selection it made stands,
     // but nothing moved and no undo step was spent.
     const heldMarquee = pending?.drag.type === "marquee";
+    const clickedSelected = pending?.drag.type === "move-elements" ? drillId : null;
+    const clickedPoint = pending?.drag.type === "points" ? pointClick : null;
+    const clickedEmpty =
+      pointMarquee && !!pending && (pending.drag.type === "marquee" || pending.drag.type === "pan");
     pending = null;
+    drillId = null;
+    pointClick = null;
+    if (clickedPoint) {
+      setState({
+        selection: onePoint(getState().selection, {
+          pathId: clickedPoint.pathId,
+          kind: "anchor",
+          index: clickedPoint.index,
+        }),
+      });
+    }
+    if (clickedEmpty && !e.shiftKey && !isSelectMore()) setState({ selection: selectOnly() });
+    if (clickedSelected) {
+      const s = getState();
+      const inner = drillTarget(s.elements, new Set(s.selection.elementIds), clickedSelected);
+      if (inner) setState({ selection: selectOnly(inner.ids) });
+    }
     cancelHold();
     if (heldMarquee) clearDrawing();
     if (drag?.type === "pan") {
@@ -791,6 +1176,20 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     setState({ align: { x: null, y: null }, dropTarget: null });
 
     if (drag?.type === "marquee") {
+      // With a point picked, a marquee picks the points inside it, on the shapes selected; when
+      // it holds none, it selects shapes as usual.
+      const s0 = getState();
+      const refs = pointMarquee
+        ? pointsInMarquee(s0.elements, new Set(s0.selection.elementIds), drag)
+        : [];
+      if (refs.length) {
+        const additive = e.shiftKey || isSelectMore();
+        const next = additive ? [...pickedPoints(s0.selection), ...refs] : refs;
+        setState({ selection: pickPoints(s0.selection, next) });
+        clearDrawing();
+        drag = null;
+        return;
+      }
       const ids = expandGroups(elementsInMarquee(drag));
       setState((s) => ({
         ...s,
@@ -814,7 +1213,23 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       return;
     }
 
-    if (drag?.type === "rotate") {
+    if (drag?.type === "guide") {
+      const d = drag;
+      drag = null;
+      if (overRuler(d.axis, e)) {
+        setState((s) => ({ ...s, guides: movedGuide(s.guides, d.axis, d.index, null) }));
+      }
+      return;
+    }
+
+    if (drag?.type === "rotate" || drag?.type === "sel-rotate") {
+      // A group's Rotate field counts what the handle turned, as it does what is typed there.
+      if (drag.type === "sel-rotate" && drag.active) {
+        addTurn(
+          drag.bases.map((b) => b.id),
+          drag.degrees
+        );
+      }
       drag = null;
       clearDrawing();
       return;

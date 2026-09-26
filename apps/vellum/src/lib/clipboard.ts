@@ -2,16 +2,16 @@ import { getState, setState, findElement, selectOnly } from "./state.js";
 import { importSvgFile, isInert } from "./io.js";
 import { type SceneElement } from "./types.js";
 import { commit } from "./ops.js";
-import { expandGroups, deleteSelection, copyElements } from "./selection-commands.js";
+import { deleteSelection, copyElements } from "./selection-commands.js";
 
 const CLIP_TAG = "vellum/elements";
 
 let pasteCount = 0;
 
-/** Serializes the selection for the clipboard (whole groups included), or null. */
+/** Serializes the selection for the clipboard - what is selected, a member picked alone included - or null. */
 export function copySelectionText(): string | null {
-  const els = expandGroups(getState().selection.elementIds)
-    .map((id) => findElement(id))
+  const els = getState()
+    .selection.elementIds.map((id) => findElement(id))
     .filter((e): e is SceneElement => !!e);
   if (!els.length) return null;
   pasteCount = 0;
@@ -31,7 +31,10 @@ export async function pasteFromClipboard(): Promise<void> {
 
 export function cutSelection(): string | null {
   const text = copySelectionText();
-  if (text) deleteSelection();
+  if (!text) return null;
+  // What was copied is the shapes, so the shapes go - not a point or handle picked on one.
+  setState((st) => ({ ...st, selection: selectOnly(st.selection.elementIds) }));
+  deleteSelection();
   return text;
 }
 

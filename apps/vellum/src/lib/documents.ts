@@ -8,10 +8,20 @@ import {
   renameDocument,
   duplicateDocument,
   reorderDocuments,
+  setDocumentTags,
   libraryReset,
   type DocumentMeta,
 } from "./storage.js";
-import { serializeProject, loadProject, readProject } from "./io.js";
+import { serializeProject, loadProject, formatExportSvg, type ExportDoc } from "./io.js";
+import {
+  documentFile,
+  documentFileName,
+  fileBase,
+  libraryFile,
+  libraryFileName,
+  readDocumentFile,
+  type ImportedDocument,
+} from "./document-files.js";
 import { deepClone, escapeAttr, uid } from "./utils.js";
 import { byId, downloadText, registerServiceWorker } from "@workbench/ui";
 import { type ProjectFile } from "./types.js";
@@ -21,6 +31,17 @@ import { fitToView } from "./zoom.js";
 import { invalidateLists, rowDotHtml } from "./accordion.js";
 import { hydrateImageDimensions } from "./images-panel.js";
 import { WELCOME_NAME, loadWelcome } from "./welcome.js";
+import { demoDocument, demoUrl, demosToAdd } from "./demos.js";
+import {
+  cleanTags,
+  docStats,
+  sizeText,
+  markHtml,
+  matchesSearch,
+  searchWords,
+  statsText,
+  tagsHit,
+} from "./doc-list.js";
 
 /** The document on the canvas. Read by the rest of the app; only this module replaces it. */
 export let currentDoc: { id: string | null; name: string } = { id: null, name: "" };
@@ -29,6 +50,8 @@ export let currentDoc: { id: string | null; name: string } = { id: null, name: "
 const LAST_DOC_KEY = "vellum.lastDoc";
 /** Set once the welcome drawing has been added: deleting it must not bring it back. */
 const WELCOMED_KEY = "vellum.welcomed";
+/** The demo files this browser has been given, so a deleted one is not given again. */
+const DEMOS_KEY = "vellum.demos";
 const docDirtyEl = byId("doc-dirty");
 const docListEl = byId("doc-list");
 let docsCache: DocumentMeta[] = [];
@@ -83,11 +106,17 @@ async function refreshDocList(): Promise<void> {
     docsCache = [];
   }
   const active = document.activeElement as HTMLInputElement | null;
-  // Don't rebuild the list under a name that is being edited.
-  if (active?.classList?.contains("doc-title-input")) {
-    const docId = active.closest<HTMLElement>("[data-doc-id]")?.dataset.docId;
-    const stored = docsCache.find((d) => d.id === docId)?.name;
-    if (active.value !== stored) return;
+  // Don't rebuild the list under a name or tags being edited.
+  const editing = active?.closest<HTMLElement>("#doc-list [data-doc-id]")?.dataset.docId;
+  if (editing) {
+    const stored = docsCache.find((d) => d.id === editing);
+    if (active!.classList.contains("doc-title-input") && active!.value !== stored?.name) return;
+    if (
+      active!.classList.contains("doc-tags-input") &&
+      cleanTags(active!.value).join(", ") !== (stored?.tags ?? []).join(", ")
+    ) {
+      return;
+    }
   }
   docListEl.innerHTML = "";
   const last = docsCache.length - 1;
@@ -95,15 +124,22 @@ async function refreshDocList(): Promise<void> {
     const isCurrent = d.id === currentDoc.id;
     const li = document.createElement("li");
     li.dataset.docId = d.id;
-    li.className = `acc-item doc-row${isCurrent ? " current" : ""}`;
+    const open = expandedDocs.has(d.id);
+    li.className = `acc-item doc-row${isCurrent ? " current" : ""}${open ? " expanded" : ""}`;
     const when = new Date(d.updated).toLocaleString([], {
       dateStyle: "short",
       timeStyle: "short",
     });
     li.title = isCurrent ? `Open since ${when}` : `Open (last saved ${when})`;
     li.innerHTML = `<div class="acc-header-row">
-        ${rowDotHtml("radio", isCurrent, isCurrent ? "This is the open document" : "Open", " data-doc-open")}
-        <input type="text" class="acc-title-input doc-title-input" data-doc-open value="${escapeAttr(d.name)}" maxlength="80" aria-label="Document name"${isCurrent ? "" : ' readonly tabindex="-1"'} />
+        <button type="button" class="acc-expand-btn" data-doc-expand aria-expanded="${open}" aria-label="Tags and details" title="Tags and details">
+          <span class="chevron" aria-hidden="true">▶</span>
+        </button>
+        ${rowDotHtml("radio", isCurrent, isCurrent ? "This is the open document" : "Open")}
+        <span class="doc-name">
+          <input type="text" class="acc-title-input doc-title-input" value="${escapeAttr(d.name)}" maxlength="80" aria-label="Document name"${isCurrent ? "" : ' readonly tabindex="-1"'} />
+          <span class="acc-title-input doc-title-input doc-name-marks" aria-hidden="true"></span>
+        </span>
         <button type="button" class="acc-icon-btn doc-act" data-doc-dup title="Duplicate" aria-label="Duplicate document">
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-copy" /></svg>
         </button>
@@ -115,10 +151,139 @@ async function refreshDocList(): Promise<void> {
         <button type="button" class="acc-icon-btn acc-trash doc-del" data-doc-delete title="Delete" aria-label="Delete document">
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-trash" /></svg>
         </button>
+      </div>
+      <p class="doc-tag-hits" hidden></p>
+      <div class="acc-body doc-body">
+        <label class="field-row field-row--wide"><span>Tags</span><input type="text" class="doc-tags-input" value="${escapeAttr((d.tags ?? []).join(", "))}" placeholder="icons, arrows" aria-label="Tags, separated by commas" /></label>
+        <p class="doc-stats"><span class="doc-stats-content"></span><span class="doc-stats-file"></span></p>
       </div>`;
     docListEl.appendChild(li);
+    if (open) void fillStats(li, d);
   }
+  applyDocSearch();
 }
+
+/**
+ * Documents showing their tags and details. Where you are, not part of any document: kept for
+ * the session only.
+ */
+const expandedDocs = new Set<string>();
+
+interface Details {
+  /** What is in it: shapes, groups, points, size. */
+  content: string;
+  /** How large its exported SVG is, in bytes. */
+  bytes: number;
+}
+
+/** Details of stored documents, kept while the document is unchanged: reading one loads it whole. */
+const statsCache = new Map<string, { updated: number; details: Details }>();
+
+/** What the details line reads for a document: its SVG is sized as Export SVG writes it. */
+function detailsOf(doc: (ExportDoc & Pick<ProjectFile, "images">) | null): Details {
+  const svg = doc ? formatExportSvg(doc, true) : "";
+  return { content: statsText(docStats(doc)), bytes: new TextEncoder().encode(svg).length };
+}
+
+/** Two lines: what is in the document, then how large its SVG is and when it was saved. */
+async function fillStats(li: HTMLElement, d: DocumentMeta): Promise<void> {
+  const content = li.querySelector<HTMLElement>(".doc-stats-content");
+  const file = li.querySelector<HTMLElement>(".doc-stats-file");
+  if (!content || !file) return;
+  const when = new Date(d.updated).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  let details: Details;
+  if (d.id === currentDoc.id) {
+    details = detailsOf(getState());
+  } else {
+    const cached = statsCache.get(d.id);
+    if (cached?.updated === d.updated) {
+      details = cached.details;
+    } else {
+      let data: ProjectFile | null;
+      try {
+        data = await loadDocument(d.id);
+      } catch {
+        data = null;
+      }
+      details = detailsOf(data);
+      statsCache.set(d.id, { updated: d.updated, details });
+    }
+  }
+  content.textContent = details.content;
+  file.textContent = `${sizeText(details.bytes)} saved ${when}`;
+}
+
+/* ---------- Search: names and tags ---------- */
+
+const docSearchBtn = byId<HTMLButtonElement>("btn-doc-search");
+const docSearchInput = byId<HTMLInputElement>("doc-search");
+const docNoMatch = byId("doc-no-match");
+let lastQuery = "";
+
+/**
+ * Shows only the documents matching the search, with what matched marked: in the name, and -
+ * since a folded row hides its tags - the tags that matched on a line of their own under it. ▲
+ * and ▼ step through the whole list, so they rest while it is filtered: a step past a hidden
+ * document would look like nothing happened.
+ */
+function applyDocSearch(): void {
+  const query = docSearchInput.value.trim();
+  const words = searchWords(query);
+  let shown = 0;
+  for (const li of docListEl.querySelectorAll<HTMLElement>("[data-doc-id]")) {
+    const d = docsCache.find((m) => m.id === li.dataset.docId);
+    const match = !d || matchesSearch(d, query);
+    li.hidden = !match;
+    if (match) shown++;
+    li.querySelectorAll<HTMLButtonElement>("[data-doc-move]").forEach((b) => {
+      if (query) b.disabled = true;
+    });
+    const name = li.querySelector<HTMLInputElement>(".doc-title-input:not(.doc-name-marks)");
+    const marks = li.querySelector<HTMLElement>(".doc-name-marks");
+    if (marks) marks.innerHTML = words.length && name ? markHtml(name.value, words) : "";
+    const hits = li.querySelector<HTMLElement>(".doc-tag-hits");
+    if (hits) {
+      const tags = words.length ? tagsHit(d?.tags, words) : [];
+      hits.innerHTML = tags
+        .map((t) => `<span class="doc-tag">${markHtml(t, words)}</span>`)
+        .join("");
+      hits.hidden = !tags.length;
+    }
+  }
+  docNoMatch.hidden = !query || shown > 0;
+  // With text in it, the magnifying glass becomes the way to clear it.
+  const icon = query ? "icon-clear" : "icon-search";
+  const label = query ? "Clear the search" : "Search";
+  docSearchBtn.innerHTML = `<svg class="ui-icon" aria-hidden="true"><use href="#${icon}" /></svg>`;
+  docSearchBtn.title = label;
+  docSearchBtn.setAttribute("aria-label", label);
+  // Leaving a filtered list gives ▲ and ▼ back, which only a rebuild works out.
+  const wasFiltered = !!lastQuery;
+  lastQuery = query;
+  if (wasFiltered && !query) void refreshDocList();
+}
+
+function clearDocSearch(): void {
+  docSearchInput.value = "";
+  applyDocSearch();
+}
+
+docSearchBtn.addEventListener("click", () => {
+  if (docSearchInput.value) clearDocSearch();
+  docSearchInput.focus();
+});
+docSearchInput.addEventListener("input", applyDocSearch);
+docSearchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") docSearchInput.blur();
+  if (e.key !== "Escape") return;
+  e.stopPropagation();
+  if (docSearchInput.value) clearDocSearch();
+  else docSearchInput.blur();
+});
+// The open document's name marks what it matches as it is renamed.
+docListEl.addEventListener("input", (e) => {
+  if ((e.target as HTMLElement).classList?.contains("doc-title-input")) applyDocSearch();
+});
 
 function rememberLast(id: string | null): void {
   try {
@@ -216,6 +381,8 @@ function focusCurrentDocName(): void {
 
 async function newDocument(): Promise<void> {
   await flushSave();
+  // A filtered list would hide the new document the moment it is made.
+  clearDocSearch();
   setSectionOpen("documents", true);
   const st = getState();
   // If the open document is still empty there is no need for another one.
@@ -240,6 +407,8 @@ async function openDocument(id: string): Promise<void> {
     window.alert(err instanceof Error ? err.message : String(err));
     return;
   }
+  // A document opens showing all of its artboard, whatever view it was last left in.
+  setState({ viewport: fitToView() });
   currentDoc = { id, name: docsCache.find((d) => d.id === id)?.name ?? "" };
   rememberLast(id);
   afterDocumentReplaced();
@@ -270,8 +439,24 @@ docListEl.addEventListener("keydown", (e) => {
     target.blur();
   }
 });
+docListEl.addEventListener("keydown", (e) => {
+  const target = e.target as HTMLInputElement;
+  if (target.classList?.contains("doc-tags-input") && e.key === "Enter") target.blur();
+});
 docListEl.addEventListener("change", async (e) => {
   const target = e.target as HTMLInputElement;
+  const id = target.closest<HTMLElement>("[data-doc-id]")?.dataset.docId;
+  if (id && target.classList?.contains("doc-tags-input")) {
+    const tags = cleanTags(target.value);
+    target.value = tags.join(", ");
+    try {
+      await setDocumentTags(id, tags);
+    } catch (err) {
+      storageError(err);
+    }
+    await refreshDocList();
+    return;
+  }
   if (!target.classList?.contains("doc-title-input")) return;
   if (!target.value.trim()) target.value = currentDoc.name;
   else await renameCurrent(target.value);
@@ -349,108 +534,117 @@ docListEl.addEventListener("click", async (e) => {
   const li = target.closest<HTMLElement>("[data-doc-id]");
   const id = li?.dataset.docId;
   if (!id) return;
+  if (target.closest("[data-doc-expand]")) {
+    if (!expandedDocs.delete(id)) expandedDocs.add(id);
+    await refreshDocList();
+    return;
+  }
+  // The details under a row are for reading and typing tags, not a way to open the document.
+  if (!target.closest(".acc-header-row")) return;
   const move = target.closest<HTMLElement>("[data-doc-move]");
   if (move) await moveDoc(id, Number(move.dataset.docMove));
   else if (target.closest("[data-doc-dup]")) await duplicateDoc(id);
   else if (target.closest("[data-doc-save]")) await exportDoc(id);
   else if (target.closest("[data-doc-delete]")) await deleteDoc(id);
-  else if (target.closest("[data-doc-open]") && id !== currentDoc.id) await openDocument(id);
+  // Anywhere else on another document's row opens it: the dot is not the only way in.
+  else if (id !== currentDoc.id) await openDocument(id);
 });
 
-/* ---------- Backup: the whole library in and out as one file ---------- */
-
-/**
- * A document travels as a file of its own, not as a copy of the whole library. Exporting one
- * means picking it; importing one adds it beside what you already have. A library file could
- * only ever be restored wholesale, which is the wrong unit for moving a single drawing between
- * two browsers - the thing people actually do.
- */
-const DOC_TAG = "vellum/document";
-
-interface DocumentFile {
-  tag: typeof DOC_TAG;
-  version: 1;
-  exported: string;
-  name: string;
-  data: ProjectFile;
-}
-
-/** A document name made safe for a file name on every operating system. */
-function fileBase(name: string): string {
-  return name.replace(/[^\w. -]+/g, "").trim() || "document";
-}
-
-function docFileName(name: string): string {
-  return `${fileBase(name)}.vellum.json`;
-}
+/* ---------- Files: one document, or all of them, in and out ---------- */
 
 /** What an SVG export of the open document is saved as. */
 export function svgFileName(): string {
   return `${fileBase(currentDoc.name)}.svg`;
 }
 
-async function exportDoc(id: string): Promise<void> {
-  if (id === currentDoc.id) await flushSave();
-  let data: ProjectFile | null;
+/** A stored document's data, or null (with the error shown) when storage fails. */
+async function storedData(id: string): Promise<ProjectFile | null> {
   try {
-    data = await loadDocument(id);
+    return await loadDocument(id);
   } catch (err) {
     storageError(err);
-    return;
+    return null;
   }
-  if (!data) return;
-  const name = docsCache.find((d) => d.id === id)?.name ?? "Untitled";
-  const file: DocumentFile = {
-    tag: DOC_TAG,
-    version: 1,
-    exported: new Date().toISOString(),
-    name,
-    data,
-  };
-  downloadText(docFileName(name), JSON.stringify(file), "application/json");
 }
+
+async function exportDoc(id: string): Promise<void> {
+  if (id === currentDoc.id) await flushSave();
+  const data = await storedData(id);
+  if (!data) return;
+  const meta = docsCache.find((d) => d.id === id);
+  const name = meta?.name ?? "Untitled";
+  downloadText(
+    documentFileName(name),
+    JSON.stringify(documentFile({ name, tags: meta?.tags, data })),
+    "application/json"
+  );
+}
+
+/** Every document in one file, in list order: a backup, or a whole library to move. */
+async function exportAll(): Promise<void> {
+  await flushSave();
+  const documents: ImportedDocument[] = [];
+  for (const d of docsCache) {
+    const data = await storedData(d.id);
+    if (!data) return;
+    documents.push({ name: d.name, tags: d.tags, data });
+  }
+  if (!documents.length) return;
+  downloadText(libraryFileName(), JSON.stringify(libraryFile(documents)), "application/json");
+}
+
+byId("btn-doc-export-all").addEventListener("click", () => void exportAll());
 
 byId("btn-doc-import").addEventListener("click", () => {
   byId<HTMLInputElement>("input-doc-file").click();
 });
 
+/**
+ * Adds every document in the chosen files - single documents and whole libraries alike - beside
+ * the ones already here, each with a fresh id and a free name, then opens the first of them.
+ */
 byId("input-doc-file").addEventListener("change", async (e) => {
   const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
+  const files = [...(input.files ?? [])];
   input.value = "";
-  if (!file) return;
-  let parsed: DocumentFile;
-  try {
-    parsed = JSON.parse(await file.text()) as DocumentFile;
-  } catch {
-    window.alert("That file is not valid JSON.");
-    return;
+  if (!files.length) return;
+  const incoming: ImportedDocument[] = [];
+  const problems: string[] = [];
+  for (const file of files) {
+    try {
+      incoming.push(...readDocumentFile(await file.text()));
+    } catch (err) {
+      problems.push(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
-  if (parsed?.tag !== DOC_TAG || !parsed.data) {
-    window.alert("That is not a Vellum document file.");
-    return;
-  }
-  try {
-    parsed.data = readProject(parsed.data);
-  } catch (err) {
-    window.alert(err instanceof Error ? err.message : String(err));
-    return;
-  }
+  if (incoming.length) await addDocuments(incoming);
+  if (problems.length) window.alert(`Could not import:\n${problems.join("\n")}`);
+});
+
+async function addDocuments(incoming: readonly ImportedDocument[]): Promise<void> {
   await flushSave();
-  const id = uid("doc");
+  let firstId: string | null = null;
   try {
     docsCache = await listDocuments();
-    // An imported document always gets a fresh id and a free name: it is added, never merged.
-    await saveDocument({ id, name: uniqueName(parsed.name || "Untitled"), data: parsed.data });
-    docsCache = await listDocuments();
+    // A new document goes on top of the list, so the last one stored ends up first: stored
+    // backwards, a library comes back in its own order.
+    for (const doc of [...incoming].reverse()) {
+      const id = uid("doc");
+      // Named against everything stored so far, this import's other documents included.
+      await saveDocument({ id, name: uniqueName(doc.name), tags: doc.tags, data: doc.data });
+      docsCache = await listDocuments();
+      firstId = id;
+    }
   } catch (err) {
     storageError(err);
-    return;
   }
+  if (!firstId) return;
+  // As for a new one: what comes in must be seen, whatever the list was filtered to.
+  clearDocSearch();
   setSectionOpen("documents", true);
-  await openDocument(id);
+  await openDocument(firstId);
   await refreshDocList();
-});
+}
 
 // Anything that changes the document schedules an autosave; saves wait until the pointer is up.
 setHistoryListener(noteChange);
@@ -491,6 +685,46 @@ function markWelcomed(): void {
   }
 }
 
+/**
+ * Adds the demos this browser has not had yet, at the bottom of the list, in the order they are
+ * listed. Without storage to remember them by, none are added: better than adding them again at
+ * every start. One that cannot be fetched (offline before a first load) is tried next time.
+ */
+async function addDemos(): Promise<void> {
+  let given: string[];
+  try {
+    given = JSON.parse(localStorage.getItem(DEMOS_KEY) ?? "[]") as string[];
+    if (!Array.isArray(given)) given = [];
+  } catch {
+    return;
+  }
+  const added: string[] = [];
+  for (const demo of demosToAdd(given)) {
+    try {
+      const res = await fetch(demoUrl(demo));
+      if (!res.ok) continue;
+      const data = demoDocument(await res.text());
+      await saveDocument({
+        id: uid("doc"),
+        name: demo.name,
+        tags: demo.tags,
+        data,
+        place: "bottom",
+      });
+      added.push(demo.file);
+    } catch {
+      /* tried again next start */
+    }
+  }
+  if (!added.length) return;
+  try {
+    localStorage.setItem(DEMOS_KEY, JSON.stringify([...given, ...added]));
+  } catch {
+    /* not remembered */
+  }
+  docsCache = await listDocuments();
+}
+
 /** Opens the last document (or a blank one) and starts the service worker. Call once, last. */
 export function startDocuments(): void {
   void openInitialDocument();
@@ -505,7 +739,9 @@ async function openInitialDocument(): Promise<void> {
   } catch {
     last = null;
   }
-  if (!docsCache.length && firstVisit()) await createWelcomeDocument();
+  const welcome = !docsCache.length && firstVisit();
+  await addDemos();
+  if (welcome) await createWelcomeDocument();
   const first = docsCache[0];
   if (last && docsCache.some((d) => d.id === last)) await openDocument(last);
   else if (!currentDoc.id && first) await openDocument(first.id);

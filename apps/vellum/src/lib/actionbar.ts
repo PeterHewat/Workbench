@@ -27,11 +27,14 @@ import {
   localBBox,
   toWorldPoint,
 } from "./model.js";
-import { canMergeGroups, canMoveSelectionZ, groupsOf, outerGroup } from "./groups.js";
+import { canGroup, canMergeGroups, canMoveSelectionZ, canUngroup } from "./groups.js";
+import { canCombine, type BooleanOp } from "./boolean.js";
+import { pickedPoints } from "./points.js";
+import type { AlignMode, Axis } from "./align.js";
 import { worldToScreen } from "./viewport.js";
-import { isCoarsePointer } from "./pointer.js";
+import { HIT_R_COARSE, HIT_R_FINE, isCoarsePointer } from "./pointer.js";
 import { isSelectMore } from "./modes.js";
-import { HANDLE_EXTENT, outerHandlePoints } from "./render.js";
+import { HANDLE_EXTENT, outerHandlePoints, selectionHandlePoints } from "./render.js";
 import type { EditorState, Point, SceneElement } from "./types.js";
 
 export interface ActionBarHandlers {
@@ -47,6 +50,13 @@ export interface ActionBarHandlers {
   linkHandles: (linked: boolean) => void;
   togglePointCurve: () => void;
   removeHandle: () => void;
+  removePoint: () => void;
+  combine: (op: BooleanOp) => void;
+  lock: (locked: boolean) => void;
+  align: (mode: AlignMode) => void;
+  distribute: (axis: Axis) => void;
+  /** How many things align would move: picked points, or the selection's blocks. */
+  alignable: () => number;
   join: () => void;
   editText: (id: string) => void;
   finishPath: () => void;
@@ -58,7 +68,7 @@ export interface ActionBarHandlers {
   paste: () => void;
 }
 
-interface Action {
+export interface Action {
   key: string;
   label: string;
   icon?: string;
@@ -67,14 +77,26 @@ interface Action {
   disabled?: boolean;
   /** A switch rather than an action: shown pressed while on. */
   pressed?: boolean;
-  run: () => void;
+  /** Opens a page of its own - align, combine - instead of running anything. */
+  menu?: () => Action[];
+  /** Kept in the same row as the button after it, as backward is with forward. */
+  pairedWithNext?: boolean;
+  run?: () => void;
 }
 
 const GAP = 12;
+/**
+ * The most buttons in one row: seven fit across a 360px phone. A longer set is laid out in even
+ * rows - eight as two of four, not seven and a straggler - so every button stays in view.
+ */
+export const MAX_BUTTONS = 7;
 
 let bar: HTMLElement;
 let handlers: ActionBarHandlers;
 let lastSignature = "";
+/** The pages opened from the bar, by key, innermost last; emptied when the selection changes. */
+let pagePath: string[] = [];
+let pageFor = "";
 
 export function initActionBar(element: HTMLElement, fns: ActionBarHandlers): void {
   bar = element;
@@ -105,7 +127,7 @@ function drawingActions(state: EditorState): Action[] {
       key: "close",
       label: "Close the path and finish",
       icon: "icon-close-path",
-      disabled: points < 3,
+      disabled: points < 2,
       run: handlers.closeAndFinishPath,
     },
     {
@@ -236,7 +258,116 @@ function pointActions(el: SceneElement, index: number, handle?: "in" | "out"): A
     label: "Delete this point",
     icon: "icon-trash",
     danger: true,
-    run: handlers.remove,
+    run: handlers.removePoint,
+  });
+  return out;
+}
+
+/**
+ * Align, as one button opening a page: the six lines to align on, and the two ways to spread
+ * things out once there are three to spread. One thing on its own aligns to the artboard.
+ */
+function alignAction(count: number): Action {
+  const one = count === 1;
+  const onto = one ? "the artboard's" : "their";
+  return {
+    key: "align",
+    label: one ? "Align to the artboard" : "Align and distribute",
+    icon: "icon-align-hcenter",
+    menu: () => [
+      {
+        key: "align-left",
+        label: `Align left edges to ${onto} left`,
+        icon: "icon-align-left",
+        run: () => handlers.align("left"),
+      },
+      {
+        key: "align-hcenter",
+        label: `Centre horizontally on ${onto} middle`,
+        icon: "icon-align-hcenter",
+        run: () => handlers.align("hcenter"),
+      },
+      {
+        key: "align-right",
+        label: `Align right edges to ${onto} right`,
+        icon: "icon-align-right",
+        run: () => handlers.align("right"),
+      },
+      {
+        key: "align-top",
+        label: `Align top edges to ${onto} top`,
+        icon: "icon-align-top",
+        run: () => handlers.align("top"),
+      },
+      {
+        key: "align-vcenter",
+        label: `Centre vertically on ${onto} middle`,
+        icon: "icon-align-vcenter",
+        run: () => handlers.align("vcenter"),
+      },
+      {
+        key: "align-bottom",
+        label: `Align bottom edges to ${onto} bottom`,
+        icon: "icon-align-bottom",
+        run: () => handlers.align("bottom"),
+      },
+      ...(count >= 3
+        ? [
+            {
+              key: "distribute-x",
+              label: "Space evenly across",
+              icon: "icon-distribute-x",
+              run: () => handlers.distribute("x"),
+            },
+            {
+              key: "distribute-y",
+              label: "Space evenly down",
+              icon: "icon-distribute-y",
+              run: () => handlers.distribute("y"),
+            },
+          ]
+        : []),
+    ],
+  };
+}
+
+/** What the bar offers with several points picked: what acts on all of them at once. */
+function pointsActions(state: EditorState): Action[] {
+  const picked = pickedPoints(state.selection);
+  const curvable = picked.filter((r) => {
+    const el = findElement(r.pathId);
+    return !!el && canToggleClosed(el);
+  });
+  const allCurves = curvable.every((r) => {
+    const el = findElement(r.pathId);
+    const p = el?.type === "path" ? el.points[r.index] : undefined;
+    return !!p && (hasHandle(p, "in") || hasHandle(p, "out"));
+  });
+  const out: Action[] = [];
+  if (curvable.length) {
+    out.push(
+      allCurves
+        ? {
+            key: "corners",
+            label: "Make them corners: remove their handles",
+            icon: "icon-corner",
+            run: handlers.togglePointCurve,
+          }
+        : {
+            key: "curves",
+            label: "Make them curves: give them handles",
+            icon: "icon-curve",
+            run: handlers.togglePointCurve,
+          }
+    );
+  }
+  out.push(alignAction(picked.length));
+  out.push({
+    key: "delete-points",
+    label: `Delete these ${picked.length} points`,
+    icon: "icon-trash",
+    danger: true,
+    run: handlers.removePoint,
   });
   return out;
 }
@@ -246,6 +377,7 @@ function selectionActions(state: EditorState): Action[] {
   const out: Action[] = [];
   const single = sel.length === 1 ? sel[0]! : null;
 
+  if (pickedPoints(state.selection).length > 1) return pointsActions(state);
   const pe = state.selection.pathEdit;
   const edited = pe ? findElement(pe.pathId) : null;
   if (pe && edited) return pointActions(edited, pe.index, pe.handle);
@@ -264,11 +396,11 @@ function selectionActions(state: EditorState): Action[] {
     out.push({ key: "join", label: "Join the two paths", icon: "icon-join", run: handlers.join });
   }
 
-  const groups = new Set(sel.map((e) => outerGroup(e) ?? ""));
-  if (sel.length > 1 && !(groups.size === 1 && !groups.has(""))) {
+  const selected = new Set(state.selection.elementIds);
+  if (canGroup(state.elements, selected)) {
     out.push({ key: "group", label: "Group", icon: "icon-group", run: handlers.group });
   }
-  if (canMergeGroups(state.elements, new Set(state.selection.elementIds))) {
+  if (canMergeGroups(state.elements, selected)) {
     out.push({
       key: "merge",
       label: "Merge into one group",
@@ -276,8 +408,44 @@ function selectionActions(state: EditorState): Action[] {
       run: handlers.merge,
     });
   }
-  if (sel.some((e) => groupsOf(e).length)) {
+  if (canUngroup(state.elements, selected)) {
     out.push({ key: "ungroup", label: "Ungroup", icon: "icon-ungroup", run: handlers.ungroup });
+  }
+
+  out.push(alignAction(handlers.alignable()));
+  // Union, subtract, intersect and exclude: one button, opening a page of four.
+  if (sel.length >= 2 && sel.every(canCombine)) {
+    out.push({
+      key: "combine",
+      label: "Combine the shapes into one",
+      icon: "icon-combine",
+      menu: () => [
+        {
+          key: "union",
+          label: "Union: everything the shapes cover",
+          icon: "icon-union",
+          run: () => handlers.combine("union"),
+        },
+        {
+          key: "subtract",
+          label: "Subtract: the backmost shape, less the others",
+          icon: "icon-subtract",
+          run: () => handlers.combine("subtract"),
+        },
+        {
+          key: "intersect",
+          label: "Intersect: only where they all overlap",
+          icon: "icon-intersect",
+          run: () => handlers.combine("intersect"),
+        },
+        {
+          key: "exclude",
+          label: "Exclude: everything but where they overlap",
+          icon: "icon-exclude",
+          run: () => handlers.combine("exclude"),
+        },
+      ],
+    });
   }
 
   const ids = new Set(state.selection.elementIds);
@@ -290,19 +458,22 @@ function selectionActions(state: EditorState): Action[] {
     pressed: more,
     run: () => handlers.selectMore(!more),
   });
-  if (state.elements.some((e) => !e.hidden && !ids.has(e.id))) {
-    out.splice(1, 0, {
-      key: "select-all",
-      label: "Select everything",
-      icon: "icon-select-all",
-      run: handlers.selectAll,
-    });
-  }
+  // Locked shapes are reached from their rows; unlocking them is here once they are selected.
+  const anyLocked = sel.some((e) => e.locked);
+  out.push({
+    key: anyLocked ? "unlock" : "lock",
+    label: anyLocked ? "Unlock: clickable on the canvas again" : "Lock: out of reach on the canvas",
+    icon: anyLocked ? "icon-unlock" : "icon-lock",
+    run: () => handlers.lock(!anyLocked),
+  });
+  // Duplicate and z-order, then select everything, then delete: last, where it is always found.
   out.push(
+    { key: "duplicate", label: "Duplicate", icon: "icon-copy", run: handlers.duplicate },
     {
       key: "back",
       label: "Send backward (Shift: to the back)",
       glyph: "▼",
+      pairedWithNext: true,
       disabled: !canMoveSelectionZ(state.elements, ids, -1),
       run: handlers.back,
     },
@@ -312,15 +483,74 @@ function selectionActions(state: EditorState): Action[] {
       glyph: "▲",
       disabled: !canMoveSelectionZ(state.elements, ids, 1),
       run: handlers.forward,
-    },
-    { key: "duplicate", label: "Duplicate", icon: "icon-copy", run: handlers.duplicate },
-    { key: "delete", label: "Delete", icon: "icon-trash", danger: true, run: handlers.remove }
+    }
   );
+  // Always there, so the bar keeps its shape; greyed out once there is nothing more to select.
+  out.push({
+    key: "select-all",
+    label: "Select everything",
+    icon: "icon-select-all",
+    disabled: !state.elements.some((e) => !e.hidden && !e.locked && !ids.has(e.id)),
+    run: handlers.selectAll,
+  });
+  out.push({
+    key: "delete",
+    label: "Delete",
+    icon: "icon-trash",
+    danger: true,
+    run: handlers.remove,
+  });
   return out;
+}
+
+const backAction = (): Action => ({
+  key: "page-back",
+  label: "Back",
+  icon: "icon-back",
+  run: () => {
+    pagePath = pagePath.slice(0, -1);
+    lastSignature = "";
+  },
+});
+
+/**
+ * How many buttons go in a row: all of them up to the limit, then as few rows as can be, as even
+ * as can be - without a row ending between a pair (`pairs` holds the index of each pair's first).
+ */
+export function columnsFor(
+  count: number,
+  max = MAX_BUTTONS,
+  pairs: readonly number[] = []
+): number {
+  const splits = (cols: number) => pairs.some((i) => (i + 1) % cols === 0);
+  for (let rows = Math.ceil(count / max); rows <= count; rows++) {
+    for (let cols = Math.ceil(count / rows); cols <= max; cols++) {
+      if (Math.ceil(count / cols) !== rows) break;
+      if (!splits(cols)) return cols;
+    }
+  }
+  const rows = Math.ceil(count / max);
+  return Math.max(1, Math.ceil(count / rows));
+}
+
+/** The buttons to show: the actions themselves, or the page a menu button has opened. */
+function currentButtons(actions: readonly Action[]): Action[] {
+  let shown = [...actions];
+  for (const key of pagePath) {
+    const opener = shown.find((a) => a.key === key);
+    if (!opener?.menu) {
+      pagePath = [];
+      return [...actions];
+    }
+    shown = [backAction(), ...opener.menu()];
+  }
+  return shown;
 }
 
 function build(actions: readonly Action[]): void {
   bar.replaceChildren();
+  const pairs = actions.flatMap((a, i) => (a.pairedWithNext ? [i] : []));
+  bar.style.setProperty("--bar-cols", String(columnsFor(actions.length, MAX_BUTTONS, pairs)));
   for (const action of actions) {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -339,7 +569,17 @@ function build(actions: readonly Action[]): void {
       btn.classList.toggle("active", action.pressed);
     }
     btn.disabled = !!action.disabled;
-    btn.addEventListener("click", action.run);
+    if (action.menu) btn.setAttribute("aria-haspopup", "true");
+    btn.addEventListener("click", () => {
+      if (action.menu) {
+        pagePath = [...pagePath, action.key];
+        lastSignature = "";
+      } else {
+        action.run?.();
+      }
+      // A page change redraws at once; an action redraws with the state it changed.
+      if (action.menu || action.key === "page-back") syncActionBar(latest!);
+    });
     bar.appendChild(btn);
   }
 }
@@ -357,29 +597,45 @@ interface AnchorRect {
  * what it acts on.
  */
 function pointRect(state: EditorState): AnchorRect | null {
+  // Every picked point, and the curve handles of the one picked last.
+  const spots: { at: Point; reach: number }[] = [];
+  const coarse = isCoarsePointer();
+  const handleReach = coarse ? HIT_R_COARSE : HIT_R_FINE;
+  // A point keeps room round it to see the segments leaving it and to grab it again; its
+  // handles keep their target clear.
+  const pointReach = coarse ? 48 : 32;
   const pe = state.selection.pathEdit;
-  const el = pe ? findElement(pe.pathId) : undefined;
-  const p = pe && el && "points" in el ? el.points[pe.index] : undefined;
-  if (!el || !p) return null;
-  const points: Point[] = [p];
-  if (el.type === "path") {
-    const { hIn, hOut } = el.points[pe!.index]!;
-    if (hIn) points.push(hIn);
-    if (hOut) points.push(hOut);
+  for (const ref of pickedPoints(state.selection)) {
+    const el = findElement(ref.pathId);
+    if (!el) continue;
+    const local = pointAt(el, ref.index);
+    if (!local) continue;
+    spots.push({ at: toWorldPoint(el, local), reach: pointReach });
+    if (el.type === "path" && pe?.pathId === ref.pathId && pe.index === ref.index) {
+      const { hIn, hOut } = el.points[ref.index]!;
+      for (const h of [hIn, hOut])
+        if (h) spots.push({ at: toWorldPoint(el, h), reach: handleReach });
+    }
   }
+  if (!spots.length) return null;
   let left = Infinity;
   let right = -Infinity;
   let top = Infinity;
   let bottom = -Infinity;
-  for (const local of points) {
-    const world = toWorldPoint(el, local);
-    const s = worldToScreen(world.x, world.y);
-    left = Math.min(left, s.x - HANDLE_EXTENT);
-    right = Math.max(right, s.x + HANDLE_EXTENT);
-    top = Math.min(top, s.y - HANDLE_EXTENT);
-    bottom = Math.max(bottom, s.y + HANDLE_EXTENT);
+  for (const { at, reach } of spots) {
+    const s = worldToScreen(at.x, at.y);
+    left = Math.min(left, s.x - reach);
+    right = Math.max(right, s.x + reach);
+    top = Math.min(top, s.y - reach);
+    bottom = Math.max(bottom, s.y + reach);
   }
   return { left, right, top, bottom };
+}
+
+/** Where point `index` of a shape is: a path's, polyline's or polygon's point, or a line's end. */
+function pointAt(el: SceneElement, index: number): Point | null {
+  if (el.type === "line") return index === 0 ? { x: el.x1, y: el.y1 } : { x: el.x2, y: el.y2 };
+  return "points" in el ? (el.points[index] ?? null) : null;
 }
 
 /** The screen rectangle the bar sits beside: a selected point, the selection, or the path being drawn. */
@@ -425,6 +681,14 @@ function anchorRect(state: EditorState): AnchorRect | null {
       bottom = Math.max(bottom, p.y + HANDLE_EXTENT);
     }
   }
+  // Several shapes have handles of their own, around the box they share.
+  for (const world of drawing ? [] : selectionHandlePoints(shapes, zoom)) {
+    const p = worldToScreen(world.x, world.y);
+    left = Math.min(left, p.x - HANDLE_EXTENT);
+    right = Math.max(right, p.x + HANDLE_EXTENT);
+    top = Math.min(top, p.y - HANDLE_EXTENT);
+    bottom = Math.max(bottom, p.y + HANDLE_EXTENT);
+  }
   if (!Number.isFinite(left)) return null;
   return { left, right, top, bottom };
 }
@@ -467,6 +731,8 @@ function position(state: EditorState): void {
   bar.style.top = `${Math.max(band.top, Math.min(y, band.bottom - size.height))}px`;
 }
 
+let latest: EditorState | null = null;
+
 /** Called on every state change: shows, rebuilds and repositions the bar as needed. */
 export function syncActionBar(state: EditorState): void {
   const drawing = !!state.drawing?.activePathId;
@@ -479,11 +745,16 @@ export function syncActionBar(state: EditorState): void {
     lastSignature = "";
     return;
   }
-  const actions = drawing
-    ? drawingActions(state)
-    : idle(state)
-      ? idleActions(state)
-      : selectionActions(state);
+  latest = state;
+  // A page opened for one selection means nothing for the next.
+  const owner = `${drawing}|${state.selection.elementIds.join(",")}|${state.selection.pathEdit?.pathId ?? ""}|${pickedPoints(state.selection).length}`;
+  if (owner !== pageFor) {
+    pageFor = owner;
+    pagePath = [];
+  }
+  const actions = currentButtons(
+    drawing ? drawingActions(state) : idle(state) ? idleActions(state) : selectionActions(state)
+  );
   // Rebuilt only when the set of buttons, or whether they are enabled, actually changes.
   const signature = actions.map((a) => `${a.key}${a.disabled ? "-off" : ""}`).join(",");
   if (signature !== lastSignature) {

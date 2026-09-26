@@ -1,5 +1,6 @@
 import { getState } from "./state.js";
-import { translateElement, localBBox, toLocalPoint, toWorldPoint } from "./model.js";
+import { elementBBox, translateElement, localBBox, toLocalPoint, toWorldPoint } from "./model.js";
+import { scaleAllByCorner } from "./selection-transform.js";
 import { cornerHandleInset } from "./pointer.js";
 import { dist } from "./utils.js";
 import { type Point, type SceneElement } from "./types.js";
@@ -17,12 +18,33 @@ function reanchor(el: SceneElement, base: SceneElement, anchorLocal: Point): voi
   translateElement(el, want.x - now.x, want.y - now.y);
 }
 
+/**
+ * Whether a shape is sized by box handles: the shapes whose only handles are their own points,
+ * so without these a width or a height could only be typed.
+ */
+export function hasBoxHandles(el: SceneElement): boolean {
+  if (el.type !== "path" && el.type !== "polyline" && el.type !== "polygon") return false;
+  const box = elementBBox(el);
+  return !!box && (box.width > 0 || box.height > 0);
+}
+
+/** One shape stretched by a box handle: see `scaleAllByCorner`. */
+export function scaleByCorner(
+  base: SceneElement,
+  role: string,
+  at: Point,
+  uniform: boolean
+): SceneElement {
+  return scaleAllByCorner([base], role, at, uniform)[0]!;
+}
+
 export function applyResize(
   el: SceneElement,
   role: string,
   rawWorld: Point,
   base: SceneElement,
-  alt: boolean
+  alt: boolean,
+  shift = false
 ): void {
   // Geometry lives in the shape's own unrotated frame, so the pointer is taken there first
   // and the result is turned back. Without this, dragging a corner of a rotated rect would
@@ -38,6 +60,11 @@ export function applyResize(
     };
     if (role === "grad-from") el.gradFrom = point;
     else el.gradTo = point;
+    return;
+  }
+  if (role.startsWith("box-")) {
+    const scaled = scaleByCorner(base, role, rawWorld, shift);
+    if ("points" in el && "points" in scaled) el.points = scaled.points;
     return;
   }
   switch (el.type) {

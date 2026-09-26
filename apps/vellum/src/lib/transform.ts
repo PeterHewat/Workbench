@@ -155,6 +155,10 @@ export function transformElement(el: SceneElement, m: Matrix): SceneElement {
   if (keepsRotation(el) && (el.rotation || !isAxisAligned(m)) && isSimilarity(m)) {
     return transformKeepingRotation(el, m);
   }
+  // A turned box or ellipse stretched along other axes than its own is no longer one.
+  if (el.rotation && keepsRotation(el) && el.type !== "text") {
+    return transformElement(toPathElement(el), m);
+  }
   if (el.type === "text") {
     const at = applyMatrix(m, { x: el.x, y: el.y });
     return { ...el, x: at.x, y: at.y, fontSize: el.fontSize * scaleOf(m) };

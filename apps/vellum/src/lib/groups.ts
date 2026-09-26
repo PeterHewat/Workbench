@@ -344,6 +344,197 @@ export function expandToGroups(
 }
 
 /**
+ * What a click on element `id` picks: the elements it selects, and the group they make up (null
+ * for the element alone).
+ *
+ * From outside a group a click takes the whole outermost group, as it always has. Once you are
+ * inside one - everything selected sits in the same group - a click on another of its members
+ * picks that member, or the nested group holding it, so you can go from one member to the next
+ * without climbing back out.
+ */
+export function clickTarget(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>,
+  id: string
+): { ids: string[]; gid: string | null } {
+  const chain = groupsOf(elements.find((e) => e.id === id));
+  const chains = elements.filter((e) => selected.has(e.id)).map(groupsOf);
+  let depth = 0;
+  while (depth < chain.length && chains.length && chains.every((c) => c[depth] === chain[depth])) {
+    depth++;
+  }
+  return levelTarget(elements, id, chain, depth);
+}
+
+/** Level `depth` of `id`'s chain: group `chain[depth]`, or the element alone past its end. */
+function levelTarget(
+  elements: readonly SceneElement[],
+  id: string,
+  chain: readonly string[],
+  depth: number
+): { ids: string[]; gid: string | null } {
+  const gid = chain[depth];
+  if (gid == null) return { ids: [id], gid: null };
+  return { ids: elements.filter((e) => groupsOf(e).includes(gid)).map((e) => e.id), gid };
+}
+
+/**
+ * What a click on an element that is already selected steps down to: when the selection is
+ * exactly one of the groups holding it, the next level in - the nested group holding it, or the
+ * element itself. Null when there is nothing further in, and the selection should stay as it is.
+ */
+export function drillTarget(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>,
+  id: string
+): { ids: string[]; gid: string | null } | null {
+  const chain = groupsOf(elements.find((e) => e.id === id));
+  for (let depth = 0; depth < chain.length; depth++) {
+    const level = levelTarget(elements, id, chain, depth);
+    if (level.ids.length === selected.size && level.ids.every((x) => selected.has(x))) {
+      return levelTarget(elements, id, chain, depth + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * The level a selection works at: the groups that hold everything selected without being
+ * selected whole themselves, outermost first. Empty for a selection made from the top, as it is
+ * whenever whole groups are picked; a member picked inside a group has that group as context,
+ * so grouping, ungrouping and merging it stay inside the group rather than tearing it open.
+ */
+export function selectionContext(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>
+): string[] {
+  const chains = elements.filter((e) => selected.has(e.id)).map(groupsOf);
+  if (!chains.length) return [];
+  const context: string[] = [];
+  for (let depth = 0; ; depth++) {
+    const gid = chains[0]![depth];
+    if (gid == null || !chains.every((c) => c[depth] === gid)) break;
+    if (elements.every((e) => !groupsOf(e).includes(gid) || selected.has(e.id))) break;
+    context.push(gid);
+  }
+  return context;
+}
+
+/**
+ * One level out from a selection made inside a group: every member of the innermost group that
+ * holds it (what Esc selects). Null for a selection made from the top, which has nowhere to go.
+ */
+export function parentSelection(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>
+): string[] | null {
+  const gid = selectionContext(elements, selected).at(-1);
+  if (!gid) return null;
+  return elements.filter((e) => groupsOf(e).includes(gid)).map((e) => e.id);
+}
+
+/**
+ * Runs `fn` on the members of the group that `context` ends in, as if that group were the whole
+ * document - `context` taken off the front of their chains - and puts the result back in its
+ * place. With an empty context, `fn` sees the document itself.
+ */
+function withinContext(
+  elements: readonly SceneElement[],
+  context: readonly string[],
+  fn: (inner: SceneElement[]) => SceneElement[]
+): SceneElement[] {
+  if (!context.length) return fn([...elements]);
+  const inside = (e: SceneElement) => samePrefix(groupsOf(e), context, context.length);
+  const start = elements.findIndex(inside);
+  if (start < 0) return [...elements];
+  let end = start;
+  while (end < elements.length && inside(elements[end]!)) end++;
+  const inner = elements.slice(start, end).map((e) => {
+    const next = { ...e };
+    const rest = groupsOf(e).slice(context.length);
+    if (rest.length) next.groups = rest;
+    else delete next.groups;
+    return next;
+  });
+  const back = fn(inner).map((e) => ({ ...e, groups: [...context, ...groupsOf(e)] }));
+  return [...elements.slice(0, start), ...back, ...elements.slice(end)];
+}
+
+/** The selection's elements with its context stripped, for the checks below. */
+function innerSelection(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>
+): SceneElement[] {
+  const depth = selectionContext(elements, selected).length;
+  return elements
+    .filter((e) => selected.has(e.id))
+    .map((e) => ({ ...e, groups: groupsOf(e).slice(depth) }));
+}
+
+/**
+ * Wraps the selection in a new group `gid`, placed where the frontmost selected element was.
+ * Groups selected whole nest inside it rather than being flattened; a selection made inside a
+ * group gets its new group inside that one.
+ */
+export function groupElements(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>,
+  gid: string
+): SceneElement[] {
+  return withinContext(elements, selectionContext(elements, selected), (inner) => {
+    const lastIdx = Math.max(...inner.map((e, i) => (selected.has(e.id) ? i : -1)));
+    const rest = inner.filter((e) => !selected.has(e.id));
+    const before = inner.slice(0, lastIdx + 1).filter((e) => !selected.has(e.id)).length;
+    const grouped = inner
+      .filter((e) => selected.has(e.id))
+      .map((e) => ({ ...e, groups: [gid, ...groupsOf(e)] }));
+    return normalizeGroups([...rest.slice(0, before), ...grouped, ...rest.slice(before)]);
+  });
+}
+
+/** Whether grouping would add anything: two or more things, and not exactly one group already. */
+export function canGroup(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>
+): boolean {
+  const sel = innerSelection(elements, selected);
+  const outer = new Set(sel.map((e) => outerGroup(e) ?? ""));
+  return sel.length >= 2 && !(outer.size === 1 && !outer.has(""));
+}
+
+/** Takes off the outermost group of the selection, at its level; groups inside it stay. */
+export function ungroupElements(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>
+): SceneElement[] {
+  return withinContext(elements, selectionContext(elements, selected), (inner) => {
+    const gids = new Set(
+      inner
+        .filter((e) => selected.has(e.id))
+        .map(outerGroup)
+        .filter((g): g is string => !!g)
+    );
+    return pruneGroups(
+      inner.map((e) => {
+        const chain = groupsOf(e);
+        if (!chain.length || !gids.has(chain[0]!)) return e;
+        const next = { ...e };
+        if (chain.length > 1) next.groups = chain.slice(1);
+        else delete next.groups;
+        return next;
+      })
+    );
+  });
+}
+
+export function canUngroup(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>
+): boolean {
+  return innerSelection(elements, selected).some((e) => groupsOf(e).length);
+}
+
+/**
  * What a merge would act on: the selected elements plus the rest of their outermost groups, and
  * those groups. A merge takes whole groups, so a member picked alone from the list brings its
  * group along rather than splitting it.
@@ -371,8 +562,13 @@ export function canMergeGroups(
   elements: readonly SceneElement[],
   selected: ReadonlySet<string>
 ): boolean {
-  const { merging, blocks } = mergeScope(elements, selected);
-  return merging.length > 0 && blocks > 1;
+  let can = false;
+  withinContext(elements, selectionContext(elements, selected), (inner) => {
+    const { merging, blocks } = mergeScope(inner, selected);
+    can = merging.length > 0 && blocks > 1;
+    return inner;
+  });
+  return can;
 }
 
 /**
@@ -389,6 +585,16 @@ export function mergeGroups(
   elements: readonly SceneElement[],
   selected: ReadonlySet<string>,
   groupNames: Readonly<Record<string, string>> = {}
+): SceneElement[] {
+  return withinContext(elements, selectionContext(elements, selected), (inner) =>
+    mergeAtTop(inner, selected, groupNames)
+  );
+}
+
+function mergeAtTop(
+  elements: readonly SceneElement[],
+  selected: ReadonlySet<string>,
+  groupNames: Readonly<Record<string, string>>
 ): SceneElement[] {
   const { merging, involved, blocks } = mergeScope(elements, selected);
   if (!merging.length || blocks < 2) return [...elements];

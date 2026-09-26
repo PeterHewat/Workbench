@@ -116,6 +116,15 @@ describe("export document", () => {
     expect(svg.match(/<\/g>/g)).toHaveLength(1);
   });
 
+  test("a line with no stroke has no markers either", () => {
+    const line = Object.assign(createLine(0, 0, 9, 9), {
+      markerEnd: "arrow" as const,
+      strokeWidth: 0,
+    });
+    const svg = formatExportSvg({ artboard: { width: 10, height: 10 }, elements: [line] }, true);
+    expect(svg).not.toContain("marker");
+  });
+
   test("gradients and markers are emitted into defs", () => {
     const grad = Object.assign(createRect(0, 0, 9, 9), {
       fillEnabled: true,
@@ -196,6 +205,22 @@ describe("round trip", () => {
       { artboard: back.artboard ?? { width: 1000, height: 1000 }, elements: back.elements },
       true
     );
+    expect(second).toBe(first);
+  });
+
+  test("a closed two-point path comes back closed, and stable", () => {
+    const lens = createPath(
+      [
+        { x: 0, y: 0, smooth: false, hIn: null, hOut: null },
+        { x: 30, y: 0, smooth: false, hIn: null, hOut: null },
+      ],
+      true
+    );
+    const first = formatExportSvg(doc([lens]), true);
+    const back = importSvgFile(first, { keepIds: true });
+    const el = back.elements[0]!;
+    expect(el.type === "path" && el.closed).toBe(true);
+    const second = formatExportSvg({ artboard: back.artboard!, elements: back.elements }, true);
     expect(second).toBe(first);
   });
 
@@ -764,5 +789,76 @@ describe("rotation round trip", () => {
     const back = importSvgFile(formatExportSvg(doc([el]), true), { keepIds: true });
     expect(back.elements[0]!.type).toBe("ellipse");
     expect(Math.round(back.elements[0]!.rotation ?? 0)).toBe(45);
+  });
+});
+
+describe("compound paths", () => {
+  const svg = (inner: string) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${inner}</svg>`;
+  const ring =
+    '<path d="M 0 0 L 40 0 L 40 40 L 0 40 Z M 10 10 L 10 30 L 30 30 L 30 10 Z" fill="#000000" fill-rule="evenodd"/>';
+
+  test("every moveto starts an outline of its own, in one path", () => {
+    const [el] = importSvgFile(svg(ring)).elements;
+    expect(el!.type).toBe("path");
+    if (el!.type !== "path") return;
+    expect(el.points).toHaveLength(8);
+    expect(el.subpaths).toEqual([4]);
+    expect(el.closed).toBe(true);
+    expect(el.fillRule).toBe("evenodd");
+  });
+
+  test("the outlines and the fill rule survive the round trip byte for byte", () => {
+    const first = formatExportSvg(doc(importSvgFile(svg(ring)).elements), true);
+    expect(first).toContain("Z M 10 10");
+    expect(first).toContain('fill-rule="evenodd"');
+    const back = importSvgFile(first, { keepIds: true });
+    const second = formatExportSvg({ artboard: back.artboard!, elements: back.elements }, true);
+    expect(second).toBe(first);
+  });
+
+  test("open and closed outlines in one d become a path of each kind", () => {
+    const els = importSvgFile(
+      svg('<path d="M 0 0 L 10 0 L 10 10 Z M 20 0 L 30 0" stroke="#000"/>')
+    ).elements;
+    expect(els.map((e) => e.type === "path" && e.closed)).toEqual([true, false]);
+  });
+
+  test("a stray moveto draws nothing and leaves no point behind", () => {
+    const [el] = importSvgFile(
+      svg('<path d="M 5 5 M 0 0 L 10 0 L 10 10 Z" fill="#000"/>')
+    ).elements;
+    expect(el!.type === "path" && el!.points.length).toBe(3);
+  });
+});
+
+describe("dash patterns", () => {
+  test("a dash pattern is written, read back, and stable", () => {
+    const line = createLine(0, 0, 100, 0);
+    line.dash = [6, 4];
+    const first = formatExportSvg(doc([line]), true);
+    expect(first).toContain('stroke-dasharray="6 4"');
+    const back = importSvgFile(first, { keepIds: true });
+    expect(back.elements[0]!.dash).toEqual([6, 4]);
+    expect(formatExportSvg({ artboard: back.artboard!, elements: back.elements }, true)).toBe(
+      first
+    );
+  });
+
+  test("none, negatives and all zeros are a solid line", () => {
+    for (const d of ["none", "4 -2", "0 0", ""]) {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><line x1="0" y1="0" x2="9" y2="0" stroke="#000" stroke-dasharray="${d}"/></svg>`;
+      expect(importSvgFile(svg).elements[0]!.dash).toBeUndefined();
+    }
+  });
+});
+
+describe("guides", () => {
+  test("are saved with the document only when there are any, and never exported", () => {
+    const state = createInitialState();
+    expect(serializeProject(state)).not.toHaveProperty("guides");
+    const withGuides = { ...state, guides: { x: [100], y: [50] } };
+    expect(serializeProject(withGuides).guides).toEqual({ x: [100], y: [50] });
+    expect(formatExportSvg(withGuides, true)).not.toContain("100");
   });
 });

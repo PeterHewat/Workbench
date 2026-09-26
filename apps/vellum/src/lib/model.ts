@@ -41,7 +41,15 @@ export const DEFAULT_STROKE: StyleProps = {
 };
 
 /** Keys copied when an element is converted from one type to another: identity plus every style. */
-const STYLE_KEYS: readonly string[] = ["name", "groups", "hidden", ...Object.keys(DEFAULT_STROKE)];
+const STYLE_KEYS: readonly string[] = [
+  "name",
+  "groups",
+  "hidden",
+  "fillRule",
+  "dash",
+  "locked",
+  ...Object.keys(DEFAULT_STROKE),
+];
 
 export function styleOf(el: SceneElement): StyleCarrier {
   const src = el as unknown as Record<string, unknown>;
@@ -335,13 +343,58 @@ function closesBack(path: PathElement): boolean {
   return path.closed && path.points.length >= 2;
 }
 
-/** Anchor pairs for every drawn segment, including the closing one on a closed path. */
-function pathSegments(path: PathElement): [Anchor, Anchor][] {
+/** A run of `points`, `start` to `end` exclusive: one outline of a path. */
+export interface Contour {
+  start: number;
+  end: number;
+}
+
+/** The outlines of a path, in order: one for an ordinary path, more for a shape with holes. */
+export function contours(path: PathElement): Contour[] {
+  const n = path.points.length;
+  const starts = [0, ...(path.subpaths ?? []).filter((i) => i > 0 && i < n)];
+  return starts.map((start, k) => ({ start, end: starts[k + 1] ?? n }));
+}
+
+/** Whether a path is made of more than one outline. */
+export function isCompound(el: SceneElement): boolean {
+  return el.type === "path" && !!el.subpaths?.length;
+}
+
+/** The outline holding point `i`. */
+function contourOf(path: PathElement, i: number): Contour {
+  return contours(path).find((c) => i >= c.start && i < c.end) ?? { start: 0, end: 0 };
+}
+
+/** The points before and after `i` along its own outline, wrapping round a closed one. */
+function neighbours(path: PathElement, i: number): { prev?: Anchor; next?: Anchor; count: number } {
+  const { start, end } = contourOf(path, i);
+  const count = end - start;
+  const wrap = path.closed && count >= 2;
+  const prev = i > start ? path.points[i - 1] : wrap ? path.points[end - 1] : undefined;
+  const next = i < end - 1 ? path.points[i + 1] : wrap ? path.points[start] : undefined;
+  return { prev, next, count };
+}
+
+/**
+ * Every drawn segment, including each outline's closing one on a closed path. `from` is the
+ * index of the segment's first anchor.
+ */
+function indexedSegments(path: PathElement): { from: number; a: Anchor; b: Anchor }[] {
   const pts = path.points;
-  const segs: [Anchor, Anchor][] = [];
-  for (let i = 0; i < pts.length - 1; i++) segs.push([pts[i]!, pts[i + 1]!]);
-  if (closesBack(path)) segs.push([pts[pts.length - 1]!, pts[0]!]);
+  const segs: { from: number; a: Anchor; b: Anchor }[] = [];
+  for (const { start, end } of contours(path)) {
+    for (let i = start; i < end - 1; i++) segs.push({ from: i, a: pts[i]!, b: pts[i + 1]! });
+    if (path.closed && end - start >= 2) {
+      segs.push({ from: end - 1, a: pts[end - 1]!, b: pts[start]! });
+    }
+  }
   return segs;
+}
+
+/** Anchor pairs for every drawn segment. */
+function pathSegments(path: PathElement): [Anchor, Anchor][] {
+  return indexedSegments(path).map(({ a, b }) => [a, b]);
 }
 
 export type Formatter = (n: number) => number;
@@ -356,15 +409,21 @@ function pathToD(path: PathElement, fmt: Formatter = (n) => n): string {
       ? ` C ${fmt(c1.x)} ${fmt(c1.y)} ${fmt(c2.x)} ${fmt(c2.y)} ${fmt(b.x)} ${fmt(b.y)}`
       : ` L ${fmt(b.x)} ${fmt(b.y)}`;
   };
-  let d = `M ${fmt(pts[0]!.x)} ${fmt(pts[0]!.y)}`;
-  for (let i = 0; i < pts.length - 1; i++) d += draw(pts[i]!, pts[i + 1]!);
-  if (closesBack(path)) {
-    const last = pts[pts.length - 1]!;
-    // A straight closing segment is implied by Z; only a curved one needs its own command.
-    if (segmentInfo(last, pts[0]!).curved) d += draw(last, pts[0]!);
-    d += " Z";
-  }
-  return d;
+  // Each outline is a subpath of its own: a move to its first point, and a Z when closed.
+  return contours(path)
+    .filter(({ start, end }) => end > start)
+    .map(({ start, end }) => {
+      let d = `M ${fmt(pts[start]!.x)} ${fmt(pts[start]!.y)}`;
+      for (let i = start; i < end - 1; i++) d += draw(pts[i]!, pts[i + 1]!);
+      if (path.closed && end - start >= 2) {
+        const last = pts[end - 1]!;
+        // A straight closing segment is implied by Z; only a curved one needs its own command.
+        if (segmentInfo(last, pts[start]!).curved) d += draw(last, pts[start]!);
+        d += " Z";
+      }
+      return d;
+    })
+    .join(" ");
 }
 
 /** True if every segment of `path` is a straight line (no Bezier curvature). */
@@ -579,6 +638,14 @@ export function geometryOf(el: SceneElement, fmt: Formatter = (n) => n): Geometr
  * emitted only when not fully opaque, and a zero-width stroke exports as `stroke="none"`,
  * so the markup stays minimal and the canvas matches the file.
  */
+/**
+ * Whether line ends are drawn. A marker is sized in stroke widths, and with no stroke the SVG
+ * falls back to a width of 1 - so without this, a line of width 0 would still show its arrows.
+ */
+export function hasMarkers(el: SceneElement): boolean {
+  return MARKER_TYPES.includes(el.type) && el.strokeWidth > 0;
+}
+
 export function styleAttrs(el: SceneElement): AttrMap {
   const attrs: AttrMap = {};
   // The canvas renders from these same attributes, so this hides it there and in the file alike.
@@ -593,12 +660,14 @@ export function styleAttrs(el: SceneElement): AttrMap {
     if (el.strokeOpacity != null && el.strokeOpacity !== 1) {
       attrs["stroke-opacity"] = el.strokeOpacity;
     }
+    if (el.dash?.length) attrs["stroke-dasharray"] = el.dash.join(" ");
   }
   attrs.fill = effectiveFill(el);
+  if (el.fillRule === "evenodd") attrs["fill-rule"] = "evenodd";
   if (el.fillEnabled && !isGradient(el) && el.fillOpacity != null && el.fillOpacity !== 1) {
     attrs["fill-opacity"] = el.fillOpacity;
   }
-  if (MARKER_TYPES.includes(el.type)) {
+  if (hasMarkers(el)) {
     if (el.markerStart && el.markerStart !== "none") {
       attrs["marker-start"] = `url(#mk-${el.id}-start)`;
     }
@@ -607,6 +676,21 @@ export function styleAttrs(el: SceneElement): AttrMap {
     }
   }
   return attrs;
+}
+
+/**
+ * A dash pattern from what someone typed or a file said: lengths separated by spaces or commas.
+ * Absent for a solid line - nothing to read, "none", a negative length, or nothing but zeros,
+ * which SVG draws solid as well.
+ */
+export function parseDash(raw: string | null | undefined): number[] | undefined {
+  const text = (raw ?? "").trim();
+  if (!text || text === "none") return undefined;
+  const parts = text.split(/[\s,]+/).map(Number);
+  if (parts.some((n) => !Number.isFinite(n) || n < 0) || parts.every((n) => n === 0)) {
+    return undefined;
+  }
+  return parts;
 }
 
 /* ---------- Transforms ---------- */
@@ -638,6 +722,63 @@ export function translateElement(el: SceneElement, dx: number, dy: number): void
       el.cy += dy;
       break;
   }
+}
+
+/**
+ * Moves one point of a shape rather than the shape: point `index` of a path, polyline or polygon,
+ * or end `index` of a line. On a path, `handle` moves that curve handle instead of its anchor,
+ * and a linked pair keeps mirroring, as it does under a drag; an anchor takes its handles along.
+ * Does nothing when the shape has no such point (see `hasPoint`).
+ */
+export function translatePoint(
+  el: SceneElement,
+  index: number,
+  dx: number,
+  dy: number,
+  handle?: "in" | "out"
+): void {
+  if (!hasPoint(el, index)) return;
+  if (el.type === "line") {
+    if (index === 0) {
+      el.x1 += dx;
+      el.y1 += dy;
+    } else {
+      el.x2 += dx;
+      el.y2 += dy;
+    }
+    return;
+  }
+  if (el.type === "polyline" || el.type === "polygon") {
+    el.points[index]!.x += dx;
+    el.points[index]!.y += dy;
+    return;
+  }
+  if (el.type !== "path") return;
+  const p = el.points[index]!;
+  const h = handle === "in" ? p.hIn : handle === "out" ? p.hOut : null;
+  if (h) {
+    h.x += dx;
+    h.y += dy;
+    const other = handle === "in" ? "hOut" : "hIn";
+    if (p.smooth && p[other]) p[other] = mirrorHandle(p, h);
+    return;
+  }
+  p.x += dx;
+  p.y += dy;
+  for (const c of [p.hIn, p.hOut]) {
+    if (!c) continue;
+    c.x += dx;
+    c.y += dy;
+  }
+}
+
+/** Whether `index` names a point of `el` that `translatePoint` can move. */
+export function hasPoint(el: SceneElement, index: number): boolean {
+  if (el.type === "line") return index === 0 || index === 1;
+  if (el.type === "path" || el.type === "polyline" || el.type === "polygon") {
+    return index >= 0 && index < el.points.length;
+  }
+  return false;
 }
 
 export interface AlignOptions {
@@ -703,6 +844,10 @@ export function alignToPoints(p: Point, points: readonly Point[], tol: number): 
  */
 export function simplifyPathIfStraight(path: SceneElement): SceneElement {
   if (path.type !== "path" || path.points.length < 2 || !pathIsStraight(path)) return path;
+  // Several outlines are one shape only as a path: a polygon has room for one.
+  if (isCompound(path)) return path;
+  // Closed on two points it is a lens waiting for its curves: a line would forget it was closed.
+  if (path.closed && path.points.length < 3) return path;
   const pts = path.points.map((p) => ({ x: p.x, y: p.y }));
   const style = { ...styleOf(path), id: path.id };
   if (path.closed && pts.length >= 3) return createPolygon(pts, style);
@@ -740,6 +885,61 @@ function ellipseToPath(
   );
 }
 
+/**
+ * A rounded rectangle as a path: each corner a quarter ellipse, drawn with the same cubic
+ * approximation as an ellipse, clockwise from the top edge. A corner whose radius takes a whole
+ * side meets the next corner at one point.
+ */
+function roundedRectPath(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  rx: number,
+  ry: number,
+  style: StyleCarrier
+): PathElement {
+  const kx = rx * KAPPA;
+  const ky = ry * KAPPA;
+  const at = (px: number, py: number, hIn: Point | null, hOut: Point | null): Anchor => ({
+    x: px,
+    y: py,
+    smooth: !!hIn && !!hOut,
+    hIn,
+    hOut,
+  });
+  const right = x + w;
+  const bottom = y + h;
+  // Each corner is two anchors: where the straight side ends and where the next one starts.
+  const pts: Anchor[] = [
+    at(x + rx, y, { x: x + rx - kx, y }, null),
+    at(right - rx, y, null, { x: right - rx + kx, y }),
+    at(right, y + ry, { x: right, y: y + ry - ky }, null),
+    at(right, bottom - ry, null, { x: right, y: bottom - ry + ky }),
+    at(right - rx, bottom, { x: right - rx + kx, y: bottom }, null),
+    at(x + rx, bottom, null, { x: x + rx - kx, y: bottom }),
+    at(x, bottom - ry, { x, y: bottom - ry + ky }, null),
+    at(x, y + ry, null, { x, y: y + ry - ky }),
+  ];
+  // Sides the radius used up entirely leave two anchors on one spot: keep one, with both handles.
+  const merged: Anchor[] = [];
+  for (const p of pts) {
+    const prev = merged[merged.length - 1];
+    if (prev && prev.x === p.x && prev.y === p.y) {
+      prev.hOut = p.hOut;
+      prev.smooth = true;
+    } else merged.push(p);
+  }
+  const first = merged[0]!;
+  const last = merged[merged.length - 1]!;
+  if (merged.length > 1 && first.x === last.x && first.y === last.y) {
+    first.hIn = last.hIn;
+    first.smooth = true;
+    merged.pop();
+  }
+  return createPath(merged, true, style);
+}
+
 /** Converts any geometric primitive to an equivalent editable path (same id and style). */
 export function toPathElement(el: SceneElement): SceneElement {
   if (el.type === "path") return el;
@@ -764,8 +964,12 @@ export function toPathElement(el: SceneElement): SceneElement {
       return createPath(el.points.map(corner), false, style);
     case "polygon":
       return createPath(el.points.map(corner), true, style);
-    case "rect":
-      return createPath(geometryPoints(el).map(corner), true, style);
+    case "rect": {
+      const rx = cornerRadius(el);
+      const ry = cornerRadiusY(el);
+      if (!rx || !ry) return createPath(geometryPoints(el).map(corner), true, style);
+      return roundedRectPath(el.x, el.y, el.width, el.height, rx, ry, style);
+    }
     case "circle":
     case "ellipse": {
       const { rx, ry } = radii(el);
@@ -854,12 +1058,13 @@ export function nearestOnElement(el: SceneElement, p: Point): NearestHit | null 
   const segs: { i: number; a: Point; b: Point }[] = [];
   if (el.type === "line") {
     segs.push({ i: 0, a: { x: el.x1, y: el.y1 }, b: { x: el.x2, y: el.y2 } });
+  } else if (el.type === "path") {
+    for (const { from, a, b } of indexedSegments(el)) segs.push({ i: from, a, b });
   } else if ("points" in el) {
     const pts: Point[] = el.points;
     const n = pts.length;
     for (let i = 0; i < n - 1; i++) segs.push({ i, a: pts[i]!, b: pts[i + 1]! });
-    const closed = el.type === "polygon" || (el.type === "path" && closesBack(el));
-    if (closed && n > 1) segs.push({ i: n - 1, a: pts[n - 1]!, b: pts[0]! });
+    if (el.type === "polygon" && n > 1) segs.push({ i: n - 1, a: pts[n - 1]!, b: pts[0]! });
   }
   let best: NearestHit | null = null;
   const consider = (i: number, t: number, d: number) => {
@@ -930,7 +1135,10 @@ export function insertPointAt(el: SceneElement, index: number, t: number): Scene
   if (el.type === "path") {
     const pts = el.points;
     const a = pts[index]!;
-    const b = pts[(index + 1) % pts.length]!;
+    const b = neighbours(el, index).next;
+    if (!b) return el;
+    // The new point goes after `index`, in its outline: every later outline starts one further on.
+    if (el.subpaths) el.subpaths = el.subpaths.map((s) => (s > index ? s + 1 : s));
     const info = segmentInfo(a, b);
     if (!info.curved) {
       pts.splice(index + 1, 0, createPoint(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, false));
@@ -964,14 +1172,18 @@ export function togglePointSmooth(path: SceneElement, i: number): void {
     syncHandlesForCorner(p);
     return;
   }
-  const n = path.points.length;
-  const closed = closesBack(path);
-  const prev = path.points[i - 1] ?? (closed ? path.points[n - 1] : undefined);
-  const next = path.points[i + 1] ?? (closed ? path.points[0] : undefined);
+  const { prev, next, count } = neighbours(path, i);
   let tx: number;
   let ty: number;
   let len: number;
-  if (prev && next) {
+  const other = count === 2 ? (next ?? prev) : undefined;
+  if (other) {
+    // Two points have only the line between them to follow, and handles along it leave it
+    // straight: they stand square to it instead, so the curve bulges - a lens when closed.
+    tx = -(other.y - p.y);
+    ty = other.x - p.x;
+    len = Math.hypot(tx, ty) / 3;
+  } else if (prev && next) {
     tx = next.x - prev.x;
     ty = next.y - prev.y;
     len =
@@ -1012,7 +1224,8 @@ export function isClosedShape(el: SceneElement): boolean {
 export function setClosed(el: SceneElement, closed: boolean): SceneElement {
   if (!canToggleClosed(el) || isClosedShape(el) === closed) return el;
   const n = el.points.length;
-  if (closed && n < 3) return el;
+  // Two points close into a lens once either segment curves; straight, they need a third.
+  if (closed && n < (el.type === "path" ? 2 : 3)) return el;
   if (el.type === "path") {
     el.closed = closed;
     return el;
@@ -1028,6 +1241,7 @@ export function setClosed(el: SceneElement, closed: boolean): SceneElement {
  */
 export function closingEnd(el: SceneElement, index: number, tol: number): Point | null {
   if (el.type !== "path" && el.type !== "polyline") return null;
+  if (isCompound(el)) return null;
   if (el.type === "path" && el.closed) return null;
   const n = el.points.length;
   if (n < 4 && !(el.type === "path" && n >= 3)) return null;
@@ -1068,7 +1282,7 @@ export function closeByMerge(el: SceneElement, index: number, tol: number): Scen
 
 /** Whether `splitAt` cuts the shape at point `i`: anywhere on a closed one, between the ends of an open one. */
 export function canSplitAt(el: SceneElement, i: number): boolean {
-  if (!canToggleClosed(el)) return false;
+  if (!canToggleClosed(el) || isCompound(el)) return false;
   const n = el.points.length;
   return isClosedShape(el) ? n >= 2 : i > 0 && i < n - 1;
 }
@@ -1079,7 +1293,7 @@ export function canSplitAt(el: SceneElement, i: number): boolean {
  * or null if the cut is not possible (endpoints, lines, too few points).
  */
 export function splitAt(el: SceneElement, i: number): SceneElement[] | null {
-  if (!canToggleClosed(el)) return null;
+  if (!canToggleClosed(el) || isCompound(el)) return null;
   const path = el.type === "path" ? el : (toPathElement(el) as PathElement);
   const pts = path.points;
   const n = pts.length;
@@ -1111,6 +1325,38 @@ export function splitAt(el: SceneElement, i: number): SceneElement[] | null {
   ];
 }
 
+/**
+ * The shape left once the points at `indices` are deleted, each neighbour pair rejoined, or null
+ * when too little is left to draw. An outline down to one point goes, taking its place in the
+ * path with it; a line or a polyline down to two points becomes a line, and a line losing either
+ * end is gone.
+ */
+export function deletePoints(el: SceneElement, indices: readonly number[]): SceneElement | null {
+  const doomed = new Set(indices);
+  if (el.type === "line") return doomed.has(0) || doomed.has(1) ? null : el;
+  if (el.type === "polyline" || el.type === "polygon") {
+    const kept = el.points.filter((_, i) => !doomed.has(i)).map((p) => ({ x: p.x, y: p.y }));
+    if (kept.length < 2) return null;
+    const style = { ...styleOf(el), id: el.id };
+    const next = el.type === "polygon" ? createPolygon(kept, style) : createPolyline(kept, style);
+    return kept.length === 2 ? simplifyPathIfStraight(toPathElement(next)) : next;
+  }
+  if (el.type !== "path") return el;
+  const points: Anchor[] = [];
+  const subpaths: number[] = [];
+  for (const { start, end } of contours(el)) {
+    const kept = el.points.slice(start, end).filter((_, k) => !doomed.has(start + k));
+    if (kept.length < 2) continue;
+    if (points.length) subpaths.push(points.length);
+    points.push(...kept);
+  }
+  if (points.length < 2) return null;
+  const next: PathElement = { ...el, points };
+  if (subpaths.length) next.subpaths = subpaths;
+  else delete next.subpaths;
+  return next;
+}
+
 function reversedPoints(points: readonly Anchor[]): Anchor[] {
   return points
     .map((p) => ({ ...p, hIn: cloneHandle(p.hOut), hOut: cloneHandle(p.hIn) }))
@@ -1120,7 +1366,7 @@ function reversedPoints(points: readonly Anchor[]): Anchor[] {
 /** Open, single-subpath shapes that can be joined end to end (as paths). */
 export function canJoin(el: SceneElement): boolean {
   if (el.type === "line" || el.type === "polyline") return true;
-  return el.type === "path" && !el.closed;
+  return el.type === "path" && !el.closed && !isCompound(el);
 }
 
 /**

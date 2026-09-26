@@ -1,6 +1,8 @@
 import { getState, setState, mutate, findElement, selectOnly } from "./state.js";
 import { setElementClosed } from "./selection-commands.js";
 import { pushUndo } from "./undo.js";
+import { DASH_STYLES, dashPreset, dashStyleOf, keepDashStyle, type DashStyle } from "./dash.js";
+import { addTurn, turnedBy } from "./turn-tally.js";
 import {
   MARKER_TYPES,
   MARKER_SHAPES,
@@ -10,13 +12,15 @@ import {
   translateElement,
   gradientStops,
   keepsRotation,
+  parseDash,
 } from "./model.js";
 import { escapeAttr } from "./utils.js";
 import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./colorpicker.js";
 import { canMoveGroup, canMoveWithinParent, groupColor, groupsOf, moveGroup } from "./groups.js";
 import { flattenLines, lineOffsets, visibleRange, type ListLine } from "./list-lines.js";
 import { scaleAbout, transformElement } from "./transform.js";
-import { type EditorState, type SceneElement } from "./types.js";
+import { type BBox, type EditorState, type SceneElement } from "./types.js";
+import { rotateAll, setBoxField, unionBox } from "./selection-transform.js";
 import { holdSvgFocus, setSvgFocus } from "./svg-source.js";
 import {
   cachedList,
@@ -36,7 +40,7 @@ function primitiveListKeyOf(state: EditorState): string {
   const els = state.elements
     .map(
       (e) =>
-        `${e.id}:${e.type}:${groupsOf(e).join("/")}:${"closed" in e && e.closed ? 1 : 0}:${e.hidden ? 1 : 0}`
+        `${e.id}:${e.type}:${groupsOf(e).join("/")}:${"closed" in e && e.closed ? 1 : 0}:${e.hidden ? 1 : 0}:${e.locked ? 1 : 0}`
     )
     .join(",");
   return `${els}|${state.selection.elementIds.join(",")}|${state.ui.expandedElementId}`;
@@ -130,6 +134,19 @@ function primitiveBodyHtml(el: SceneElement): string {
       gradientStopsHtml(el)
     );
   }
+  // Where outlines overlap - a hole, a shape crossing itself - the rule decides what is inside.
+  if (el.type === "path" || el.type === "polygon" || el.type === "polyline") {
+    rows.push(
+      `<div class="field-row" title="Where outlines overlap: non-zero fills a hole drawn the same way round as its shape, even-odd leaves every other overlap empty"><span>Fill rule</span>${selectHtml(
+        "fillRule",
+        el.fillRule ?? "nonzero",
+        [
+          ["nonzero", "Non-zero"],
+          ["evenodd", "Even-odd"],
+        ]
+      )}</div>`
+    );
+  }
   if (canToggleClosed(el)) {
     rows.push(
       `<div class="field-row"><label class="fill-toggle"><span>Closed</span><input type="checkbox" data-field="closed"${isClosedShape(el) ? " checked" : ""} /></label></div>`
@@ -138,6 +155,8 @@ function primitiveBodyHtml(el: SceneElement): string {
   rows.push(
     `<div class="field-row"><span>Width</span><input type="number" data-field="strokeWidth" min="0" step="0.5" value="${el.strokeWidth}" /></div>`,
     `<div class="field-row"><span>Line cap</span>${selectHtml("linecap", el.linecap, ["round", "butt", "square"])}</div>`,
+    `<div class="field-row field-row--line-start" title="Solid, or a dash pattern worked out from the stroke width"><span>Dash</span>${selectHtml("dashStyle", dashStyleFor(el), DASH_STYLES)}</div>`,
+    `<div class="field-row" title="Dash and gap lengths along the stroke, taking turns - 6 4 is a dash of 6 then a gap of 4. Choose Custom to type your own."><span>Pattern</span><input type="text" data-field="dash" inputmode="decimal" placeholder="${dashStyleFor(el) === "custom" ? "6 4" : "none"}" value="${escapeAttr((el.dash ?? []).join(" "))}" aria-label="Dash pattern"${dashStyleFor(el) === "custom" ? "" : " disabled"} /></div>`,
     `<div class="field-row"><span>Line join</span>${selectHtml("linejoin", el.linejoin, ["round", "miter", "bevel"])}</div>`
   );
   if (el.type === "rect") {
@@ -232,10 +251,19 @@ const OVERSCAN_PX = 600;
 const RAIL_STEP_PX = 11;
 
 function buildPrimitiveList(state: EditorState): void {
+  // A rebuild replaces every field, so the one being typed in is found again afterwards: a
+  // circle turned into an ellipse by its W field, say, must not lose the keyboard.
+  const active = document.activeElement as HTMLElement | null;
+  const inList = primitiveListEl.contains(active);
+  const field = inList ? active?.dataset.field : undefined;
+  const fieldOf = active?.closest<HTMLElement>("[data-element-id]")?.dataset.elementId;
+  const groupField = inList ? active?.dataset.groupField : undefined;
+  const groupFieldOf = active?.closest<HTMLElement>("[data-group-id]")?.dataset.groupId;
   primitiveListEl.innerHTML = "";
   drawnLines.clear();
   rowRefs.clear();
   groupNameInputs.clear();
+  groupBodies.clear();
   lines = [];
   if (!state.elements.length) {
     primitiveListEl.style.height = "";
@@ -248,6 +276,18 @@ function buildPrimitiveList(state: EditorState): void {
   listColors = groupColors(state);
   lines = flattenLines(state.elements, collapsedGroups);
   renderLines(state);
+  if (field && fieldOf) {
+    primitiveListEl
+      .querySelector<HTMLElement>(`[data-element-id="${fieldOf}"] [data-field="${field}"]`)
+      ?.focus();
+  }
+  if (groupField && groupFieldOf) {
+    primitiveListEl
+      .querySelector<HTMLElement>(
+        `[data-group-id="${groupFieldOf}"] [data-group-field="${groupField}"]`
+      )
+      ?.focus();
+  }
 }
 
 /** The part of the list the panel shows, in the list's own coordinates. */
@@ -333,7 +373,10 @@ function forgetRefs(node: HTMLElement): void {
   const id = node.querySelector<HTMLElement>("[data-element-id]")?.dataset.elementId;
   if (id) rowRefs.delete(id);
   const gid = node.querySelector<HTMLElement>("[data-group-id]")?.dataset.groupId;
-  if (gid) groupNameInputs.delete(gid);
+  if (gid) {
+    groupNameInputs.delete(gid);
+    groupBodies.delete(gid);
+  }
 }
 
 let renderQueued = false;
@@ -375,6 +418,8 @@ interface RowRefs {
   style: string;
 }
 const rowRefs = new Map<string, RowRefs>();
+/** The open body of each drawn group head that is selected whole, by group id. */
+const groupBodies = new Map<string, HTMLElement>();
 /** The name field of each drawn group head, by group id. */
 const groupNameInputs = new Map<string, HTMLInputElement>();
 
@@ -395,12 +440,17 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
   const selected = new Set(state.selection.elementIds);
   const allSelected = members.every((e) => selected.has(e.id));
   const allHidden = members.every((e) => e.hidden);
+  const allLocked = members.every((e) => e.locked);
   const head = document.createElement("div");
   head.className = `acc-item group-head${collapsedGroups.has(gid) ? "" : " open"}`;
   head.dataset.groupId = gid;
   head.innerHTML = accHeaderHtml({
     dot: { on: allSelected, title: allSelected ? "Deselect the group" : "Select the group" },
     eye: { visible: !allHidden, title: allHidden ? "Show the group" : "Hide the group" },
+    lock: {
+      locked: allLocked,
+      title: allLocked ? "Unlock the group" : "Lock the group: out of reach on the canvas",
+    },
     titleHtml: `<input type="text" class="acc-title-input group-name-input" data-group-name value="${escapeAttr(state.groupNames[gid] ?? "")}" placeholder="group" aria-label="Group name" title="Group name - exported in the group's id" />`,
     extra: `<span class="acc-swatch group-count" title="${members.length} shapes in this group">${members.length}</span>`,
     canUp: canMoveGroup(state.elements, gid, towardFront(-1)),
@@ -416,6 +466,11 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
         members.map((e) => e.id),
         !allHidden
       ),
+    onLock: () =>
+      setLocked(
+        members.map((e) => e.id),
+        !allLocked
+      ),
     onDelete: () => deleteGroup(gid),
     onMove: (dir, toEnd) => moveGroupBy(gid, towardFront(dir), toEnd),
   });
@@ -425,7 +480,36 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") input.blur();
   });
+  // An open group shows the numbers of the box its members share, as an open shape row shows its
+  // own; folded, it shows neither those nor its members.
+  if (!collapsedGroups.has(gid)) {
+    head.classList.add("expanded");
+    const body = document.createElement("div");
+    body.className = "acc-body";
+    body.innerHTML = groupFieldsHtml(unionBox(members), turnedBy(members.map((e) => e.id)));
+    head.appendChild(body);
+    groupBodies.set(gid, body);
+  }
   return head;
+}
+
+/**
+ * A group's position and size - the box its members share - and a turn. Nothing of it is stored
+ * on the group: each value typed is baked into the members' coordinates (selection-transform.ts),
+ * so Rotate reads how far it has turned since it was chosen (turn-tally.ts), not a stored angle.
+ */
+function groupFieldsHtml(box: BBox | null, turned: number): string {
+  if (!box) return "";
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const field = (key: string, label: string, aria: string, value: number, step = 1) =>
+    `<label class="field-row"><span>${label}</span><input type="number" data-group-field="${key}" step="${step}" value="${value}" aria-label="${aria}" /></label>`;
+  return (
+    field("x", "X", "Group X", round(box.x)) +
+    field("y", "Y", "Group Y", round(box.y)) +
+    field("width", "W", "Group width", round(box.width)) +
+    field("height", "H", "Group height", round(box.height)) +
+    `<label class="field-row" title="Rotates every member about the group's centre by this many degrees"><span>Rotate</span><input type="number" data-group-field="turn" step="5" value="${turned}" aria-label="Rotate the group by (degrees)" /></label>`
+  );
 }
 
 function primitiveRow(state: EditorState, index: number): HTMLElement {
@@ -438,6 +522,10 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
     ${accHeaderHtml({
       dot: { on: isSelected, title: isSelected ? "Deselect" : "Select" },
       eye: { visible: !el.hidden, title: el.hidden ? "Show" : "Hide" },
+      lock: {
+        locked: !!el.locked,
+        title: el.locked ? "Unlock" : "Lock: out of reach on the canvas",
+      },
       name: el.name || "",
       placeholder: el.type,
       extra: `<span class="acc-swatch" style="${escapeAttr(headerSwatchStyle(el))}"></span>`,
@@ -459,6 +547,7 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
     onExpand: () => toggleElementExpanded(el.id),
     onDot: () => toggleElementSelected(el.id),
     onEye: () => setHidden([el.id], !el.hidden),
+    onLock: () => setLocked([el.id], !el.locked),
     onDelete: () => deletePrimitive(el.id),
     onMove: (dir, toEnd) => reorder("elements", el.id, towardFront(dir), toEnd),
   });
@@ -466,6 +555,19 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
 }
 
 function updatePrimitiveListValues(state: EditorState): void {
+  for (const [gid, body] of groupBodies) {
+    const members = membersOf(state.elements, gid);
+    const box = unionBox(members);
+    if (!box) continue;
+    const turn = body.querySelector<HTMLInputElement>('[data-group-field="turn"]');
+    const turned = String(turnedBy(members.map((e) => e.id)));
+    if (turn && turn !== document.activeElement && turn.value !== turned) turn.value = turned;
+    for (const key of ["x", "y", "width", "height"] as const) {
+      const input = body.querySelector<HTMLInputElement>(`[data-group-field="${key}"]`);
+      const value = String(Math.round(box[key] * 100) / 100);
+      if (input && input !== document.activeElement && input.value !== value) input.value = value;
+    }
+  }
   for (const [gid, input] of groupNameInputs) {
     const value = state.groupNames[gid] ?? "";
     if (input !== document.activeElement && input.value !== value) input.value = value;
@@ -521,6 +623,15 @@ function updatePrimitiveListValues(state: EditorState): void {
     setField(li, "linecap", el.linecap);
     setField(li, "linejoin", el.linejoin);
     setField(li, "fillType", el.fillType ?? "solid");
+    setField(li, "fillRule", el.fillRule ?? "nonzero");
+    setField(li, "dash", (el.dash ?? []).join(" "));
+    const dashStyle = dashStyleFor(el);
+    setField(li, "dashStyle", dashStyle);
+    const pattern = li.querySelector<HTMLInputElement>('[data-field="dash"]');
+    if (pattern) {
+      pattern.disabled = dashStyle !== "custom";
+      pattern.placeholder = dashStyle === "custom" ? "6 4" : "none";
+    }
     if (el.type === "rect") {
       setField(li, "rx", Math.round(el.rx || 0));
       setField(li, "ry", Math.round(el.ry ?? el.rx ?? 0));
@@ -597,6 +708,25 @@ function setHidden(ids: readonly string[], hidden: boolean): void {
   }));
 }
 
+/**
+ * Locked shapes stay selected: they were chosen here, where a locked shape is still reached, and
+ * the bar is where they are unlocked again.
+ */
+function setLocked(ids: readonly string[], locked: boolean): void {
+  const wanted = new Set(ids);
+  pushUndo();
+  setState((s) => ({
+    ...s,
+    elements: s.elements.map((e) => {
+      if (!wanted.has(e.id) || !!e.locked === locked) return e;
+      const next = { ...e };
+      if (locked) next.locked = true;
+      else delete next.locked;
+      return next;
+    }),
+  }));
+}
+
 /** Live while typing, like a shape's name: one undo step for the whole edit. */
 function renameGroup(gid: string, raw: string): void {
   const name = raw.trim();
@@ -667,6 +797,20 @@ function deletePrimitive(id: string): void {
 
 const GEOMETRY_FIELDS = ["geomX", "geomY", "geomW", "geomH"];
 
+/** A shape's bounding box by the names of its fields, as they show it (to two decimals). */
+function geometryBox(id: string): Record<string, number> | null {
+  const el = findElement(id);
+  const box = el ? elementBBox(el) : null;
+  if (!box) return null;
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return {
+    geomX: round(box.x),
+    geomY: round(box.y),
+    geomW: round(box.width),
+    geomH: round(box.height),
+  };
+}
+
 /**
  * Moves or scales a shape to put one edge of its bounding box at a typed value. Scaling runs
  * through the same matrix code that bakes imported transforms, so every shape type behaves.
@@ -703,7 +847,6 @@ function applyGeometryField(id: string, field: string, value: number): void {
         : x
     ),
   }));
-  primitiveList.invalidate();
 }
 
 function applyToElement(id: string, fn: (el: SceneElement) => void): void {
@@ -730,6 +873,97 @@ const WRAPPING_ANGLES = ["rotation"];
 
 let textUndoPushed = false;
 
+/**
+ * Shapes whose Dash menu reads Custom although their numbers match a named style: chosen here so
+ * that the pattern can be typed. Where you are, not part of the drawing, like a folded group.
+ */
+const customDash = new Set<string>();
+
+function dashStyleFor(el: SceneElement): DashStyle {
+  return customDash.has(el.id) ? "custom" : dashStyleOf(el);
+}
+
+/** A named dash style follows the stroke's width and cap as they change; a custom one does not. */
+function restyleDash(el: SceneElement, before: SceneElement): void {
+  if (!customDash.has(el.id)) keepDashStyle(el, before);
+}
+
+/**
+ * A Custom dash pattern, applied as it is typed. Only digits, points and spaces go in - pasted
+ * text too - and a pattern half typed (a lone "."), or all zeros, waits rather than turning the
+ * line solid under the typing. One undo step for the whole edit, as for a name.
+ */
+function liveDash(input: HTMLInputElement): void {
+  const raw = input.value;
+  const clean = raw.replace(/[^\d. ]/g, "");
+  if (clean !== raw) {
+    const caret = input.selectionStart ?? clean.length;
+    const removed = raw.slice(0, caret).length - raw.slice(0, caret).replace(/[^\d. ]/g, "").length;
+    input.value = clean;
+    input.setSelectionRange(caret - removed, caret - removed);
+  }
+  const el = findElement(input.closest<HTMLElement>("[data-element-id]")?.dataset.elementId ?? "");
+  if (!el) return;
+  const dash = parseDash(clean);
+  if (!dash && clean.trim()) return;
+  if ((dash ?? []).join(" ") === (el.dash ?? []).join(" ")) return;
+  if (!textUndoPushed) {
+    pushUndo();
+    textUndoPushed = true;
+  }
+  mutate(() => {
+    if (dash) el.dash = dash;
+    else delete el.dash;
+  });
+}
+
+/* Group fields: position, size and a turn for every member at once. */
+primitiveListEl.addEventListener("input", (e) => {
+  const input = e.target as HTMLInputElement;
+  const key = input.dataset?.groupField;
+  const gid = input.closest<HTMLElement>("[data-group-id]")?.dataset.groupId;
+  // A spinner step lands on a whole number, as a shape's fields do.
+  if (!key || !gid || key === "turn" || (e as InputEvent).inputType) return;
+  const box = unionBox(membersOf(getState().elements, gid));
+  const v = parseFloat(input.value);
+  if (!box || Number.isNaN(v)) return;
+  const from = Math.round(box[key as "x"] * 100) / 100;
+  if (v === from) return;
+  input.value = String(v > from ? Math.floor(from + 1e-9) + 1 : Math.ceil(from - 1e-9) - 1);
+});
+
+primitiveListEl.addEventListener("change", (e) => {
+  const input = e.target as HTMLInputElement;
+  const key = input.dataset?.groupField;
+  const gid = input.closest<HTMLElement>("[data-group-id]")?.dataset.groupId;
+  if (!key || !gid) return;
+  const members = membersOf(getState().elements, gid);
+  const v = parseFloat(input.value);
+  let next: SceneElement[] | null = null;
+  if (key === "turn") {
+    // The field reads the running total, so what is typed is turned by the difference.
+    const box = unionBox(members);
+    const ids = members.map((e) => e.id);
+    const by = Number.isFinite(v) ? v - turnedBy(ids) : 0;
+    if (box && by) {
+      // A whole turn moves nothing, but still counts.
+      if (by % 360) next = rotateAll(members, by, box.x + box.width / 2, box.y + box.height / 2);
+      addTurn(ids, by);
+    } else {
+      input.value = String(turnedBy(ids));
+    }
+  } else {
+    next = setBoxField(members, key as "x" | "y" | "width" | "height", v);
+  }
+  if (!next) {
+    primitiveList.sync(getState());
+    return;
+  }
+  const byId = new Map(next.map((el) => [el.id, el]));
+  pushUndo();
+  setState((s) => ({ ...s, elements: s.elements.map((x) => byId.get(x.id) ?? x) }));
+});
+
 primitiveListEl.addEventListener("focusin", () => {
   textUndoPushed = false;
 });
@@ -743,6 +977,23 @@ primitiveListEl.addEventListener("input", (e) => {
   if (!(e as InputEvent).inputType && WRAPPING_ANGLES.includes(field)) {
     const v = parseFloat(input.value);
     if (!Number.isNaN(v)) input.value = String(((v % 360) + 360) % 360);
+    return;
+  }
+
+  // The same, for position and size: a step lands on the next whole number, so 5.2 goes to 6
+  // and 5, not 6.2 and 4.2. The shape itself changes on the `change` that follows.
+  if (!(e as InputEvent).inputType && GEOMETRY_FIELDS.includes(field)) {
+    const id = input.closest<HTMLElement>("[data-element-id]")?.dataset.elementId;
+    const box = id ? geometryBox(id) : null;
+    const v = parseFloat(input.value);
+    const from = box?.[field];
+    if (from == null || Number.isNaN(v) || v === from) return;
+    input.value = String(v > from ? Math.floor(from + 1e-9) + 1 : Math.ceil(from - 1e-9) - 1);
+    return;
+  }
+
+  if (field === "dash") {
+    liveDash(input);
     return;
   }
 
@@ -763,7 +1014,9 @@ primitiveListEl.addEventListener("input", (e) => {
     textUndoPushed = true;
   }
   mutate(() => {
+    const before = { ...el };
     target[field] = value;
+    restyleDash(el, before);
   });
 });
 
@@ -788,6 +1041,31 @@ primitiveListEl.addEventListener("change", (e) => {
   } else if (field === "closed") {
     setElementClosed(id, input.checked);
     primitiveList.invalidate();
+  } else if (field === "dashStyle") {
+    const style = input.value as DashStyle;
+    if (style === "custom") {
+      // Nothing changes yet: the pattern opens for typing, starting from what the style drew.
+      customDash.add(id);
+      primitiveList.sync(getState());
+      const pattern = li!.querySelector<HTMLInputElement>('[data-field="dash"]');
+      pattern?.focus();
+      pattern?.select();
+      return;
+    }
+    customDash.delete(id);
+    applyToElement(id, (el) => {
+      const dash = dashPreset(style, el);
+      if (dash) el.dash = dash;
+      else delete el.dash;
+    });
+  } else if (field === "dash") {
+    // Typing already applied it; leaving the field only tidies what it shows.
+    input.value = (current?.dash ?? []).join(" ");
+  } else if (field === "fillRule") {
+    applyToElement(id, (el) => {
+      if (input.value === "evenodd") el.fillRule = "evenodd";
+      else delete el.fillRule;
+    });
   } else if (field === "fillType") {
     applyToElement(id, (el) => {
       el.fillType = input.value as SceneElement["fillType"];
@@ -811,7 +1089,9 @@ primitiveListEl.addEventListener("change", (e) => {
     const v = parseFloat(input.value);
     if (Number.isNaN(v)) return;
     applyToElement(id, (el) => {
+      const before = { ...el };
       (el as unknown as Record<string, unknown>)[field] = NUMERIC_FIELDS[field]!(v);
+      restyleDash(el, before);
     });
   } else if (field === "name") {
     applyToElement(id, (el) => {
@@ -820,7 +1100,9 @@ primitiveListEl.addEventListener("change", (e) => {
   } else {
     // Plain string selects: linecap, linejoin, markers, font family, anchor.
     applyToElement(id, (el) => {
+      const before = { ...el };
       (el as unknown as Record<string, unknown>)[field] = input.value;
+      restyleDash(el, before);
     });
   }
 });

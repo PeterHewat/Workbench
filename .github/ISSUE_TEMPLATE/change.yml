@@ -1,0 +1,17 @@
+name: Change
+description: A change to a tool, or a new one.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What should exist
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it fits
+      description: A tool runs in the browser, uploads nothing, and still opens offline after the first visit.
+    validations:
+      required: true

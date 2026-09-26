@@ -1,5 +1,5 @@
 import { getState } from "./state.js";
-import type { Point, Viewport } from "./types.js";
+import type { BBox, Point, Viewport } from "./types.js";
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 16;
@@ -76,18 +76,29 @@ interface ViewInsets {
  * of the artboard land underneath them.
  */
 export function fitArtboardInView(padding = 40, insets: ViewInsets = {}): Viewport {
-  const state = getState();
+  const { width, height } = getState().artboard;
+  return fitBoxInView({ x: 0, y: 0, width, height }, padding, insets);
+}
+
+/**
+ * The view that shows `box` as large as it fits, centred in what is free. A box with no extent
+ * on one side - a flat line - is fitted by the other, and a single point keeps the zoom.
+ */
+export function fitBoxInView(box: BBox, padding = 40, insets: ViewInsets = {}): Viewport {
   const rect = svgEl.getBoundingClientRect();
   const top = insets.top ?? 0;
   const bottom = insets.bottom ?? 0;
   const usableH = Math.max(1, rect.height - top - bottom);
-  const aw = state.artboard.width;
-  const ah = state.artboard.height;
+  const fits = [
+    box.width > 0 ? (rect.width - padding * 2) / box.width : Infinity,
+    box.height > 0 ? (usableH - padding * 2) / box.height : Infinity,
+  ];
   // No cap of its own: "fit" means fill what is free, and clampZoom already has the last word.
-  const zoom = Math.min((rect.width - padding * 2) / aw, (usableH - padding * 2) / ah);
+  const want = Math.min(...fits);
+  const zoom = clampZoom(Number.isFinite(want) ? want : getState().viewport.zoom);
   return {
-    panX: (rect.width - aw * zoom) / 2,
-    panY: top + (usableH - ah * zoom) / 2,
-    zoom: clampZoom(zoom),
+    panX: rect.width / 2 - (box.x + box.width / 2) * zoom,
+    panY: top + usableH / 2 - (box.y + box.height / 2) * zoom,
+    zoom,
   };
 }

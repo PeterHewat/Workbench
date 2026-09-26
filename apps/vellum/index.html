@@ -77,17 +77,17 @@
             d="M12 10v7M9 14l3 3 3-3"
           />
         </symbol>
-        <!-- Two shapes lined up on a guide: snap to other shapes' points. -->
-        <symbol id="icon-align" viewBox="0 0 24 24">
+        <!-- A shape's corner caught in the ring Vellum draws on a snapped point: snap to shapes. -->
+        <symbol id="icon-snap-shapes" viewBox="0 0 24 24">
           <path
             fill="none"
             stroke="currentColor"
-            stroke-width="1.6"
-            stroke-dasharray="2.5 2"
-            d="M2 12h20"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M11.6 9H4a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1v-7.6"
           />
-          <rect x="3" y="5" width="7" height="7" rx="1" fill="currentColor" />
-          <circle cx="17" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+          <circle cx="15" cy="9" r="3.4" fill="none" stroke="currentColor" stroke-width="2" />
+          <circle cx="15" cy="9" r="1" fill="currentColor" />
         </symbol>
         <symbol id="icon-pen" viewBox="0 0 24 24">
           <path
@@ -371,16 +371,6 @@
             d="M4 4h16v16H4zM4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16"
           />
         </symbol>
-        <symbol id="icon-fit" viewBox="0 0 24 24">
-          <path
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"
-          />
-        </symbol>
         <symbol id="icon-eye" viewBox="0 0 24 24">
           <path
             fill="none"
@@ -402,15 +392,18 @@
             d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM4 4l16 16"
           />
         </symbol>
-        <symbol id="icon-magnet" viewBox="0 0 24 24">
+        <!-- The same ring on a grid crossing: snap to the grid. -->
+        <symbol id="icon-snap-grid" viewBox="0 0 24 24">
           <path
             fill="none"
             stroke="currentColor"
-            stroke-width="2"
+            stroke-width="1.5"
             stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M6 3v9a6 6 0 0012 0V3h-4v9a2 2 0 01-4 0V3H6zM6 8h4M14 8h4"
+            opacity="0.55"
+            d="M3 8h18M3 16h9.6M8 3v18M16 3v9.6M20 16h1M16 20v1"
           />
+          <circle cx="16" cy="16" r="3.4" fill="none" stroke="currentColor" stroke-width="2" />
+          <circle cx="16" cy="16" r="1" fill="currentColor" />
         </symbol>
         <symbol id="icon-trash" viewBox="0 0 24 24">
           <path
@@ -419,7 +412,7 @@
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            d="M4 6h16M9 6V4h6v2M6 6v14h12V6M10 10v8M14 10v8"
+            d="M3 6h18M5 6v14a2 2 0 002 2h10a2 2 0 002-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"
           />
         </symbol>
         <symbol id="icon-import" viewBox="0 0 24 24">
@@ -442,6 +435,27 @@
             d="M12 15V3M7 8l5-5 5 5M5 21h14"
           />
         </symbol>
+        <!-- A cross: clear. -->
+        <symbol id="icon-clear" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M7 7l10 10M17 7L7 17"
+          />
+        </symbol>
+        <!-- A magnifying glass: search. -->
+        <symbol id="icon-search" viewBox="0 0 24 24">
+          <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2" />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M15.5 15.5L20 20"
+          />
+        </symbol>
         <symbol id="icon-copy" viewBox="0 0 24 24">
           <rect
             x="9"
@@ -459,6 +473,419 @@
             stroke-width="2"
             stroke-linecap="round"
             d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"
+          />
+        </symbol>
+        <!-- Two overlapping squares: combine shapes into one. -->
+        <symbol id="icon-combine" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M4 4h10v10H4z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M10 10h10v10H10z"
+          />
+        </symbol>
+        <!-- Their union: one outline round both. -->
+        <symbol id="icon-union" viewBox="0 0 24 24">
+          <path fill="currentColor" fill-opacity="0.45" d="M4 4h10v6h6v10H10v-6H4z" />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M4 4h10v6h6v10H10v-6H4z"
+          />
+        </symbol>
+        <!-- The back square, less the front one. -->
+        <symbol id="icon-subtract" viewBox="0 0 24 24">
+          <path fill="currentColor" fill-opacity="0.45" d="M4 4h10v6h-4v4H4z" />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M4 4h10v6h-4v4H4z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            stroke-dasharray="2 2"
+            d="M10 10h10v10H10z"
+          />
+        </symbol>
+        <!-- Only where they overlap. -->
+        <symbol id="icon-intersect" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            stroke-dasharray="2 2"
+            d="M4 4h10v10H4z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            stroke-dasharray="2 2"
+            d="M10 10h10v10H10z"
+          />
+          <path fill="currentColor" fill-opacity="0.45" d="M10 10h4v4h-4z" />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M10 10h4v4h-4z"
+          />
+        </symbol>
+        <!-- Everything but where they overlap. -->
+        <symbol id="icon-exclude" viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            fill-opacity="0.45"
+            fill-rule="evenodd"
+            d="M4 4h10v10H4zM10 10h10v10H10z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M4 4h10v10H4z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M10 10h10v10H10z"
+          />
+        </symbol>
+        <!-- Two bars against a line on their left: align left edges. -->
+        <symbol id="icon-align-left" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M4 3v18"
+          />
+          <rect
+            x="7"
+            y="6"
+            width="13"
+            height="4"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <rect
+            x="7"
+            y="14"
+            width="8"
+            height="4"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+        </symbol>
+        <!-- Two bars centred on a vertical line. -->
+        <symbol id="icon-align-hcenter" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M12 3v18"
+          />
+          <rect
+            x="5.5"
+            y="6"
+            width="13"
+            height="4"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <rect
+            x="8"
+            y="14"
+            width="8"
+            height="4"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+        </symbol>
+        <!-- Two bars against a line on their right. -->
+        <symbol id="icon-align-right" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M20 3v18"
+          />
+          <rect
+            x="4"
+            y="6"
+            width="13"
+            height="4"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <rect
+            x="9"
+            y="14"
+            width="8"
+            height="4"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+        </symbol>
+        <!-- Two bars hanging from a line above them. -->
+        <symbol id="icon-align-top" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M3 4h18"
+          />
+          <rect
+            x="6"
+            y="7"
+            width="4"
+            height="13"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <rect
+            x="14"
+            y="7"
+            width="4"
+            height="8"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+        </symbol>
+        <!-- Two bars centred on a horizontal line. -->
+        <symbol id="icon-align-vcenter" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M3 12h18"
+          />
+          <rect
+            x="6"
+            y="5.5"
+            width="4"
+            height="13"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <rect
+            x="14"
+            y="8"
+            width="4"
+            height="8"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+        </symbol>
+        <!-- Two bars standing on a line below them. -->
+        <symbol id="icon-align-bottom" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M3 20h18"
+          />
+          <rect
+            x="6"
+            y="4"
+            width="4"
+            height="13"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <rect
+            x="14"
+            y="9"
+            width="4"
+            height="8"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+        </symbol>
+        <!-- A bar spaced evenly between two lines, across. -->
+        <symbol id="icon-distribute-x" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M3 4v16M21 4v16"
+          />
+          <rect
+            x="9"
+            y="7"
+            width="6"
+            height="10"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+        </symbol>
+        <!-- A bar spaced evenly between two lines, down. -->
+        <symbol id="icon-distribute-y" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M4 3h16M4 21h16"
+          />
+          <rect
+            x="7"
+            y="9"
+            width="10"
+            height="6"
+            rx="1"
+            fill="currentColor"
+            fill-opacity="0.45"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+        </symbol>
+        <!-- An eyedropper: pick a colour from the reference image. -->
+        <symbol id="icon-dropper" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M14 6l4 4M16.5 3.5a2.1 2.1 0 013 3L18 8l-2-2 .5-2.5zM15 7l-9 9-1.5 4.5L9 19l9-9"
+          />
+        </symbol>
+        <!-- A padlock, shut and open: lock a shape out of reach on the canvas, and unlock it. -->
+        <symbol id="icon-lock" viewBox="0 0 24 24">
+          <rect
+            x="5"
+            y="11"
+            width="14"
+            height="10"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M8 11V8a4 4 0 018 0v3"
+          />
+        </symbol>
+        <symbol id="icon-unlock" viewBox="0 0 24 24">
+          <rect
+            x="5"
+            y="11"
+            width="14"
+            height="10"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M8 11V8a4 4 0 017.7-1.5"
+          />
+        </symbol>
+        <!-- A picture: export a PNG. -->
+        <symbol id="icon-png" viewBox="0 0 24 24">
+          <rect
+            x="3"
+            y="4"
+            width="18"
+            height="16"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+          <circle cx="9" cy="10" r="1.8" fill="currentColor" />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M4 18l5-5 3 3 3-3 5 5"
+          />
+        </symbol>
+        <!-- Back from a page of the bar, such as Combine's. -->
+        <symbol id="icon-back" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M15 5l-7 7 7 7"
           />
         </symbol>
       </defs>
@@ -494,10 +921,19 @@
                   <div class="menu-panel-toolbar-actions">
                     <button
                       type="button"
+                      id="btn-doc-export-all"
+                      class="icon-btn"
+                      title="Export every document, in one file"
+                      aria-label="Export every document"
+                    >
+                      <svg class="ui-icon" aria-hidden="true"><use href="#icon-export" /></svg>
+                    </button>
+                    <button
+                      type="button"
                       id="btn-doc-import"
                       class="icon-btn"
-                      title="Import a Vellum document"
-                      aria-label="Import a document"
+                      title="Import Vellum documents — single files or a whole library; nothing already here is replaced"
+                      aria-label="Import documents"
                     >
                       <svg class="ui-icon" aria-hidden="true"><use href="#icon-import" /></svg>
                     </button>
@@ -513,7 +949,28 @@
                   </div>
                 </div>
                 <div class="doc-section-body">
+                  <div class="doc-search">
+                    <input
+                      type="text"
+                      id="doc-search"
+                      placeholder="Search"
+                      aria-label="Search documents by name or tag"
+                      title="Words in a name or tag; commas for alternatives, as in arrow, logo"
+                      autocomplete="off"
+                      enterkeyhint="search"
+                    />
+                    <button
+                      type="button"
+                      id="btn-doc-search"
+                      class="doc-search-btn"
+                      title="Search"
+                      aria-label="Search"
+                    >
+                      <svg class="ui-icon" aria-hidden="true"><use href="#icon-search" /></svg>
+                    </button>
+                  </div>
                   <ul id="doc-list" class="doc-list"></ul>
+                  <p id="doc-no-match" class="doc-no-match" hidden>No document matches.</p>
                 </div>
               </section>
 
@@ -563,6 +1020,16 @@
                     aria-label="Export SVG"
                   >
                     <svg class="ui-icon" aria-hidden="true"><use href="#icon-export" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="tool-btn"
+                    id="btn-export-png"
+                    title="Export PNG, at the artboard's size"
+                    aria-label="Export PNG"
+                    aria-haspopup="dialog"
+                  >
+                    <svg class="ui-icon" aria-hidden="true"><use href="#icon-png" /></svg>
                   </button>
                   <button
                     type="button"
@@ -757,35 +1224,26 @@
             type="button"
             class="tool-btn"
             id="btn-snap"
-            title="Snap to grid (G)"
+            title="Snap to grid (G) — turns snap to shapes off"
             aria-label="Snap to grid"
             aria-pressed="false"
           >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-magnet" /></svg>
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-snap-grid" /></svg>
           </button>
           <!-- Alt, as a switch: a finger has no key to hold. -->
           <button
             type="button"
             class="tool-btn"
             id="btn-align"
-            title="Snap to other shapes' points (or hold Alt) — instead of the grid while on"
+            title="Snap to other shapes' points (or hold Alt) — turns grid snap off"
             aria-label="Snap to other shapes"
             aria-pressed="false"
           >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-align" /></svg>
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-snap-shapes" /></svg>
           </button>
         </div>
 
         <div class="tool-group" id="group-view" role="group" aria-label="View">
-          <button
-            type="button"
-            class="tool-btn"
-            id="btn-fit-view"
-            title="Fit artboard in view"
-            aria-label="Fit view"
-          >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-fit" /></svg>
-          </button>
           <!-- One control, not three: it reads the zoom out loud and sets it from a list. -->
           <div class="zoom-wrap" id="zoom-wrap">
             <button
@@ -905,7 +1363,8 @@
             </li>
             <li data-help="mouse">
               <b>Pen (P)</b> — click for corner points, click-drag for curves. Double-click or
-              <kbd>Enter</kbd> finishes; click the start point to close. A path with no curves
+              <kbd>Enter</kbd> finishes; click the start point to close — from the second point on,
+              and the start point is ringed while a click would close it. A path with no curves
               becomes a line, polyline or polygon automatically. <kbd>Esc</kbd> cancels.
             </li>
             <li data-help="touch">
@@ -937,7 +1396,11 @@
               shape square or circular. Rectangles also have a corner handle just inside the
               top-right corner; drag it to round the corners<span data-help="mouse"
                 >, hold <kbd>Alt</kbd> to set horizontal and vertical radii separately</span
-              >. A faint dashed line ties each of these extra handles to the corner it works from.
+              >. A faint dashed line ties each of these extra handles to the corner it works from. A
+              path, polyline or polygon has a hollow handle just off each corner of its box: drag
+              one to stretch the shape from the opposite corner<span data-help="mouse"
+                >, with <kbd>Shift</kbd> to keep its proportions</span
+              >.
             </li>
             <li>
               <b>Rotate</b> — drag the pink handle above a selected shape<span data-help="touch"
@@ -952,7 +1415,25 @@
               their points, which loses nothing.
             </li>
             <li data-help="mouse">
-              <b>Nudge</b> — arrow keys move by 1 unit, <kbd>Shift</kbd> by 10.
+              <b>Nudge</b> — arrow keys move the selection by 1 unit, <kbd>Shift</kbd> by 10. With a
+              point picked they move only that point, or the curve handle you grabbed last.
+            </li>
+            <li>
+              <b>Align and distribute</b> — the align button on the bar opens a page of six ways to
+              line things up (left, centre, right, top, middle, bottom) and, with three or more, two
+              ways to space them evenly. Several shapes line up with the box they share; a group
+              selected whole moves as one; a single shape, or a single group, lines up with the
+              artboard, which is how an icon is centred. Picked points line up and spread the same
+              way.
+            </li>
+            <li>
+              <b>Several points</b> — with a point picked,
+              <span data-help="mouse"><kbd>Shift</kbd>-click</span
+              ><span data-help="touch">turn on add to the selection and tap</span> more points of
+              the selected shapes, or drag a box round them. Dragging one of them moves them all,
+              and so do the arrow keys; delete removes them, and the bar makes them all curves or
+              all corners. A plain <span data-help="mouse">click</span
+              ><span data-help="touch">tap</span> on one of them picks it alone again.
             </li>
             <li data-help="touch">
               <b>Exact numbers</b> — X, Y, W, H and the angle are fields at the top of the shape's
@@ -968,8 +1449,12 @@
             <li>
               <b>Align</b> —
               <span data-help="mouse">hold <kbd>Alt</kbd> while drawing or dragging, or </span>turn
-              on the switch beside the magnet, to snap to points that line up horizontally or
-              vertically with other shapes. It replaces grid snapping while it is on.
+              on the snap-to-shapes switch beside the grid-snap one, to snap to points that line up
+              horizontally or vertically with other shapes - their corners and points, the middle of
+              each of their segments, and the places where two of them cross. The two switches are
+              one choice: turning one on turns the other off<span data-help="mouse"
+                >, and holding Alt borrows snap to shapes for as long as it is held</span
+              >.
             </li>
             <li>
               <b>Z-order</b> — the ▲ ▼ buttons on the bar beside the selection, or on a row in
@@ -1012,7 +1497,8 @@
               breaks the pair into a <em>cusp</em>, whose handles then move on their own (their arms
               are drawn dashed), or links it again, mirroring one handle off the other. To take one
               handle off, leaving the curve on the other side, grab it and use the remove button on
-              the bar, or <span data-help="mouse">double-click</span
+              the bar<span data-help="mouse">, press <kbd>Delete</kbd></span
+              >, or <span data-help="mouse">double-click</span
               ><span data-help="touch">double-tap</span> it.
               <span data-help="mouse"
                 >Holding <kbd>Alt</kbd> while you drag breaks the pair on the fly; let go of Alt
@@ -1046,11 +1532,21 @@
             <li>
               <b>Stroke / Fill</b> — <span data-help="mouse">click</span
               ><span data-help="touch">tap</span> a swatch for the colour picker (hue, saturation,
-              brightness, hex and alpha). The Fill checkbox turns fill on or off.
+              brightness, hex and alpha). With a reference image in the document, its dropper picks
+              a colour from the image: press it, then <span data-help="mouse">click</span
+              ><span data-help="touch">tap</span> the image where the colour is. The Fill checkbox
+              turns fill on or off.
             </li>
             <li>
-              <b>Fill type</b> — Solid, Linear Gradient (with Angle) or Radial Gradient; both
-              gradient colors have their own alpha.
+              <b>Dash</b> — Solid, Dashed, Dotted or Dash-dot, sized from the stroke width and kept
+              in step when the width or the line cap changes. <b>Pattern</b> beside it shows the
+              lengths of dash and gap that makes, in artboard units; choose <b>Custom</b> to type
+              your own, such as <code>6 4</code>. Exported as <code>stroke-dasharray</code>.
+            </li>
+            <li>
+              <b>Fill type</b> — Solid, Linear Gradient or Radial Gradient. A gradient has as many
+              stops as you add, each with its own colour, alpha and position, and two handles on the
+              shape set where it runs.
             </li>
             <li>
               <b>Width, Line cap, Line join</b> — stroke geometry. Width 0 exports as no stroke.
@@ -1078,8 +1574,34 @@
                 >, or <kbd>Ctrl</kbd>+<kbd>G</kbd> and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd
                   >G</kbd
                 ></span
-              >. Selecting a member selects the whole group; the checkbox on a row in the list
-              selects single members. Exported as <code>&lt;g&gt;</code>.
+              >. Selecting a member selects the whole group; <span data-help="mouse">click</span
+              ><span data-help="touch">tap</span> it again to step inside, to the group nested there
+              or to the shape itself, which then moves, duplicates or groups on its own and stays in
+              its group.<span data-help="mouse"> <kbd>Esc</kbd> steps back out one level.</span> The
+              checkbox on a row in the list selects single members too. Exported as
+              <code>&lt;g&gt;</code>.
+            </li>
+            <li>
+              <b>Move, stretch and turn a group</b> — with a group, or several shapes, selected, a
+              hollow handle stands off each corner of their shared box and a pink one above it: drag
+              a corner to stretch them all from the opposite corner<span data-help="mouse">
+                (<kbd>Shift</kbd> keeps the proportions)</span
+              >, or the pink handle to turn them all about the middle. In the Primitives list an
+              open group shows the same as X, Y, W, H and <b>Rotate</b> under its name, as an open
+              shape shows its fields. The group keeps no transform of its own: every change is
+              written into its shapes, so Rotate counts how far the group has turned since you chose
+              it (typing turns it by the difference, and it starts from 0 for the next thing you
+              choose), a rotated rectangle or ellipse stretched off its own axes becomes a path, and
+              stroke widths stay as they are.
+            </li>
+            <li>
+              <b>Combine</b> — with two or more shapes selected (paths, polygons, rectangles,
+              ellipses), the combine button on the bar opens four ways to make one shape of them:
+              <b>union</b> keeps everything they cover, <b>subtract</b> takes the others from the
+              backmost, <b>intersect</b> keeps only where they all overlap, and <b>exclude</b> keeps
+              everything but the overlap. Curves stay curves. The result takes the backmost shape's
+              place, name and style. A hole is a second outline in the same path: a path can hold
+              several, and its <b>Fill rule</b> says how overlapping ones fill.
             </li>
             <li>
               <b>Merge</b> puts the selection into one group without adding a level<span
@@ -1155,6 +1677,13 @@
               a row shows or hides that shape or reference image.
             </li>
             <li>
+              <b>Lock</b> — the padlock on the bar, or the one beside the eye in a row, puts a shape
+              out of reach on the canvas: it is not clicked, box-selected or selected with
+              everything else, so what you trace over it can be drawn without nudging it. Its row
+              still selects it, and its padlock or the bar unlocks it. A group's padlock locks every
+              shape in it. A locked shape is still snapped to, and is exported like any other.
+            </li>
+            <li>
               <b>Reference images</b> — add reference images to trace; each row is the file it came
               from, and <span data-help="mouse">clicking</span
               ><span data-help="touch">tapping</span>
@@ -1171,7 +1700,8 @@
               Primitives row has focus, the SVG attribute it edits is highlighted in yellow, even if
               the shape is not selected. Only shapes the app knows (path, line, rect, circle,
               ellipse, polyline, polygon, text) are kept. Icons import, export and copy the SVG
-              (coordinates are exported as integers).
+              (coordinates are exported as integers), and export it as a PNG at the artboard's size,
+              one pixel to a unit.
             </li>
             <li>
               <b>Background</b> — the swatch beside the grid paints the whole artboard, alpha
@@ -1205,11 +1735,21 @@
               The last document reopens when you start the app.
             </li>
             <li>
-              Documents live in this browser only, so move them out as files: the ⬇ on a row saves
+              A lot of documents? The ▶ at the start of a row opens its <b>tags</b> — words to find
+              it by, separated by commas — and what is in it: shapes, groups, points, reference
+              images and artboard size — then how large its SVG is and when it was saved. The
+              <b>Search</b> field above the list keeps the documents whose name or tags hold every
+              word you type, and marks where; a folded row shows the tags that matched under its
+              name. Commas give alternatives: <code>arrow, logo</code> finds either. The ✕ at its
+              end, or <kbd>Esc</kbd>, clears it. While the list is filtered, ▲ ▼ rest.
+            </li>
+            <li>
+              Documents live in this browser only, so move them out as files: the ⬆ on a row saves
               that document (reference images included) as <code>Name.vellum.json</code>, and the ⬆
-              in the <b>Documents</b> header opens one back. A file holds one document, so an import
-              is always added beside what you already have and never overwrites it — backing up a
-              whole library means saving each one.<span data-help="mouse">
+              in the <b>Documents</b> header saves every document in one library file — a backup, or
+              everything at once for another browser. The ⬇ beside it opens files of either kind,
+              several at a time: each document in them is added beside what you already have, under
+              a free name, and never overwrites anything.<span data-help="mouse">
                 To empty a document, <kbd>Ctrl</kbd>+<kbd>A</kbd> then <kbd>Delete</kbd>.</span
               >
             </li>
@@ -1218,24 +1758,38 @@
           <h3>Toolbar: grid and view</h3>
           <ul>
             <li>
-              The magnet<span data-help="mouse"> (or <kbd>G</kbd>)</span> toggles snap to grid; a
-              marker shows where the point will land. Snapping applies to drawing, dragged handles
-              and moved shapes<span data-help="mouse"
+              The grid-snap switch (a ring on a grid crossing)<span data-help="mouse">
+                (or <kbd>G</kbd>)</span
+              >
+              toggles snap to grid; a marker shows where the point will land. Snapping applies to
+              drawing, dragged handles and moved shapes<span data-help="mouse"
                 >; hold <kbd>Alt</kbd> to switch to alignment snapping instead</span
               >. It sits with the drawing tools, because that is what it is for. Whether the grid is
               shown, and how far apart its lines are, belong to the document, so they live in the
               <b>SVG</b> section of the Document panel beside the artboard size.
             </li>
             <li>
+              <b>Guides</b> — drag from the top ruler for a horizontal guide, from the left one for
+              a vertical guide. With either snap switch on, points land on a guide they come near
+              and a moved shape lines up an edge or its centre with one. Drag a guide to move it;
+              drop it back on its ruler, or <span data-help="mouse">double-click</span
+              ><span data-help="touch">double-tap</span> it, to take it away. Guides are saved with
+              the document and never exported. On a phone, where the rulers are hidden, guides
+              already there can still be moved and removed.
+            </li>
+            <li>
               <b>Zoom</b> is one control: it reads the current level and opens a list to set it, and
               it follows the view however you changed it — a <span data-help="mouse">wheel</span
-              ><span data-help="touch">pinch</span> shows up here too. Beside it, fit the artboard
-              in view, and the eye (<b>Final SVG</b>: hides the grid, guides and reference images).
+              ><span data-help="touch">pinch</span> shows up here too. The list also fits the
+              artboard or the selection in view<span data-help="mouse">
+                (<kbd>Shift</kbd>+<kbd>1</kbd> and <kbd>Shift</kbd>+<kbd>2</kbd>;
+                <kbd>Shift</kbd>+<kbd>0</kbd> is 100%)</span
+              >. Beside it, the eye (<b>Final SVG</b>: hides the grid, guides and reference images).
             </li>
             <li data-help="touch">
-              Nothing in the bar is behind a menu: Document, undo, redo, fit, zoom, Final SVG and
-              Help all fit across the top, and the tools and the magnet sit at the bottom where your
-              thumb is. On a phone the light / dark switch is here, at the top of this panel.
+              Nothing in the bar is behind a menu: Document, undo, redo, zoom, Final SVG and Help
+              all fit across the top, and the tools and the snap switches sit at the bottom where
+              your thumb is. On a phone the light / dark switch is here, at the top of this panel.
             </li>
             <li>
               <b>Light / dark</b> — the sun or moon beside Help switches the theme. Until you use
@@ -1315,6 +1869,14 @@
             <tr>
               <td>Enter / Esc</td>
               <td>Finish / cancel a path</td>
+            </tr>
+            <tr>
+              <td>Esc</td>
+              <td>Let go of the picked point, or step out of a group one level</td>
+            </tr>
+            <tr>
+              <td>Shift+0 / 1 / 2</td>
+              <td>Zoom to 100% / fit the artboard / fit the selection</td>
             </tr>
             <tr>
               <td>Delete</td>
@@ -1402,7 +1964,7 @@
     </div>
 
     <input type="file" id="input-import-svg" accept=".svg,image/svg+xml" hidden />
-    <input type="file" id="input-doc-file" accept=".json,application/json" hidden />
+    <input type="file" id="input-doc-file" accept=".json,application/json" multiple hidden />
 
     <script type="module" src="/src/lib/app.ts"></script>
   </body>

@@ -1,8 +1,18 @@
-import { getState, setState, mutate, findElement, selectOnly } from "./state.js";
+import { getState, setState, mutate, findElement, selectOnly, selectedElements } from "./state.js";
+import { canCombine, combine, type BooleanOp } from "./boolean.js";
+import { byShape, movePoints, pickedPoints } from "./points.js";
+import {
+  alignBlocks,
+  alignPoints,
+  blocksOf,
+  distributeBlocks,
+  distributePoints,
+  type AlignMode,
+  type Axis,
+} from "./align.js";
 import {
   translateElement,
   duplicateElement,
-  simplifyPathIfStraight,
   toPathElement,
   canToggleClosed,
   closeByMerge,
@@ -16,19 +26,28 @@ import {
   removeHandle,
   setHandlesLinked,
   togglePointSmooth,
+  translatePoint,
+  styleOf,
+  simplifyPathIfStraight,
+  deletePoints,
+  hasPoint,
 } from "./model.js";
 import {
+  canGroup,
   canMergeGroups,
+  canUngroup,
   expandToGroups,
+  groupElements,
   groupsOf,
   mergeGroups,
   moveSelectionZ,
   normalizeGroups,
-  outerGroup,
-  pruneGroups,
+  parentSelection,
+  selectionContext,
+  ungroupElements,
   type ZDirection,
 } from "./groups.js";
-import { uid } from "./utils.js";
+import { deepClone, uid } from "./utils.js";
 import { pushUndo } from "./undo.js";
 import { type Point, type SceneElement } from "./types.js";
 import { commit } from "./ops.js";
@@ -48,27 +67,15 @@ export function expandGroups(ids: string[]): string[] {
 }
 
 /**
- * Wraps the selection in a new group. The selection is always whole groups (selecting a member
- * selects its group), so grouping two groups nests them rather than flattening either.
+ * Wraps the selection in a new group. Groups selected whole nest inside it rather than being
+ * flattened; a selection made inside a group is grouped inside that group.
  */
 export function groupSelection(): void {
   const st = getState();
   const ids = new Set(st.selection.elementIds);
-  if (st.elements.filter((e) => ids.has(e.id)).length < 2) return;
-  const gid = uid("group");
+  if (!canGroup(st.elements, ids)) return;
   pushUndo();
-  setState((s) => {
-    const lastIdx = Math.max(...s.elements.map((e, i) => (ids.has(e.id) ? i : -1)));
-    const rest = s.elements.filter((e) => !ids.has(e.id));
-    const before = s.elements.slice(0, lastIdx + 1).filter((e) => !ids.has(e.id)).length;
-    const grouped = s.elements
-      .filter((e) => ids.has(e.id))
-      .map((e) => ({ ...e, groups: [gid, ...groupsOf(e)] }));
-    return {
-      ...s,
-      elements: normalizeGroups([...rest.slice(0, before), ...grouped, ...rest.slice(before)]),
-    };
-  });
+  setState((s) => ({ ...s, elements: groupElements(s.elements, ids, uid("group")) }));
 }
 
 /**
@@ -79,64 +86,179 @@ export function mergeSelection(): void {
   const st = getState();
   const ids = new Set(st.selection.elementIds);
   if (!canMergeGroups(st.elements, ids)) return;
+  const depth = selectionContext(st.elements, ids).length;
   pushUndo();
   setState((s) => {
     const elements = mergeGroups(s.elements, ids, s.groupNames);
-    return { ...s, elements, selection: selectOnly(expandToGroups(elements, [...ids])) };
+    // The merged group is the one the selection now shares at its own level.
+    const first = elements.find((e) => ids.has(e.id));
+    const gid = groupsOf(first)[depth];
+    const selected = gid
+      ? elements.filter((e) => groupsOf(e).includes(gid)).map((e) => e.id)
+      : [...ids];
+    return { ...s, elements, selection: selectOnly(selected) };
+  });
+}
+
+/**
+ * Esc on a selection: from a picked point back to its shape, and from inside a group out to the
+ * whole of that group, one level at a time. False when there is no level left to climb.
+ */
+export function stepOutSelection(): boolean {
+  const { selection, elements } = getState();
+  if (selection.pathEdit) {
+    setState({ selection: selectOnly(selection.elementIds) });
+    return true;
+  }
+  const parent = parentSelection(elements, new Set(selection.elementIds));
+  if (!parent) return false;
+  setState({ selection: selectOnly(parent) });
+  return true;
+}
+
+/**
+ * Lines the selection up: picked points with each other, several blocks with the box they
+ * share, or one shape - or one group - with the artboard.
+ */
+export function alignSelection(mode: AlignMode): void {
+  const st = getState();
+  const picked = pickedPoints(st.selection);
+  const moved =
+    picked.length > 1
+      ? alignPoints(st.elements, picked, mode)
+      : alignBlocks(blocksOf(st.elements, new Set(st.selection.elementIds)), mode, {
+          x: 0,
+          y: 0,
+          ...st.artboard,
+        });
+  if (moved.length) replaceShapes(moved);
+}
+
+/** Spaces three or more blocks, or picked points, evenly along an axis. */
+export function distributeSelection(axis: Axis): void {
+  const st = getState();
+  const picked = pickedPoints(st.selection);
+  const moved =
+    picked.length > 1
+      ? distributePoints(st.elements, picked, axis)
+      : distributeBlocks(blocksOf(st.elements, new Set(st.selection.elementIds)), axis);
+  if (moved.length) replaceShapes(moved);
+}
+
+/** How many things align and distribute would move: picked points, or the selection's blocks. */
+export function alignableCount(): number {
+  const st = getState();
+  const picked = pickedPoints(st.selection).length;
+  return picked > 1 ? picked : blocksOf(st.elements, new Set(st.selection.elementIds)).length;
+}
+
+/** Locks the selected shapes, or unlocks them. They stay selected, so the choice can be undone. */
+export function setSelectionLocked(locked: boolean): void {
+  const ids = new Set(getState().selection.elementIds);
+  if (!ids.size) return;
+  commit(() => {
+    setState((s) => ({
+      ...s,
+      elements: s.elements.map((e) => {
+        if (!ids.has(e.id) || !!e.locked === locked) return e;
+        const next = { ...e };
+        if (locked) next.locked = true;
+        else delete next.locked;
+        return next;
+      }),
+    }));
+  });
+}
+
+/** Whether the selection can be combined: two or more shapes, every one enclosing an area. */
+export function canCombineSelection(): boolean {
+  const sel = selectedElements();
+  return sel.length >= 2 && sel.every(canCombine);
+}
+
+/**
+ * Combines the selected shapes into one path. They are taken back to front: subtract takes every
+ * other shape from the backmost one. The result stands where the backmost shape stood, in its
+ * groups, with its name and style.
+ */
+export function combineSelection(op: BooleanOp): void {
+  if (!canCombineSelection()) return;
+  const st = getState();
+  const ids = new Set(st.selection.elementIds);
+  const operands = st.elements.filter((e) => ids.has(e.id));
+  const back = operands[0]!;
+  const combined = combine(operands, op, { ...styleOf(back) });
+  // All straight, and one outline, it is a polygon, as the pen makes one.
+  const result = combined && simplifyPathIfStraight(combined);
+  if (!result) {
+    window.alert("Nothing would be left of these shapes, so they are unchanged.");
+    return;
+  }
+  commit(() => {
+    setState((s) => ({
+      ...s,
+      elements: s.elements.flatMap((e) => (e.id === back.id ? [result] : ids.has(e.id) ? [] : [e])),
+      selection: selectOnly([result.id]),
+    }));
   });
 }
 
 /** Peels off the outermost group of the selection, leaving any nested groups inside it intact. */
 export function ungroupSelection(): void {
   const st = getState();
-  const gids = new Set(
-    st.elements
-      .filter((e) => st.selection.elementIds.includes(e.id))
-      .map(outerGroup)
-      .filter((g): g is string => !!g)
-  );
-  if (!gids.size) return;
+  const ids = new Set(st.selection.elementIds);
+  if (!canUngroup(st.elements, ids)) return;
   pushUndo();
-  setState((s) => ({
-    ...s,
-    elements: pruneGroups(
-      s.elements.map((e) => {
-        const chain = groupsOf(e);
-        if (!chain.length || !gids.has(chain[0]!)) return e;
-        const rest = chain.slice(1);
-        const next = { ...e };
-        if (rest.length) next.groups = rest;
-        else delete next.groups;
-        return next;
-      })
-    ),
-  }));
+  setState((s) => ({ ...s, elements: ungroupElements(s.elements, ids) }));
 }
 
-export function deleteSelection(): void {
+/**
+ * Delete. With a curve handle picked it takes that handle and leaves its point; `handleFirst`
+ * false skips that, for the bar's "Delete this point", which says what it deletes.
+ */
+export function deleteSelection(handleFirst = true): void {
   const st = getState();
   const pe = st.selection.pathEdit;
-  if (pe && pe.kind === "anchor") {
+  if (handleFirst && pe?.handle) {
+    removeSelectedHandle();
+    return;
+  }
+  const picked = pickedPoints(st.selection);
+  if (picked.length > 1) {
+    const changed = new Map<string, SceneElement | null>();
+    for (const [id, indices] of byShape(picked)) {
+      const el = findElement(id);
+      if (el) changed.set(id, deletePoints(el, indices));
+    }
     commit(() => {
       setState((s) => {
-        const el = findElement(pe.pathId);
-        if (!el || !("points" in el)) {
-          return { ...s, selection: selectOnly(s.selection.elementIds) };
-        }
-        el.points.splice(pe.index, 1);
-        let next: SceneElement | null = el;
-        if (el.points.length < 2) next = null;
-        else if (el.type !== "path" && el.points.length === 2) {
-          next = simplifyPathIfStraight(toPathElement(el));
-        }
+        const elements = s.elements.flatMap((x) => {
+          if (!changed.has(x.id)) return [x];
+          const next = changed.get(x.id);
+          return next ? [next] : [];
+        });
+        const left = new Set(elements.map((e) => e.id));
         return {
           ...s,
-          elements: next
-            ? s.elements.map((x) => (x.id === el.id ? next : x))
-            : s.elements.filter((x) => x.id !== el.id),
-          selection: selectOnly(next ? [next.id] : []),
+          elements,
+          selection: selectOnly(s.selection.elementIds.filter((id) => left.has(id))),
         };
       });
+    });
+    return;
+  }
+  if (pe && pe.kind === "anchor") {
+    const el = findElement(pe.pathId);
+    if (!el) return;
+    const next = deletePoints(el, [pe.index]);
+    commit(() => {
+      setState((s) => ({
+        ...s,
+        elements: next
+          ? s.elements.map((x) => (x.id === el.id ? next : x))
+          : s.elements.filter((x) => x.id !== el.id),
+        selection: selectOnly(next ? [next.id] : []),
+      }));
     });
     return;
   }
@@ -164,7 +286,46 @@ export function setSelectedHandlesLinked(linked: boolean): void {
  * Turns the selected point into a curve, or a curved one back into a corner: what double-clicking
  * the point does. A line, polyline or polygon becomes a path first, as it has no curves to give.
  */
+/** Puts `next` in place of the shapes with the same ids, as one undo step. */
+function replaceShapes(next: readonly SceneElement[]): void {
+  const byId = new Map(next.map((el) => [el.id, el] as const));
+  commit(() => {
+    setState((s) => ({ ...s, elements: s.elements.map((x) => byId.get(x.id) ?? x) }));
+  });
+}
+
+/** Whether a point is a curve: it has a handle standing off it. */
+function isCurvePoint(el: SceneElement, index: number): boolean {
+  const p = el.type === "path" ? el.points[index] : undefined;
+  return !!p && (hasHandle(p, "in") || hasHandle(p, "out"));
+}
+
+/**
+ * With several points picked: makes them all curves, or, when every one already is, all corners.
+ * Lines, polylines and polygons become paths first, keeping their points in order.
+ */
+function setPickedPointsCurve(): void {
+  const picked = pickedPoints(getState().selection);
+  const makeCurves = picked.some((r) => {
+    const el = findElement(r.pathId);
+    return !!el && !isCurvePoint(el, r.index);
+  });
+  const next: SceneElement[] = [];
+  for (const [id, indices] of byShape(picked)) {
+    const el = findElement(id);
+    if (!el || !canToggleClosed(el)) continue;
+    const path = toPathElement(deepClone(el));
+    for (const i of indices) if (isCurvePoint(path, i) !== makeCurves) togglePointSmooth(path, i);
+    next.push(path);
+  }
+  replaceShapes(next);
+}
+
 export function toggleSelectedPointCurve(): void {
+  if (pickedPoints(getState().selection).length > 1) {
+    setPickedPointsCurve();
+    return;
+  }
   const pe = getState().selection.pathEdit;
   const el = pe ? findElement(pe.pathId) : undefined;
   if (!pe || !el || !canToggleClosed(el)) return;
@@ -264,19 +425,21 @@ export function setElementClosed(id: string, closed: boolean): void {
   });
 }
 
-/** Copies elements with fresh ids and fresh group ids, offset by `off`. */
 /**
  * Fresh copies of `elements`, shifted by `off`, in fresh groups. The copied groups keep their
- * names, returned by their new ids so the caller can add them to the document.
+ * names, returned by their new ids so the caller can add them to the document. Groups in `keep`
+ * are not copied: the copies join them, as a duplicate of one member joins its group.
  */
 export function copyElements(
   elements: readonly SceneElement[],
   off: number,
-  groupNames: Readonly<Record<string, string>> = {}
+  groupNames: Readonly<Record<string, string>> = {},
+  keep: ReadonlySet<string> = new Set()
 ): { copies: SceneElement[]; groupNames: Record<string, string> } {
   const groupMap = new Map<string, string>();
   const names: Record<string, string> = {};
   const remap = (gid: string) => {
+    if (keep.has(gid)) return gid;
     if (!groupMap.has(gid)) {
       const next = uid("group");
       groupMap.set(gid, next);
@@ -301,10 +464,16 @@ export function duplicateSelection(): void {
       const source = s.selection.elementIds
         .map((id) => findElement(id))
         .filter((e): e is SceneElement => !!e);
-      const { copies, groupNames } = copyElements(source, s.grid.step, s.groupNames);
+      // A group only partly selected - one member picked inside it - takes the copies in, right
+      // above its other members; a group selected whole is copied along with its members.
+      const picked = new Set(source.map((e) => e.id));
+      const partial = new Set(
+        s.elements.filter((e) => !picked.has(e.id)).flatMap((e) => groupsOf(e))
+      );
+      const { copies, groupNames } = copyElements(source, s.grid.step, s.groupNames, partial);
       return {
         ...s,
-        elements: [...s.elements, ...copies],
+        elements: normalizeGroups([...s.elements, ...copies]),
         groupNames: { ...s.groupNames, ...groupNames },
         selection: selectOnly(copies.map((c) => c.id)),
       };
@@ -312,14 +481,30 @@ export function duplicateSelection(): void {
   });
 }
 
+/**
+ * The arrow keys. With a point picked they move that point, or the curve handle grabbed last,
+ * as a drag would; otherwise they move the whole selection.
+ */
 export function nudgeSelection(dx: number, dy: number): void {
-  if (!getState().selection.elementIds.length) return;
+  const { selection } = getState();
+  const picked = pickedPoints(selection);
+  if (picked.length > 1) {
+    const bases = new Map(selectedElements().map((el) => [el.id, el] as const));
+    replaceShapes(movePoints(bases, picked, dx, dy));
+    return;
+  }
+  const pe = selection.pathEdit;
+  const pointOwner = pe ? findElement(pe.pathId) : undefined;
+  if (pe && pointOwner && hasPoint(pointOwner, pe.index)) {
+    commit(() => mutate(() => translatePoint(pointOwner, pe.index, dx, dy, pe.handle)));
+    return;
+  }
+  // A locked shape selected from its row stays put, as it does when the others are dragged.
+  const movable = () => selectedElements().filter((el) => !el.locked);
+  if (!movable().length) return;
   commit(() =>
-    mutate((s) => {
-      for (const id of s.selection.elementIds) {
-        const el = findElement(id);
-        if (el) translateElement(el, dx, dy);
-      }
+    mutate(() => {
+      for (const el of movable()) translateElement(el, dx, dy);
     })
   );
 }

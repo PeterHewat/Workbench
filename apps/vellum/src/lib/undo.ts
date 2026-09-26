@@ -1,5 +1,6 @@
 import { restoreSnapshot, snapshotForUndo } from "./state.js";
 import type { EditorState } from "./types.js";
+import { forgetTurns } from "./turn-tally.js";
 
 const MAX = 100;
 const undoStack: EditorState[] = [];
@@ -23,6 +24,7 @@ export function undo(): boolean {
   if (!prev) return false;
   redoStack.push(snapshotForUndo());
   restoreSnapshot(prev);
+  forgetTurns();
   listener();
   return true;
 }
@@ -32,6 +34,7 @@ export function redo(): boolean {
   if (!next) return false;
   undoStack.push(snapshotForUndo());
   restoreSnapshot(next);
+  forgetTurns();
   listener();
   return true;
 }

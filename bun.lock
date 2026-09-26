@@ -21,7 +21,7 @@
     },
     "apps/home": {
       "name": "@workbench/home",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "devDependencies": {
         "@workbench/catalog": "workspace:*",
         "@workbench/ui": "workspace:*",
@@ -31,7 +31,7 @@
     },
     "apps/vellum": {
       "name": "@workbench/vellum",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "devDependencies": {
         "@happy-dom/global-registrator": "^20.14.5",
         "@workbench/ui": "workspace:*",

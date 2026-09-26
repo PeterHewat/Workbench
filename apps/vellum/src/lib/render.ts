@@ -24,11 +24,13 @@ import {
   ROTATE_REACH_FINE,
 } from "./pointer.js";
 import { buildDefsMarkup } from "./io.js";
-import { expandToGroups, groupColor, groupsOf, outerGroup, selectedGroups } from "./groups.js";
+import { hasBoxHandles } from "./resize.js";
+import { pickedPoints } from "./points.js";
+import { BOX_ROLES, boxCorners, unionBox } from "./selection-transform.js";
+import { clickTarget, groupColor, groupsOf, selectedGroups } from "./groups.js";
 import type {
   BBox,
   EditorState,
-  PathEdit,
   PathElement,
   Point,
   RectElement,
@@ -181,7 +183,8 @@ function renderElement(el: SceneElement): SVGElement | null {
   // A shape with neither stroke nor fill paints nothing; keep it clickable so it can be found.
   const invisible =
     (el.strokeWidth === 0 || el.stroke === "none") && !el.fillEnabled && el.type !== "text";
-  node.setAttribute("pointer-events", invisible ? "all" : "visiblePainted");
+  // A locked shape lets presses through to whatever is under it.
+  node.setAttribute("pointer-events", el.locked ? "none" : invisible ? "all" : "visiblePainted");
   return node;
 }
 
@@ -213,7 +216,7 @@ let drawnDefs: { markup: string; node: SVGDefsElement } | null = null;
 function drawElement(el: SceneElement, minHit: number): SVGElement[] {
   const node = renderElement(el);
   if (!node) return [];
-  if (el.type === "text") return [node];
+  if (el.type === "text" || el.locked) return [node];
   // Transparent, wider copy of the outline so thin strokes are easy to click.
   const hit = outlineNode(el, {
     stroke: "transparent",
@@ -230,7 +233,7 @@ function elementKey(el: SceneElement, minHit: number): string {
   const g = geometryOf(el);
   if (!g) return "";
   const hitWidth = el.type === "text" ? 0 : Math.max(el.strokeWidth || 0, minHit);
-  return `${g.tag}|${JSON.stringify({ ...styleAttrs(el), ...g.attrs })}|${g.text ?? ""}|${hitWidth}`;
+  return `${g.tag}|${JSON.stringify({ ...styleAttrs(el), ...g.attrs })}|${g.text ?? ""}|${hitWidth}|${el.locked ? 1 : 0}`;
 }
 
 function renderDocument(state: EditorState): void {
@@ -387,6 +390,14 @@ export function outerHandlePoints(
     if (place) points.push(place.out);
   }
   if (el.type === "rect") points.push(toWorldPoint(el, squareHandleLocal(el, zoomLevel)));
+  const box = hasBoxHandles(el) ? elementBBox(el) : null;
+  if (box) {
+    const off = cornerHandleInset() / zoomLevel;
+    points.push(
+      { x: box.x - off, y: box.y - off },
+      { x: box.x + box.width + off, y: box.y + box.height + off }
+    );
+  }
   return points;
 }
 
@@ -417,7 +428,12 @@ function addResizeHandle(
   selected = false,
   hitR = defaultHitR()
 ): void {
-  const kind = role === "uniform" ? "anchor uniform-handle" : "anchor";
+  const kind =
+    role === "uniform"
+      ? "anchor uniform-handle"
+      : role.startsWith("box-")
+        ? "anchor box-handle"
+        : "anchor";
   addHandle(
     parent,
     x,
@@ -428,11 +444,13 @@ function addResizeHandle(
   );
 }
 
-function renderPrimitiveHandles(
-  parent: Element,
-  el: SceneElement,
-  pathEdit: PathEdit | null
-): void {
+/** The picked points, as "<shape id>:<index>", for marking their handles. */
+function pickedKeys(state: EditorState): Set<string> {
+  return new Set(pickedPoints(state.selection).map((p) => `${p.pathId}:${p.index}`));
+}
+
+function renderPrimitiveHandles(parent: Element, el: SceneElement, state: EditorState): void {
+  const picked = pickedKeys(state);
   // Handles are placed in the shape's own unrotated frame and then turned with it, so a rotated
   // rect still has rect handles rather than losing them to a conversion.
   const put = (x: number, y: number, role: string, selected = false, hitR?: number) => {
@@ -480,19 +498,13 @@ function renderPrimitiveHandles(
       break;
     }
     case "line":
-      put(el.x1, el.y1, "p1");
-      put(el.x2, el.y2, "p2");
+      put(el.x1, el.y1, "p1", picked.has(`${el.id}:0`));
+      put(el.x2, el.y2, "p2", picked.has(`${el.id}:1`));
       break;
     case "polyline":
     case "polygon":
       el.points.forEach((p, i) =>
-        put(
-          p.x,
-          p.y,
-          `pt-${i}`,
-          pathEdit?.pathId === el.id && pathEdit.index === i,
-          hitRForPoint(el.points, i)
-        )
+        put(p.x, p.y, `pt-${i}`, picked.has(`${el.id}:${i}`), hitRForPoint(el.points, i))
       );
       break;
   }
@@ -500,6 +512,7 @@ function renderPrimitiveHandles(
 
 function renderPathHandles(parent: Element, path: PathElement, state: EditorState): void {
   const pe = state.selection.pathEdit;
+  const picked = pickedKeys(state);
   // Curve handles first, anchors after: the anchor sits on top wherever the two overlap.
   path.points.forEach((p, i) => {
     // A cusp's arms are dashed: the pair is broken, and each handle moves on its own.
@@ -521,7 +534,7 @@ function renderPathHandles(parent: Element, path: PathElement, state: EditorStat
     }
   });
   path.points.forEach((p, i) => {
-    const selected = pe?.pathId === path.id && pe.kind === "anchor" && pe.index === i;
+    const selected = picked.has(`${path.id}:${i}`);
     addHandle(
       parent,
       p.x,
@@ -531,6 +544,71 @@ function renderPathHandles(parent: Element, path: PathElement, state: EditorStat
       hitRForPoint(path.points, i)
     );
   });
+}
+
+/**
+ * One handle off each corner of the bounding box, for the shapes whose own handles are only
+ * their points: dragging one scales the shape from the opposite corner. They stand a little way
+ * out on the diagonal, tethered to their corner, so they never sit on top of a point.
+ */
+function renderBoxHandles(parent: Element, el: SceneElement): void {
+  const box = elementBBox(el);
+  if (!box) return;
+  const off = cornerHandleInset() / zoom;
+  for (const role of BOX_ROLES) {
+    const { corner, fixed } = boxCorners(box, role);
+    const x = corner.x + (corner.x < fixed.x ? -off : off);
+    const y = corner.y + (corner.y < fixed.y ? -off : off);
+    add(parent, "line", { class: "handle-tether", x1: corner.x, y1: corner.y, x2: x, y2: y });
+    addResizeHandle(parent, x, y, el.id, role);
+  }
+}
+
+/** What the rotate handle of a selection of several shapes names as its element. */
+export const SELECTION_HANDLE_ID = "selection";
+
+/**
+ * Handles for several shapes at once - a group, or any selection of more than one: one off each
+ * corner of their shared box, which stretches them all from the opposite corner, and a rotate
+ * handle above it that turns them all about its centre. What they do is baked into the shapes'
+ * own coordinates (selection-transform.ts).
+ */
+function renderSelectionHandles(
+  parent: Element,
+  sel: readonly SceneElement[],
+  state: EditorState
+): void {
+  const box = unionBox(sel);
+  if (!box) return;
+  const off = cornerHandleInset() / zoom;
+  const data = (role: string) => ({ "data-selection-handle": "1", "data-handle-role": role });
+  if (box.width > 0 || box.height > 0) {
+    for (const role of BOX_ROLES) {
+      const { corner, fixed } = boxCorners(box, role);
+      const x = corner.x + (corner.x < fixed.x ? -off : off);
+      const y = corner.y + (corner.y < fixed.y ? -off : off);
+      add(parent, "line", { class: "handle-tether", x1: corner.x, y1: corner.y, x2: x, y2: y });
+      addHandle(parent, x, y, "anchor box-handle", data(role));
+    }
+  }
+  const rot = state.drawing?.rotateHandle;
+  const turning = rot?.elementId === SELECTION_HANDLE_ID ? rot : null;
+  const top = { x: box.x + box.width / 2, y: box.y };
+  const hx = turning ? turning.x : top.x;
+  const hy = turning ? turning.y : top.y - rotateOffset() / zoom;
+  addHandleLine(parent, turning ? turning.cx : top.x, turning ? turning.cy : top.y, hx, hy);
+  addHandle(parent, hx, hy, "rotate-handle", data("rotate"));
+}
+
+/** Where a selection's own handles reach beyond its shapes, for the bar to keep clear of. */
+export function selectionHandlePoints(sel: readonly SceneElement[], zoomLevel: number): Point[] {
+  const box = sel.length > 1 ? unionBox(sel) : null;
+  if (!box) return [];
+  const off = cornerHandleInset() / zoomLevel;
+  return [
+    { x: box.x - off, y: box.y - rotateOffset() / zoomLevel },
+    { x: box.x + box.width + off, y: box.y + box.height + off },
+  ];
 }
 
 /**
@@ -644,22 +722,21 @@ function renderGroupBoxes(state: EditorState, groups: Map<string, SceneElement[]
  *
  * Hover used to redraw the shape in blue, which borrowed the one channel the shape owns - its
  * stroke - so it said nothing on a shape with no stroke, and nothing at all on a blue one. The
- * selection outline is honest about the target instead, and for a grouped shape it outlines the
- * whole group, because that is what the click will select.
+ * selection outline is honest about the target instead: for a grouped shape it outlines the group
+ * the click will select, or, once you are inside that group, the member it will.
  */
 function renderHover(state: EditorState): void {
   const hoverId = state.hoverId;
   if (!hoverId || state.drawing?.rotateHandle) return;
-  const ids = expandToGroups(state.elements, [hoverId]);
+  const { ids, gid } = clickTarget(state.elements, new Set(state.selection.elementIds), hoverId);
   if (ids.some((id) => state.selection.elementIds.includes(id))) return;
-  if (ids.length === 1) {
+  if (!gid) {
     const el = findElement(hoverId);
     if (el) renderSelectionBox(els.pointer, el, "selection-box hover-box");
     return;
   }
   // A grouped shape: the click will select the group, so the hover shows the group's box.
-  const gid = outerGroup(findElement(hoverId));
-  const hue = gid ? state.groupHues[gid] : undefined;
+  const hue = state.groupHues[gid];
   const box = unionOf(state.elements.filter((e) => ids.includes(e.id)));
   if (!box) return;
   outline(
@@ -721,10 +798,31 @@ function showsAnchors(sel: readonly SceneElement[]): boolean {
   return true;
 }
 
+/** The guides, each a thin line over the whole canvas with a wider target to grab it by. */
+function renderGuides(state: EditorState): void {
+  const line = (axis: "x" | "y", at: number, index: number | null) => {
+    const attrs =
+      axis === "x" ? { x1: at, y1: -1e5, x2: at, y2: 1e5 } : { x1: -1e5, y1: at, x2: 1e5, y2: at };
+    add(els.overlay, "line", { class: `guide${index == null ? " guide-draft" : ""}`, ...attrs });
+    if (index == null) return;
+    add(els.overlay, "line", {
+      class: `guide-hit guide-hit-${axis}`,
+      ...attrs,
+      "data-guide-axis": axis,
+      "data-guide-index": index,
+    });
+  };
+  state.guides.x.forEach((at, i) => line("x", at, i));
+  state.guides.y.forEach((at, i) => line("y", at, i));
+  const draft = state.drawing?.guide;
+  if (draft) line(draft.axis, draft.at, null);
+}
+
 function renderOverlay(state: EditorState): void {
   clearChildren(els.overlay);
   zoom = state.viewport.zoom;
   if (state.finalOnly) return;
+  renderGuides(state);
 
   const activePathId = state.drawing?.activePathId ?? null;
   if (activePathId) {
@@ -741,6 +839,11 @@ function renderOverlay(state: EditorState): void {
   const anchors = showsAnchors(sel);
   for (const el of sel) {
     if (el.id === activePathId) continue;
+    // Locked, it shows it is selected, and offers nothing to grab.
+    if (el.locked) {
+      renderSelectionBox(els.overlay, el, `${boxClass(el)} locked-box`);
+      continue;
+    }
     if (el.type === "path") {
       // A path with a point picked keeps its points in view, whatever else is selected.
       if (anchors || state.selection.pathEdit?.pathId === el.id) {
@@ -753,12 +856,18 @@ function renderOverlay(state: EditorState): void {
     // Every shape in a selection shows its handles, as paths show their points: grabbing one
     // narrows the selection to that shape, so a group can be edited without taking it apart.
     if (anchors || state.selection.pathEdit?.pathId === el.id) {
-      renderPrimitiveHandles(els.overlay, el, state.selection.pathEdit);
+      renderPrimitiveHandles(els.overlay, el, state);
     }
   }
-  if (sel.length === 1 && sel[0]!.id !== activePathId) {
+  // While points are picked the shapes' own handles are what is being edited.
+  const free = !sel.some((e) => e.locked);
+  if (sel.length > 1 && free && !activePathId && !state.selection.pathEdit) {
+    renderSelectionHandles(els.overlay, sel, state);
+  }
+  if (sel.length === 1 && free && sel[0]!.id !== activePathId) {
     renderGradientHandles(els.overlay, sel[0]!);
     if (canRotate(sel[0]!)) renderRotateHandle(els.overlay, sel[0]!, state);
+    if (hasBoxHandles(sel[0]!)) renderBoxHandles(els.overlay, sel[0]!);
   }
 
   const prev = state.drawing?.preview;

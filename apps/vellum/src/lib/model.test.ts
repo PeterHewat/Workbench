@@ -32,6 +32,8 @@ import {
   setHandlesLinked,
   toPathElement,
   translateElement,
+  translatePoint,
+  deletePoints,
   toLocalPoint,
   toWorldPoint,
   localBBox,
@@ -340,6 +342,12 @@ describe("topology", () => {
     expect(setClosed(pl, true).type).toBe("polyline");
   });
 
+  test("a path closes from two points, a lens once it curves", () => {
+    const lens = createPath([anchor(0, 0, null, { x: 5, y: -8 }), anchor(10, 0)], false);
+    const closed = setClosed(lens, true);
+    expect(closed.type === "path" && closed.closed).toBe(true);
+  });
+
   test("splitting an open shape at a middle vertex gives two shapes", () => {
     const pl = createPolyline([
       { x: 0, y: 0 },
@@ -579,4 +587,125 @@ describe("point editing", () => {
       false
     ) as PathElement;
   }
+});
+
+describe("translatePoint", () => {
+  test("moves an anchor with both of its handles", () => {
+    const p = createPath([anchor(0, 0, { x: -1, y: 0 }, { x: 1, y: 0 }), anchor(10, 0)], false);
+    translatePoint(p, 0, 2, 3);
+    expect(p.points[0]).toMatchObject({ x: 2, y: 3, hIn: { x: 1, y: 3 }, hOut: { x: 3, y: 3 } });
+    expect(p.points[1]).toMatchObject({ x: 10, y: 0 });
+  });
+
+  test("moves one handle, mirroring its partner only while the pair is linked", () => {
+    const linked = createPath([anchor(0, 0, { x: -1, y: 0 }, { x: 1, y: 0 })], false);
+    linked.points[0]!.smooth = true;
+    translatePoint(linked, 0, 0, 1, "out");
+    expect(linked.points[0]).toMatchObject({
+      x: 0,
+      y: 0,
+      hOut: { x: 1, y: 1 },
+      hIn: { x: -1, y: -1 },
+    });
+    const cusp = createPath([anchor(0, 0, { x: -1, y: 0 }, { x: 1, y: 0 })], false);
+    cusp.points[0]!.smooth = false;
+    translatePoint(cusp, 0, 0, 1, "out");
+    expect(cusp.points[0]!.hIn).toEqual({ x: -1, y: 0 });
+  });
+
+  test("moves one end of a line, and nothing for a point it does not have", () => {
+    const line = createLine(0, 0, 10, 10);
+    translatePoint(line, 1, 1, 1);
+    expect(line).toMatchObject({ x1: 0, y1: 0, x2: 11, y2: 11 });
+    translatePoint(line, 2, 5, 5);
+    expect(line).toMatchObject({ x1: 0, y1: 0, x2: 11, y2: 11 });
+  });
+});
+
+describe("curving a two-point path", () => {
+  test("the handles stand square to the line, so it bulges", () => {
+    const lens = createPath([anchor(0, 0), anchor(30, 0)], true);
+    togglePointSmooth(lens, 0);
+    const p = lens.points[0]!;
+    expect(p.hOut!.x).toBeCloseTo(0);
+    expect(Math.abs(p.hOut!.y)).toBeCloseTo(10);
+    expect(p.hIn!.y).toBeCloseTo(-p.hOut!.y);
+  });
+
+  test("closed on two straight points it stays a closed path, not a line", () => {
+    const lens = createPath([anchor(0, 0), anchor(30, 0)], true);
+    expect(simplifyPathIfStraight(lens).type).toBe("path");
+  });
+});
+
+describe("paths of several outlines", () => {
+  // A square with a square hole: two closed outlines, the second starting at point 4.
+  const ring = () => {
+    const p = createPath(
+      [
+        anchor(0, 0),
+        anchor(40, 0),
+        anchor(40, 40),
+        anchor(0, 40),
+        anchor(10, 10),
+        anchor(10, 30),
+        anchor(30, 30),
+        anchor(30, 10),
+      ],
+      true
+    );
+    p.subpaths = [4];
+    return p;
+  };
+
+  test("each outline is its own subpath", () => {
+    expect(geometryOf(ring())!.attrs.d).toBe(
+      "M 0 0 L 40 0 L 40 40 L 0 40 Z M 10 10 L 10 30 L 30 30 L 30 10 Z"
+    );
+  });
+
+  test("a point inserted on the hole's closing edge stays in the hole", () => {
+    const p = ring();
+    insertPointAt(p, 7, 0.5);
+    expect(p.subpaths).toEqual([4]);
+    expect(p.points[8]).toMatchObject({ x: 20, y: 10 });
+  });
+
+  test("deleting points down to one in an outline drops that outline", () => {
+    const next = deletePoints(ring(), [4, 5, 6]);
+    expect(next!.type === "path" && next!.points.length).toBe(4);
+    expect(next!.type === "path" && next!.subpaths).toBeUndefined();
+  });
+
+  test("a point's neighbours are its own outline's", () => {
+    const p = ring();
+    togglePointSmooth(p, 4);
+    // Its neighbours are (30, 10) and (10, 30): the handles run along that diagonal.
+    const h = p.points[4]!.hOut!;
+    expect(h.x - 10).toBeCloseTo(-(h.y - 10));
+  });
+
+  test("it stays a path when straight, and cannot be split or joined", () => {
+    expect(simplifyPathIfStraight(ring()).type).toBe("path");
+    expect(canSplitAt(ring(), 1)).toBe(false);
+  });
+});
+
+describe("a rounded rect as a path", () => {
+  test("keeps its rounded corners and its box", () => {
+    const r = createRect(0, 0, 100, 50);
+    r.rx = 10;
+    const p = toPathElement(r);
+    expect(p.type === "path" && p.points.length).toBe(8);
+    expect(elementBBox(p)).toEqual({ x: 0, y: 0, width: 100, height: 50 });
+    expect(geometryOf(p)!.attrs.d).toContain(" C ");
+  });
+
+  test("a radius taking a whole side leaves one anchor there", () => {
+    const r = createRect(0, 0, 40, 20);
+    r.rx = 10;
+    // The ends are half circles: the vertical sides are used up.
+    const p = toPathElement(r);
+    expect(p.type === "path" && p.points.length).toBe(6);
+  });
 });

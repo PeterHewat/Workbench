@@ -1,6 +1,6 @@
 # Contributing
 
-Workbench is a set of small tools that run in the browser. A change keeps each app as static files: no runtime framework, and no runtime dependency in the shipped bundle. The decisions behind that are in [docs/adr](./docs/adr).
+Workbench is a set of small tools that run in the browser. A change keeps each app as static files: no runtime framework, and no runtime dependency in the shipped bundle. The decisions behind that are in [docs/adr](./docs/adr). Taking part means following the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## Setup
 
