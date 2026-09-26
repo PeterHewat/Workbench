@@ -2,7 +2,6 @@ import { getState, setState, mutate, findElement, selectOnly } from "./state.js"
 import {
   translateElement,
   duplicateElement,
-  simplifyPathIfStraight,
   toPathElement,
   canToggleClosed,
   closeByMerge,
@@ -17,6 +16,7 @@ import {
   setHandlesLinked,
   togglePointSmooth,
   translatePoint,
+  deletePoints,
   hasPoint,
 } from "./model.js";
 import {
@@ -124,26 +124,17 @@ export function deleteSelection(handleFirst = true): void {
     return;
   }
   if (pe && pe.kind === "anchor") {
+    const el = findElement(pe.pathId);
+    if (!el) return;
+    const next = deletePoints(el, [pe.index]);
     commit(() => {
-      setState((s) => {
-        const el = findElement(pe.pathId);
-        if (!el || !("points" in el)) {
-          return { ...s, selection: selectOnly(s.selection.elementIds) };
-        }
-        el.points.splice(pe.index, 1);
-        let next: SceneElement | null = el;
-        if (el.points.length < 2) next = null;
-        else if (el.type !== "path" && el.points.length === 2) {
-          next = simplifyPathIfStraight(toPathElement(el));
-        }
-        return {
-          ...s,
-          elements: next
-            ? s.elements.map((x) => (x.id === el.id ? next : x))
-            : s.elements.filter((x) => x.id !== el.id),
-          selection: selectOnly(next ? [next.id] : []),
-        };
-      });
+      setState((s) => ({
+        ...s,
+        elements: next
+          ? s.elements.map((x) => (x.id === el.id ? next : x))
+          : s.elements.filter((x) => x.id !== el.id),
+        selection: selectOnly(next ? [next.id] : []),
+      }));
     });
     return;
   }

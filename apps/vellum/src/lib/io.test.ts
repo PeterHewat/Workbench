@@ -21,7 +21,7 @@ import {
   createText,
 } from "./model.js";
 import { createInitialState } from "./state.js";
-import type { Anchor, SceneElement } from "./types.js";
+import { PROJECT_VERSION, type Anchor, type SceneElement } from "./types.js";
 
 const anchor = (x: number, y: number, hIn: Anchor["hIn"] = null, hOut: Anchor["hOut"] = null) =>
   ({ x, y, smooth: !!(hIn || hOut), hIn, hOut }) as Anchor;
@@ -485,8 +485,15 @@ describe("project file", () => {
     expect(serializeProject(createInitialState())).not.toHaveProperty("defaults");
   });
 
-  test("is written as version 1, the first released format", () => {
-    expect(serializeProject(createInitialState()).version).toBe(1);
+  test("is written as the current version", () => {
+    expect(serializeProject(createInitialState()).version).toBe(PROJECT_VERSION);
+  });
+
+  test("a version 1 document, the first released format, still opens", () => {
+    const saved = { ...serializeProject(createInitialState()), version: 1 };
+    const read = readProject(saved);
+    expect(read.version).toBe(PROJECT_VERSION);
+    expect(read.elements).toEqual(saved.elements);
   });
 
   test("a document of the current version reads back as it is", () => {
@@ -780,5 +787,45 @@ describe("rotation round trip", () => {
     const back = importSvgFile(formatExportSvg(doc([el]), true), { keepIds: true });
     expect(back.elements[0]!.type).toBe("ellipse");
     expect(Math.round(back.elements[0]!.rotation ?? 0)).toBe(45);
+  });
+});
+
+describe("compound paths", () => {
+  const svg = (inner: string) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${inner}</svg>`;
+  const ring =
+    '<path d="M 0 0 L 40 0 L 40 40 L 0 40 Z M 10 10 L 10 30 L 30 30 L 30 10 Z" fill="#000000" fill-rule="evenodd"/>';
+
+  test("every moveto starts an outline of its own, in one path", () => {
+    const [el] = importSvgFile(svg(ring)).elements;
+    expect(el!.type).toBe("path");
+    if (el!.type !== "path") return;
+    expect(el.points).toHaveLength(8);
+    expect(el.subpaths).toEqual([4]);
+    expect(el.closed).toBe(true);
+    expect(el.fillRule).toBe("evenodd");
+  });
+
+  test("the outlines and the fill rule survive the round trip byte for byte", () => {
+    const first = formatExportSvg(doc(importSvgFile(svg(ring)).elements), true);
+    expect(first).toContain("Z M 10 10");
+    expect(first).toContain('fill-rule="evenodd"');
+    const back = importSvgFile(first, { keepIds: true });
+    const second = formatExportSvg({ artboard: back.artboard!, elements: back.elements }, true);
+    expect(second).toBe(first);
+  });
+
+  test("open and closed outlines in one d become a path of each kind", () => {
+    const els = importSvgFile(
+      svg('<path d="M 0 0 L 10 0 L 10 10 Z M 20 0 L 30 0" stroke="#000"/>')
+    ).elements;
+    expect(els.map((e) => e.type === "path" && e.closed)).toEqual([true, false]);
+  });
+
+  test("a stray moveto draws nothing and leaves no point behind", () => {
+    const [el] = importSvgFile(
+      svg('<path d="M 5 5 M 0 0 L 10 0 L 10 10 Z" fill="#000"/>')
+    ).elements;
+    expect(el!.type === "path" && el!.points.length).toBe(3);
   });
 });

@@ -27,7 +27,7 @@ Put a test next to the pure logic it covers, the way `model.test.ts` sits beside
 
 ## Saved documents
 
-Vellum is released. A drawing lives in the browser's IndexedDB (`ProjectFile`, currently version 1) and in exported SVG. A change to either keeps documents people already have opening: bump `PROJECT_VERSION` in `types.ts` and add the step up from the previous version in `readProject` (`io.ts`). Exported SVG carries no version marker, so an importer change must still read files written before it.
+Vellum is released. A drawing lives in the browser's IndexedDB (`ProjectFile`, currently version 2) and in exported SVG. A change to either keeps documents people already have opening: bump `PROJECT_VERSION` in `types.ts` and add the step up from the previous version in `readProject` (`io.ts`). Exported SVG carries no version marker, so an importer change must still read files written before it.
 
 An app that is not released yet has no saved documents to carry forward. When its stored format changes, fail and tell the person to clear that app's storage.
 

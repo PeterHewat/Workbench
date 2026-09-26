@@ -35,7 +35,9 @@ describe("document files", () => {
   test("anything else is refused with a reason", () => {
     expect(() => readDocumentFile("not json")).toThrow("not valid JSON");
     expect(() => readDocumentFile(JSON.stringify({ tag: "other" }))).toThrow("not a Vellum");
-    const newer = JSON.stringify(documentFile("x", { ...data, version: 99 as 1 }));
+    const newer = JSON.stringify(
+      documentFile("x", { ...data, version: 99 as typeof data.version })
+    );
     expect(() => readDocumentFile(newer)).toThrow("newer Vellum");
   });
 

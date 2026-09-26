@@ -131,6 +131,19 @@ function primitiveBodyHtml(el: SceneElement): string {
       gradientStopsHtml(el)
     );
   }
+  // Where outlines overlap - a hole, a shape crossing itself - the rule decides what is inside.
+  if (el.type === "path" || el.type === "polygon" || el.type === "polyline") {
+    rows.push(
+      `<div class="field-row" title="Where outlines overlap: non-zero fills a hole drawn the same way round as its shape, even-odd leaves every other overlap empty"><span>Fill rule</span>${selectHtml(
+        "fillRule",
+        el.fillRule ?? "nonzero",
+        [
+          ["nonzero", "Non-zero"],
+          ["evenodd", "Even-odd"],
+        ]
+      )}</div>`
+    );
+  }
   if (canToggleClosed(el)) {
     rows.push(
       `<div class="field-row"><label class="fill-toggle"><span>Closed</span><input type="checkbox" data-field="closed"${isClosedShape(el) ? " checked" : ""} /></label></div>`
@@ -586,6 +599,7 @@ function updatePrimitiveListValues(state: EditorState): void {
     setField(li, "linecap", el.linecap);
     setField(li, "linejoin", el.linejoin);
     setField(li, "fillType", el.fillType ?? "solid");
+    setField(li, "fillRule", el.fillRule ?? "nonzero");
     if (el.type === "rect") {
       setField(li, "rx", Math.round(el.rx || 0));
       setField(li, "ry", Math.round(el.ry ?? el.rx ?? 0));
@@ -919,6 +933,11 @@ primitiveListEl.addEventListener("change", (e) => {
   } else if (field === "closed") {
     setElementClosed(id, input.checked);
     primitiveList.invalidate();
+  } else if (field === "fillRule") {
+    applyToElement(id, (el) => {
+      if (input.value === "evenodd") el.fillRule = "evenodd";
+      else delete el.fillRule;
+    });
   } else if (field === "fillType") {
     applyToElement(id, (el) => {
       el.fillType = input.value as SceneElement["fillType"];

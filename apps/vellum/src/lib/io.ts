@@ -338,7 +338,11 @@ export function readProject(raw: unknown): ProjectFile {
     );
   }
   if (!isInert(json)) throw new Error("This document is damaged and cannot be opened.");
-  return json as ProjectFile;
+  let doc = json as unknown as ProjectFile;
+  // 1 -> 2: what version 2 added is all optional - paths of several outlines (`subpaths`) and
+  // the fill rule. A version 1 document means the same with none of it, so only its number moves.
+  if ((version as number) === 1) doc = { ...doc, version: 2 };
+  return doc;
 }
 
 export function loadProject(raw: ProjectFile): void {
@@ -371,9 +375,13 @@ export function loadProject(raw: ProjectFile): void {
  * previous control point. Commands also repeat implicitly - `L 1 1 2 2` is two line segments,
  * and a repeated `M` continues as `L` - which is how most tools write their output.
  */
-function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
+export function parsePathD(d: string): { points: Anchor[]; closed: boolean }[] {
   const tokens = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? [];
   const points: Anchor[] = [];
+  // Each subpath - each M - is an outline of its own: where it starts, and whether a Z closed it.
+  const outlines: { start: number; closed: boolean }[] = [];
+  // After a Z, drawing on without an M starts a new subpath at the one just closed.
+  let afterClose = false;
   let i = 0;
   let cx = 0;
   let cy = 0;
@@ -388,7 +396,17 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
   const last = (): Anchor | undefined => points[points.length - 1];
   const isCommand = (t: string | undefined) => !!t && /^[a-zA-Z]$/.test(t);
 
+  /** Starts a new outline when the current one is closed, as a drawing command after Z does. */
+  const reopen = () => {
+    if (!afterClose) return;
+    afterClose = false;
+    outlines.push({ start: points.length, closed: false });
+    const at = subStart ?? { x: cx, y: cy };
+    points.push({ x: at.x, y: at.y, smooth: false, hIn: null, hOut: null });
+  };
+
   const corner = (x: number, y: number) => {
+    reopen();
     points.push({ x, y, smooth: false, hIn: null, hOut: null });
     lastControl = null;
     lastCurve = "";
@@ -396,6 +414,7 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
 
   /** Appends a cubic segment from the current point to (x, y). */
   const cubic = (c1: Point, c2: Point, x: number, y: number, kind: "cubic" | "quad") => {
+    reopen();
     const from = last();
     if (from) {
       from.hOut = { x: c1.x, y: c1.y };
@@ -446,6 +465,11 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
       cx = readNum() + ox;
       cy = readNum() + oy;
       subStart = { x: cx, y: cy };
+      afterClose = false;
+      // A move with nothing drawn since the last one replaces it rather than leaving a stray point.
+      const open = outlines[outlines.length - 1];
+      if (open && open.start === points.length - 1 && !open.closed) points.pop();
+      else outlines.push({ start: points.length, closed: false });
       corner(cx, cy);
     } else if (c === "L") {
       cx = readNum() + ox;
@@ -486,7 +510,8 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
       cx = x;
       cy = y;
     } else if (c === "Z") {
-      const first = points[0];
+      const outline = outlines[outlines.length - 1];
+      const first = outline ? points[outline.start] : undefined;
       const end = last();
       if (subStart && first && end && end !== first && end.x === first.x && end.y === first.y) {
         // A closing curve drawn back onto the start ends on the first anchor. It is that anchor,
@@ -501,13 +526,20 @@ function parsePathD(d: string): { points: Anchor[]; closed: boolean } {
       cy = subStart?.y ?? cy;
       lastControl = null;
       lastCurve = "";
+      if (outline && !afterClose) outline.closed = true;
+      afterClose = true;
     } else {
       // An unrecognised command: skip its numbers rather than reading them as coordinates.
       while (i < tokens.length && !isCommand(tokens[i])) i++;
     }
   }
   for (const p of points) if (hasTwoHandles(p)) p.smooth = handlesInLine(p);
-  return { points, closed: /z/i.test(d) };
+  return outlines
+    .map((o, k) => ({
+      points: points.slice(o.start, outlines[k + 1]?.start ?? points.length),
+      closed: o.closed,
+    }))
+    .filter((o) => o.points.length);
 }
 
 /**
@@ -666,6 +698,7 @@ function styleFromNode(node: Element, svg: Element): StyleCarrier {
     else style.fill = normalizeColor(fillAttr);
   }
   if (inheritedProp(node, "display") === "none") style.hidden = true;
+  if (inheritedProp(node, "fill-rule") === "evenodd") style.fillRule = "evenodd";
   const ms = inheritedProp(node, "marker-start");
   const me = inheritedProp(node, "marker-end");
   if (ms) style.markerStart = markerFromRef(svg, ms);
@@ -712,12 +745,42 @@ function nameFromNode(node: Element, nodeId: string | null): string | null {
   return AUTO_ID.test(nodeId) ? null : nodeId;
 }
 
-function elementFromNode(node: Element, tag: string, style: StyleCarrier): SceneElement | null {
+/**
+ * The outlines of one `<path>` as elements: one path holding them all when they are all closed or
+ * all open, which is how a shape with holes is drawn. The model closes a path's outlines together,
+ * so a `d` that mixes open and closed outlines becomes one path of each kind, side by side.
+ */
+function pathsFromOutlines(
+  outlines: readonly { points: Anchor[]; closed: boolean }[],
+  style: StyleCarrier
+): SceneElement | SceneElement[] | null {
+  if (!outlines.length) return null;
+  const build = (group: readonly { points: Anchor[] }[], closed: boolean, id?: string) => {
+    const points: Anchor[] = [];
+    const subpaths: number[] = [];
+    for (const o of group) {
+      if (points.length) subpaths.push(points.length);
+      points.push(...o.points);
+    }
+    const path = createPath(points, closed, id ? style : { ...style, id: undefined });
+    if (subpaths.length) path.subpaths = subpaths;
+    return path;
+  };
+  const closed = outlines.filter((o) => o.closed);
+  const open = outlines.filter((o) => !o.closed);
+  if (!open.length || !closed.length) return build(outlines, !!closed.length, style.id);
+  return [build(closed, true, style.id), build(open, false)];
+}
+
+function elementFromNode(
+  node: Element,
+  tag: string,
+  style: StyleCarrier
+): SceneElement | SceneElement[] | null {
   const num = (a: string) => parseFloat(node.getAttribute(a) ?? "");
   switch (tag) {
     case "path": {
-      const { points, closed } = parsePathD(node.getAttribute("d") ?? "");
-      return createPath(points, closed, style);
+      return pathsFromOutlines(parsePathD(node.getAttribute("d") ?? ""), style);
     }
     case "line":
       return createLine(num("x1"), num("y1"), num("x2"), num("y2"), style);
@@ -818,19 +881,22 @@ export function importSvgFile(text: string, { keepIds = false } = {}): ImportRes
     if (name) style.name = name;
     const { chain, matrix } = ancestry(node, svg, groupIds, groupNames, keepIds);
     if (chain.length) style.groups = chain;
-    const el = elementFromNode(node, node.tagName.toLowerCase(), style);
-    if (!el) return;
-    if (keepIds) {
-      const rid = elementIdFromSvgId(nodeId);
-      if (rid && !usedIds.has(rid)) el.id = rid;
-      usedIds.add(el.id);
-    }
-    // An element's own transform, and every <g transform> above it, are baked into the
-    // coordinates here: the scene graph has no transform of its own.
+    const made = elementFromNode(node, node.tagName.toLowerCase(), style);
+    if (!made) return;
     const own = multiply(matrix, parseTransform(node.getAttribute("transform")));
-    const placed = isIdentity(own) ? el : transformElement(el, own);
-    if (style.gradUserSpace) toBoundingBoxUnits(placed);
-    imported.push(placed);
+    (Array.isArray(made) ? made : [made]).forEach((el, k) => {
+      // The id the markup names goes to the first element it became.
+      if (keepIds && k === 0) {
+        const rid = elementIdFromSvgId(nodeId);
+        if (rid && !usedIds.has(rid)) el.id = rid;
+        usedIds.add(el.id);
+      }
+      // An element's own transform, and every <g transform> above it, are baked into the
+      // coordinates here: the scene graph has no transform of its own.
+      const placed = isIdentity(own) ? el : transformElement(el, own);
+      if (style.gradUserSpace) toBoundingBoxUnits(placed);
+      imported.push(placed);
+    });
   });
 
   const elements = normalizeGroups(pruneGroups(imported));

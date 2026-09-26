@@ -97,12 +97,25 @@ interface ElementBase extends StyleProps {
    * the SVG panel re-imports its own output, so a shape left out of it would be deleted.
    */
   hidden?: boolean;
+  /**
+   * How overlapping outlines fill: absent is SVG's default, nonzero; "evenodd" makes every other
+   * overlap a hole, as many icon files draw a ring or a letter O.
+   */
+  fillRule?: "evenodd";
 }
 
 export interface PathElement extends ElementBase {
   type: "path";
+  /** Every outline's anchors, one outline after another. */
   points: Anchor[];
+  /** Whether every outline is closed. A file with open and closed outlines imports as several paths. */
   closed: boolean;
+  /**
+   * Where each outline after the first starts in `points`, ascending; absent for a path of one
+   * outline. A shape with a hole is two outlines - what combining shapes produces, and what
+   * icons with a letter O or a ring are made of.
+   */
+  subpaths?: number[];
 }
 
 export interface LineElement extends ElementBase {
@@ -294,6 +307,7 @@ export type StyleCarrier = Partial<StyleProps> & {
   name?: string;
   groups?: string[];
   hidden?: boolean;
+  fillRule?: "evenodd";
   /** Import only: the gradient arrived in artboard units and still has to be converted. */
   gradUserSpace?: boolean;
 };
@@ -303,7 +317,7 @@ export type StyleCarrier = Partial<StyleProps> & {
  * teaches `readProject` (io.ts) to bring the previous version up to date, so nobody's work stops
  * opening.
  */
-export const PROJECT_VERSION = 1;
+export const PROJECT_VERSION = 2;
 
 /** The serialized document written to storage. */
 export interface ProjectFile {

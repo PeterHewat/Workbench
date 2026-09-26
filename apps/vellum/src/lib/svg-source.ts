@@ -35,6 +35,7 @@ const FIELD_ATTRS: Record<string, string[]> = {
   fill: ["fill", "fill-opacity"],
   fillEnabled: ["fill", "fill-opacity"],
   fillType: ["fill"],
+  fillRule: ["fill-rule"],
   stopOffset: [],
   rx: ["rx", "ry"],
   ry: ["rx", "ry"],

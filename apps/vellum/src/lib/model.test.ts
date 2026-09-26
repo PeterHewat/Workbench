@@ -33,6 +33,7 @@ import {
   toPathElement,
   translateElement,
   translatePoint,
+  deletePoints,
   toLocalPoint,
   toWorldPoint,
   localBBox,
@@ -634,5 +635,58 @@ describe("curving a two-point path", () => {
   test("closed on two straight points it stays a closed path, not a line", () => {
     const lens = createPath([anchor(0, 0), anchor(30, 0)], true);
     expect(simplifyPathIfStraight(lens).type).toBe("path");
+  });
+});
+
+describe("paths of several outlines", () => {
+  // A square with a square hole: two closed outlines, the second starting at point 4.
+  const ring = () => {
+    const p = createPath(
+      [
+        anchor(0, 0),
+        anchor(40, 0),
+        anchor(40, 40),
+        anchor(0, 40),
+        anchor(10, 10),
+        anchor(10, 30),
+        anchor(30, 30),
+        anchor(30, 10),
+      ],
+      true
+    );
+    p.subpaths = [4];
+    return p;
+  };
+
+  test("each outline is its own subpath", () => {
+    expect(geometryOf(ring())!.attrs.d).toBe(
+      "M 0 0 L 40 0 L 40 40 L 0 40 Z M 10 10 L 10 30 L 30 30 L 30 10 Z"
+    );
+  });
+
+  test("a point inserted on the hole's closing edge stays in the hole", () => {
+    const p = ring();
+    insertPointAt(p, 7, 0.5);
+    expect(p.subpaths).toEqual([4]);
+    expect(p.points[8]).toMatchObject({ x: 20, y: 10 });
+  });
+
+  test("deleting points down to one in an outline drops that outline", () => {
+    const next = deletePoints(ring(), [4, 5, 6]);
+    expect(next!.type === "path" && next!.points.length).toBe(4);
+    expect(next!.type === "path" && next!.subpaths).toBeUndefined();
+  });
+
+  test("a point's neighbours are its own outline's", () => {
+    const p = ring();
+    togglePointSmooth(p, 4);
+    // Its neighbours are (30, 10) and (10, 30): the handles run along that diagonal.
+    const h = p.points[4]!.hOut!;
+    expect(h.x - 10).toBeCloseTo(-(h.y - 10));
+  });
+
+  test("it stays a path when straight, and cannot be split or joined", () => {
+    expect(simplifyPathIfStraight(ring()).type).toBe("path");
+    expect(canSplitAt(ring(), 1)).toBe(false);
   });
 });
