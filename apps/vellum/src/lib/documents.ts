@@ -31,7 +31,15 @@ import { fitToView } from "./zoom.js";
 import { invalidateLists, rowDotHtml } from "./accordion.js";
 import { hydrateImageDimensions } from "./images-panel.js";
 import { WELCOME_NAME, loadWelcome } from "./welcome.js";
-import { cleanTags, docStats, matchesSearch, statsText } from "./doc-list.js";
+import {
+  cleanTags,
+  docStats,
+  markHtml,
+  matchesSearch,
+  searchWords,
+  statsText,
+  tagsHit,
+} from "./doc-list.js";
 
 /** The document on the canvas. Read by the rest of the app; only this module replaces it. */
 export let currentDoc: { id: string | null; name: string } = { id: null, name: "" };
@@ -124,7 +132,10 @@ async function refreshDocList(): Promise<void> {
           <span class="chevron" aria-hidden="true">▶</span>
         </button>
         ${rowDotHtml("radio", isCurrent, isCurrent ? "This is the open document" : "Open")}
-        <input type="text" class="acc-title-input doc-title-input" value="${escapeAttr(d.name)}" maxlength="80" aria-label="Document name"${isCurrent ? "" : ' readonly tabindex="-1"'} />
+        <span class="doc-name">
+          <input type="text" class="acc-title-input doc-title-input" value="${escapeAttr(d.name)}" maxlength="80" aria-label="Document name"${isCurrent ? "" : ' readonly tabindex="-1"'} />
+          <span class="acc-title-input doc-title-input doc-name-marks" aria-hidden="true"></span>
+        </span>
         <button type="button" class="acc-icon-btn doc-act" data-doc-dup title="Duplicate" aria-label="Duplicate document">
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-copy" /></svg>
         </button>
@@ -137,6 +148,7 @@ async function refreshDocList(): Promise<void> {
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-trash" /></svg>
         </button>
       </div>
+      <p class="doc-tag-hits" hidden></p>
       <div class="acc-body doc-body">
         <label class="field-row field-row--wide"><span>Tags</span><input type="text" class="doc-tags-input" value="${escapeAttr((d.tags ?? []).join(", "))}" placeholder="icons, arrows" aria-label="Tags, separated by commas" /></label>
         <p class="doc-stats"></p>
@@ -183,17 +195,20 @@ async function fillStats(li: HTMLElement, d: DocumentMeta): Promise<void> {
 
 /* ---------- Search: names and tags ---------- */
 
-const docSearchBtn = byId("btn-doc-search");
-const docSearchRow = byId("doc-search-row");
+const docSearchBtn = byId<HTMLButtonElement>("btn-doc-search");
 const docSearchInput = byId<HTMLInputElement>("doc-search");
 const docNoMatch = byId("doc-no-match");
+let lastQuery = "";
 
 /**
- * Shows only the documents matching the search. ▲ and ▼ step through the whole list, so they
- * rest while it is filtered: a step past a hidden document would look like nothing happened.
+ * Shows only the documents matching the search, with what matched marked: in the name, and -
+ * since a folded row hides its tags - the tags that matched on a line of their own under it. ▲
+ * and ▼ step through the whole list, so they rest while it is filtered: a step past a hidden
+ * document would look like nothing happened.
  */
 function applyDocSearch(): void {
-  const query = docSearchRow.classList.contains("hidden") ? "" : docSearchInput.value.trim();
+  const query = docSearchInput.value.trim();
+  const words = searchWords(query);
   let shown = 0;
   for (const li of docListEl.querySelectorAll<HTMLElement>("[data-doc-id]")) {
     const d = docsCache.find((m) => m.id === li.dataset.docId);
@@ -203,39 +218,51 @@ function applyDocSearch(): void {
     li.querySelectorAll<HTMLButtonElement>("[data-doc-move]").forEach((b) => {
       if (query) b.disabled = true;
     });
+    const name = li.querySelector<HTMLInputElement>(".doc-title-input:not(.doc-name-marks)");
+    const marks = li.querySelector<HTMLElement>(".doc-name-marks");
+    if (marks) marks.innerHTML = words.length && name ? markHtml(name.value, words) : "";
+    const hits = li.querySelector<HTMLElement>(".doc-tag-hits");
+    if (hits) {
+      const tags = words.length ? tagsHit(d?.tags, words) : [];
+      hits.innerHTML = tags
+        .map((t) => `<span class="doc-tag">${markHtml(t, words)}</span>`)
+        .join("");
+      hits.hidden = !tags.length;
+    }
   }
   docNoMatch.hidden = !query || shown > 0;
+  // With text in it, the magnifying glass becomes the way to clear it.
+  const icon = query ? "icon-clear" : "icon-search";
+  const label = query ? "Clear the search" : "Search";
+  docSearchBtn.innerHTML = `<svg class="ui-icon" aria-hidden="true"><use href="#${icon}" /></svg>`;
+  docSearchBtn.title = label;
+  docSearchBtn.setAttribute("aria-label", label);
+  // Leaving a filtered list gives ▲ and ▼ back, which only a rebuild works out.
+  const wasFiltered = !!lastQuery;
+  lastQuery = query;
+  if (wasFiltered && !query) void refreshDocList();
 }
 
-function setDocSearch(open: boolean): void {
-  docSearchRow.classList.toggle("hidden", !open);
-  docSearchBtn.classList.toggle("active", open);
-  docSearchBtn.setAttribute("aria-expanded", String(open));
-  if (open) {
-    setSectionOpen("documents", true);
-    docSearchInput.focus();
-    docSearchInput.select();
-  } else {
-    docSearchInput.value = "";
-  }
-  // Leaving the search gives ▲ and ▼ back, which only a rebuild works out.
-  void refreshDocList();
+function clearDocSearch(): void {
+  docSearchInput.value = "";
+  applyDocSearch();
 }
 
-docSearchBtn.addEventListener("click", () =>
-  setDocSearch(docSearchRow.classList.contains("hidden"))
-);
+docSearchBtn.addEventListener("click", () => {
+  if (docSearchInput.value) clearDocSearch();
+  docSearchInput.focus();
+});
 docSearchInput.addEventListener("input", applyDocSearch);
 docSearchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") docSearchInput.blur();
   if (e.key !== "Escape") return;
   e.stopPropagation();
-  if (docSearchInput.value) {
-    docSearchInput.value = "";
-    applyDocSearch();
-  } else {
-    setDocSearch(false);
-    docSearchBtn.focus();
-  }
+  if (docSearchInput.value) clearDocSearch();
+  else docSearchInput.blur();
+});
+// The open document's name marks what it matches as it is renamed.
+docListEl.addEventListener("input", (e) => {
+  if ((e.target as HTMLElement).classList?.contains("doc-title-input")) applyDocSearch();
 });
 
 function rememberLast(id: string | null): void {

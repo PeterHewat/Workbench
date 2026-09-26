@@ -4,6 +4,7 @@
  */
 
 import type { ProjectFile } from "./types.js";
+import { escapeXml } from "./utils.js";
 
 const MAX_TAGS = 20;
 const MAX_TAG_LENGTH = 32;
@@ -84,11 +85,65 @@ export function statsText(s: DocStats): string {
 }
 
 /**
- * Whether a document matches what was typed in the search: every word of it, ignoring case, is
- * found in the name or in one of the tags. An empty search matches everything.
+ * A search as typed: commas separate alternatives, spaces the words of one - "arrow icons, logo"
+ * is (arrow and icons) or logo. Lower case, empties dropped; nothing typed is no alternative.
  */
-export function matchesSearch(doc: { name: string; tags?: readonly string[] }, query: string) {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+export function parseSearch(query: string): string[][] {
+  return query
+    .toLowerCase()
+    .split(",")
+    .map((alt) => alt.split(/\s+/).filter(Boolean))
+    .filter((alt) => alt.length);
+}
+
+/**
+ * Whether a document matches a search: for one of its alternatives, every word is found in the
+ * name or in one of the tags, ignoring case. An empty search matches everything.
+ */
+export function matchesSearch(
+  doc: { name: string; tags?: readonly string[] },
+  query: string
+): boolean {
+  const alts = parseSearch(query);
+  if (!alts.length) return true;
   const haystacks = [doc.name, ...(doc.tags ?? [])].map((s) => s.toLowerCase());
-  return words.every((w) => haystacks.some((h) => h.includes(w)));
+  return alts.some((words) => words.every((w) => haystacks.some((h) => h.includes(w))));
+}
+
+/** Every word of a search, for marking where they are found. */
+export const searchWords = (query: string): string[] => [...new Set(parseSearch(query).flat())];
+
+/** The stretches of `text` where any of the words is found, ignoring case, merged and in order. */
+export function findRanges(text: string, words: readonly string[]): [number, number][] {
+  const lower = text.toLowerCase();
+  const hits: [number, number][] = [];
+  for (const w of words) {
+    for (let at = lower.indexOf(w); at >= 0; at = lower.indexOf(w, at + 1)) {
+      hits.push([at, at + w.length]);
+    }
+  }
+  hits.sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const [s, e] of hits) {
+    const last = merged[merged.length - 1];
+    if (last && s <= last[1]) last[1] = Math.max(last[1], e);
+    else merged.push([s, e]);
+  }
+  return merged;
+}
+
+/** `text`, escaped, with each found stretch in a `<mark>`. */
+export function markHtml(text: string, words: readonly string[]): string {
+  let out = "";
+  let from = 0;
+  for (const [s, e] of findRanges(text, words)) {
+    out += escapeXml(text.slice(from, s)) + `<mark>${escapeXml(text.slice(s, e))}</mark>`;
+    from = e;
+  }
+  return out + escapeXml(text.slice(from));
+}
+
+/** The tags in which a word of the search is found. */
+export function tagsHit(tags: readonly string[] | undefined, words: readonly string[]): string[] {
+  return (tags ?? []).filter((t) => findRanges(t, words).length);
 }

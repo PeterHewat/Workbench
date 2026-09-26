@@ -18,6 +18,7 @@
   --accent-dim: #3d5a9e;
   --danger: #e85d5d;
   --current-row: #364159;
+  --search-hit: rgba(255, 196, 0, 0.45);
   --sel-text: #6cb2ff;
   --attr-bg: rgba(255, 214, 102, 0.28);
   --attr-text: #ffd666;
@@ -57,6 +58,7 @@
     --accent-dim: #d3e1fb;
     --danger: #cf3b3b;
     --current-row: #dfe8fb;
+    --search-hit: rgba(255, 200, 0, 0.55);
     --sel-text: #1f5fcf;
     --attr-bg: rgba(240, 180, 0, 0.22);
     --attr-text: #8a5d00;
@@ -82,6 +84,7 @@
   --accent-dim: #d3e1fb;
   --danger: #cf3b3b;
   --current-row: #dfe8fb;
+  --search-hit: rgba(255, 200, 0, 0.55);
   --sel-text: #1f5fcf;
   --attr-bg: rgba(240, 180, 0, 0.22);
   --attr-text: #8a5d00;
@@ -2211,6 +2214,7 @@ body {
 
 /* Documents: the search under the section's head, and a row's tags and details. */
 .doc-search {
+  position: relative;
   margin: 0 0 8px;
 }
 
@@ -2218,12 +2222,87 @@ body {
   box-sizing: border-box;
   width: 100%;
   min-height: 32px;
-  padding: 0 10px;
+  padding: 0 36px 0 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--field);
   color: var(--text);
   font: inherit;
+}
+
+/* The magnifying glass - a cross once there is text - sits inside the field, at its end. */
+.doc-search-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.doc-search-btn:hover {
+  color: var(--text);
+}
+
+.doc-search-btn .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* A name marks what the search found, from a copy laid over it: an input cannot hold markup. */
+.doc-name {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-name .doc-name-marks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: transparent;
+  white-space: pre;
+  pointer-events: none;
+  background: transparent;
+}
+
+.doc-name-marks:empty {
+  display: none;
+}
+
+.doc-name-marks mark,
+.doc-tag-hits mark {
+  border-radius: 2px;
+  background: var(--search-hit);
+  color: inherit;
+}
+
+/* The tags that matched, under a folded row: otherwise nothing would show why it is there. */
+.doc-tag-hits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px 6px 60px;
+}
+
+.doc-list li.expanded .doc-tag-hits {
+  display: none;
+}
+
+.doc-tag {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .doc-no-match {
@@ -2249,4 +2328,8 @@ body {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+.doc-tag-hits[hidden] {
+  display: none;
 }

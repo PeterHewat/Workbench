@@ -435,6 +435,16 @@
             d="M12 15V3M7 8l5-5 5 5M5 21h14"
           />
         </symbol>
+        <!-- A cross: clear. -->
+        <symbol id="icon-clear" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M7 7l10 10M17 7L7 17"
+          />
+        </symbol>
         <!-- A magnifying glass: search. -->
         <symbol id="icon-search" viewBox="0 0 24 24">
           <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2" />
@@ -911,17 +921,6 @@
                   <div class="menu-panel-toolbar-actions">
                     <button
                       type="button"
-                      id="btn-doc-search"
-                      class="icon-btn"
-                      title="Search the documents by name and tag"
-                      aria-label="Search documents"
-                      aria-expanded="false"
-                      aria-controls="doc-search-row"
-                    >
-                      <svg class="ui-icon" aria-hidden="true"><use href="#icon-search" /></svg>
-                    </button>
-                    <button
-                      type="button"
                       id="btn-doc-export-all"
                       class="icon-btn"
                       title="Export every document, in one file"
@@ -950,14 +949,25 @@
                   </div>
                 </div>
                 <div class="doc-section-body">
-                  <div id="doc-search-row" class="doc-search hidden">
+                  <div class="doc-search">
                     <input
-                      type="search"
+                      type="text"
                       id="doc-search"
-                      placeholder="Name or tag"
+                      placeholder="Search"
                       aria-label="Search documents by name or tag"
+                      title="Words in a name or tag; commas for alternatives, as in arrow, logo"
                       autocomplete="off"
+                      enterkeyhint="search"
                     />
+                    <button
+                      type="button"
+                      id="btn-doc-search"
+                      class="doc-search-btn"
+                      title="Search"
+                      aria-label="Search"
+                    >
+                      <svg class="ui-icon" aria-hidden="true"><use href="#icon-search" /></svg>
+                    </button>
                   </div>
                   <ul id="doc-list" class="doc-list"></ul>
                   <p id="doc-no-match" class="doc-no-match" hidden>No document matches.</p>
@@ -1727,9 +1737,11 @@
             <li>
               A lot of documents? The ▶ at the start of a row opens its <b>tags</b> — words to find
               it by, separated by commas — and what is in it: shapes, groups, points, reference
-              images, size and when it was saved. The magnifying glass in the <b>Documents</b>
-              header searches the list: every word typed must be in a document's name or tags. While
-              the list is filtered, ▲ ▼ rest.
+              images, size and when it was saved. The <b>Search</b> field above the list keeps the
+              documents whose name or tags hold every word you type, and marks where; a folded row
+              shows the tags that matched under its name. Commas give alternatives:
+              <code>arrow, logo</code> finds either. The ✕ at its end, or <kbd>Esc</kbd>, clears it.
+              While the list is filtered, ▲ ▼ rest.
             </li>
             <li>
               Documents live in this browser only, so move them out as files: the ⬆ on a row saves

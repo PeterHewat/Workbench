@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { cleanTags, docStats, matchesSearch, statsText } from "./doc-list.js";
+import {
+  cleanTags,
+  docStats,
+  findRanges,
+  markHtml,
+  matchesSearch,
+  searchWords,
+  statsText,
+  tagsHit,
+} from "./doc-list.js";
 import { createLine, createPath, createRect } from "./model.js";
 import type { Anchor } from "./types.js";
 
@@ -51,5 +60,22 @@ describe("search", () => {
     expect(matchesSearch(doc, "NAV")).toBe(true);
     expect(matchesSearch(doc, "arrow icons")).toBe(true);
     expect(matchesSearch(doc, "arrow logo")).toBe(false);
+  });
+
+  test("commas separate alternatives", () => {
+    expect(matchesSearch(doc, "logo, nav")).toBe(true);
+    expect(matchesSearch(doc, "logo, brand")).toBe(false);
+    expect(matchesSearch(doc, "logo,")).toBe(false);
+    expect(matchesSearch(doc, " , ")).toBe(true);
+    expect(searchWords("Arrow icons, arrow")).toEqual(["arrow", "icons"]);
+  });
+
+  test("found stretches are merged and marked, the rest escaped", () => {
+    expect(findRanges("Arrow arrowhead", ["arrow", "rowh"])).toEqual([
+      [0, 5],
+      [6, 12],
+    ]);
+    expect(markHtml("A<b> arrow", ["arrow"])).toBe("A&lt;b&gt; <mark>arrow</mark>");
+    expect(tagsHit(["icons", "Navigation"], ["nav"])).toEqual(["Navigation"]);
   });
 });

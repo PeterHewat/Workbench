@@ -322,9 +322,11 @@ chosen, a checkbox otherwise), name, preview, eye, ▲ ▼, delete.
   when it was saved. Tags live in `meta`, so the list and the search never load a document;
   stats of a closed document load it once and are kept until it changes. Which rows are open
   belongs to the session.
-- **Search**: the magnifying glass in the header shows a field; a document stays in the list when
-  every word typed is found, ignoring case, in its name or one of its tags. ▲ ▼ are off while the
-  list is filtered. Esc clears the field, and a second Esc closes it.
+- **Search**: a field above the list, with a magnifying glass at its end that becomes a ✕ to clear
+  it once there is text. Commas separate alternatives and spaces the words of one: a document
+  stays when, for one alternative, every word is found, ignoring case, in its name or one of its
+  tags. What matched is marked - in the name, from a copy laid over the field, and in the tags that
+  matched, shown under a folded row. ▲ ▼ are off while the list is filtered. Esc clears the field.
 - The last open document reopens at start. The first start, with an empty library, creates
   **Vellum Workbench** from `public/art.svg` (512 × 320, Vellum's own export, also the index
   page's card art); a `vellum.welcomed` flag keeps it from coming back once deleted.
