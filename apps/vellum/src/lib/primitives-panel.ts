@@ -1,6 +1,7 @@
 import { getState, setState, mutate, findElement, selectOnly } from "./state.js";
 import { setElementClosed } from "./selection-commands.js";
 import { pushUndo } from "./undo.js";
+import { DASH_STYLES, dashPreset, dashStyleOf, keepDashStyle, type DashStyle } from "./dash.js";
 import { addTurn, turnedBy } from "./turn-tally.js";
 import {
   MARKER_TYPES,
@@ -153,8 +154,9 @@ function primitiveBodyHtml(el: SceneElement): string {
   }
   rows.push(
     `<div class="field-row"><span>Width</span><input type="number" data-field="strokeWidth" min="0" step="0.5" value="${el.strokeWidth}" /></div>`,
-    `<div class="field-row" title="Dash and gap lengths along the stroke, such as 6 4; empty for a solid line"><span>Dash</span><input type="text" data-field="dash" inputmode="decimal" placeholder="solid" value="${escapeAttr((el.dash ?? []).join(" "))}" aria-label="Dash pattern" /></div>`,
     `<div class="field-row"><span>Line cap</span>${selectHtml("linecap", el.linecap, ["round", "butt", "square"])}</div>`,
+    `<div class="field-row field-row--line-start" title="Solid, or a dash pattern worked out from the stroke width"><span>Dash</span>${selectHtml("dashStyle", dashStyleFor(el), DASH_STYLES)}</div>`,
+    `<div class="field-row" title="Dash and gap lengths along the stroke, taking turns - 6 4 is a dash of 6 then a gap of 4. Choose Custom to type your own."><span>Pattern</span><input type="text" data-field="dash" inputmode="decimal" placeholder="${dashStyleFor(el) === "custom" ? "e.g. 6 4" : "none"}" value="${escapeAttr((el.dash ?? []).join(" "))}" aria-label="Dash pattern"${dashStyleFor(el) === "custom" ? "" : " disabled"} /></div>`,
     `<div class="field-row"><span>Line join</span>${selectHtml("linejoin", el.linejoin, ["round", "miter", "bevel"])}</div>`
   );
   if (el.type === "rect") {
@@ -623,6 +625,13 @@ function updatePrimitiveListValues(state: EditorState): void {
     setField(li, "fillType", el.fillType ?? "solid");
     setField(li, "fillRule", el.fillRule ?? "nonzero");
     setField(li, "dash", (el.dash ?? []).join(" "));
+    const dashStyle = dashStyleFor(el);
+    setField(li, "dashStyle", dashStyle);
+    const pattern = li.querySelector<HTMLInputElement>('[data-field="dash"]');
+    if (pattern) {
+      pattern.disabled = dashStyle !== "custom";
+      pattern.placeholder = dashStyle === "custom" ? "e.g. 6 4" : "none";
+    }
     if (el.type === "rect") {
       setField(li, "rx", Math.round(el.rx || 0));
       setField(li, "ry", Math.round(el.ry ?? el.rx ?? 0));
@@ -864,6 +873,21 @@ const WRAPPING_ANGLES = ["rotation"];
 
 let textUndoPushed = false;
 
+/**
+ * Shapes whose Dash menu reads Custom although their numbers match a named style: chosen here so
+ * that the pattern can be typed. Where you are, not part of the drawing, like a folded group.
+ */
+const customDash = new Set<string>();
+
+function dashStyleFor(el: SceneElement): DashStyle {
+  return customDash.has(el.id) ? "custom" : dashStyleOf(el);
+}
+
+/** A named dash style follows the stroke's width and cap as they change; a custom one does not. */
+function restyleDash(el: SceneElement, before: SceneElement): void {
+  if (!customDash.has(el.id)) keepDashStyle(el, before);
+}
+
 /* Group fields: position, size and a turn for every member at once. */
 primitiveListEl.addEventListener("input", (e) => {
   const input = e.target as HTMLInputElement;
@@ -956,7 +980,9 @@ primitiveListEl.addEventListener("input", (e) => {
     textUndoPushed = true;
   }
   mutate(() => {
+    const before = { ...el };
     target[field] = value;
+    restyleDash(el, before);
   });
 });
 
@@ -981,6 +1007,23 @@ primitiveListEl.addEventListener("change", (e) => {
   } else if (field === "closed") {
     setElementClosed(id, input.checked);
     primitiveList.invalidate();
+  } else if (field === "dashStyle") {
+    const style = input.value as DashStyle;
+    if (style === "custom") {
+      // Nothing changes yet: the pattern opens for typing, starting from what the style drew.
+      customDash.add(id);
+      primitiveList.sync(getState());
+      const pattern = li!.querySelector<HTMLInputElement>('[data-field="dash"]');
+      pattern?.focus();
+      pattern?.select();
+      return;
+    }
+    customDash.delete(id);
+    applyToElement(id, (el) => {
+      const dash = dashPreset(style, el);
+      if (dash) el.dash = dash;
+      else delete el.dash;
+    });
   } else if (field === "dash") {
     const dash = parseDash(input.value);
     input.value = (dash ?? []).join(" ");
@@ -1016,7 +1059,9 @@ primitiveListEl.addEventListener("change", (e) => {
     const v = parseFloat(input.value);
     if (Number.isNaN(v)) return;
     applyToElement(id, (el) => {
+      const before = { ...el };
       (el as unknown as Record<string, unknown>)[field] = NUMERIC_FIELDS[field]!(v);
+      restyleDash(el, before);
     });
   } else if (field === "name") {
     applyToElement(id, (el) => {
@@ -1025,7 +1070,9 @@ primitiveListEl.addEventListener("change", (e) => {
   } else {
     // Plain string selects: linecap, linejoin, markers, font family, anchor.
     applyToElement(id, (el) => {
+      const before = { ...el };
       (el as unknown as Record<string, unknown>)[field] = input.value;
+      restyleDash(el, before);
     });
   }
 });

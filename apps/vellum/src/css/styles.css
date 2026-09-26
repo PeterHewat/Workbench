@@ -1687,6 +1687,11 @@ body {
   grid-column: 1 / -1;
 }
 
+/* Starts a line, so the field after it sits beside it: Dash and its Pattern. */
+.acc-body > .field-row--line-start {
+  grid-column-start: 1;
+}
+
 /* One label column for the whole body, whether the label is a word or a word and a checkbox,
    so every control in a column starts at the same x. */
 .acc-body .field-row > span {
@@ -2196,4 +2201,10 @@ body {
 /* Only the select tool picks guides up: while drawing, a press on one draws. */
 .canvas-wrap:not(.mode-select) .guide-hit {
   pointer-events: none;
+}
+
+/* A field that shows a value it does not take: the Pattern of a named dash style. */
+.acc-body .field-row input:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
