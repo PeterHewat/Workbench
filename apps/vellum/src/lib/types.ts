@@ -348,7 +348,7 @@ export type StyleCarrier = Partial<StyleProps> & {
  * teaches `readProject` (io.ts) to bring the previous version up to date, so nobody's work stops
  * opening.
  */
-export const PROJECT_VERSION = 2;
+export const PROJECT_VERSION = 1;
 
 /** The serialized document written to storage. */
 export interface ProjectFile {

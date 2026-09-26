@@ -320,12 +320,11 @@ chosen, a checkbox otherwise), name, preview, eye, ▲ ▼, delete.
 `ProjectFile`, versioned by `PROJECT_VERSION` (`types.ts`). Every released version stays readable:
 `readProject` (`io.ts`) brings an older document up to date step by step, and refuses one from a
 newer Vellum with a message to reload. The database has its own `DB_VERSION` (`storage.ts`) for
-its stores. Version 2 added paths of several outlines, the fill rule, dash patterns, locked shapes
-and guides, all optional; a version 1 document reads as it was.
+its stores.
 
 ```json
 {
-  "version": 2,
+  "version": 1,
   "artboard": { "width": 512, "height": 512 },
   "background": { "color": "#ffffff", "opacity": 0 },
   "grid": { "step": 16, "visible": true, "snap": false },

@@ -21,7 +21,7 @@ import {
   createText,
 } from "./model.js";
 import { createInitialState } from "./state.js";
-import { PROJECT_VERSION, type Anchor, type SceneElement } from "./types.js";
+import type { Anchor, SceneElement } from "./types.js";
 
 const anchor = (x: number, y: number, hIn: Anchor["hIn"] = null, hOut: Anchor["hOut"] = null) =>
   ({ x, y, smooth: !!(hIn || hOut), hIn, hOut }) as Anchor;
@@ -485,15 +485,8 @@ describe("project file", () => {
     expect(serializeProject(createInitialState())).not.toHaveProperty("defaults");
   });
 
-  test("is written as the current version", () => {
-    expect(serializeProject(createInitialState()).version).toBe(PROJECT_VERSION);
-  });
-
-  test("a version 1 document, the first released format, still opens", () => {
-    const saved = { ...serializeProject(createInitialState()), version: 1 };
-    const read = readProject(saved);
-    expect(read.version).toBe(PROJECT_VERSION);
-    expect(read.elements).toEqual(saved.elements);
+  test("is written as version 1, the first released format", () => {
+    expect(serializeProject(createInitialState()).version).toBe(1);
   });
 
   test("a document of the current version reads back as it is", () => {

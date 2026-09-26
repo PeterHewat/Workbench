@@ -340,12 +340,7 @@ export function readProject(raw: unknown): ProjectFile {
     );
   }
   if (!isInert(json)) throw new Error("This document is damaged and cannot be opened.");
-  let doc = json as unknown as ProjectFile;
-  // 1 -> 2: what version 2 added is all optional - paths of several outlines (`subpaths`), the
-  // fill rule, dash patterns, locked shapes and guides. A version 1 document means the same with
-  // none of them, so only its number moves.
-  if ((version as number) === 1) doc = { ...doc, version: 2 };
-  return doc;
+  return json as ProjectFile;
 }
 
 export function loadProject(raw: ProjectFile): void {
