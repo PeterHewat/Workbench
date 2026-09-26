@@ -1,4 +1,4 @@
-import { getState, setState, mutate, findElement, selectOnly } from "./state.js";
+import { getState, setState, mutate, findElement, selectOnly, selectedElements } from "./state.js";
 import { isAlignSnap, isSelectMore } from "./modes.js";
 import {
   createPath,
@@ -35,7 +35,9 @@ import {
 import { setDrawing, clearDrawing, commit, pointIndexForRole } from "./ops.js";
 import { finishPath } from "./pen-commands.js";
 import { endDropTarget, expandGroups, mergeDroppedEnd } from "./selection-commands.js";
-import { applyResize, boxCorners } from "./resize.js";
+import { applyResize } from "./resize.js";
+import { boxCorners, rotateAll, scaleAllByCorner, unionBox } from "./selection-transform.js";
+import { SELECTION_HANDLE_ID } from "./render.js";
 import { clickTarget, drillTarget } from "./groups.js";
 import {
   type ShapeTool,
@@ -79,7 +81,23 @@ type DragState =
       radius: number;
       active: boolean;
     }
-  | { type: "shape-drag"; tool: ShapeTool; start: Point; current: Point };
+  | { type: "shape-drag"; tool: ShapeTool; start: Point; current: Point }
+  | {
+      /** A corner of the box several selected shapes share. */
+      type: "sel-scale";
+      role: string;
+      bases: SceneElement[];
+      grab: Point;
+    }
+  | {
+      type: "sel-rotate";
+      bases: SceneElement[];
+      cx: number;
+      cy: number;
+      startAngle: number;
+      radius: number;
+      active: boolean;
+    };
 
 function hitElement(target: EventTarget | null): string | null {
   let node = target as Node | null;
@@ -200,6 +218,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     if (!drag) return {};
     if (drag.type === "move-elements") return { excludeElementIds: new Set(drag.ids) };
     if (drag.type === "resize") return { excludeElementIds: new Set([drag.elementId]) };
+    if (drag.type === "sel-scale")
+      return { excludeElementIds: new Set(drag.bases.map((b) => b.id)) };
     if (drag.type === "handle" || drag.type === "pen-handle") {
       return { excludePoint: { elementId: drag.pathId, index: drag.index } };
     }
@@ -280,7 +300,10 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     const s = getState();
     // A box handle stands off the corner it drags, so the corner is what snaps and aligns:
     // everything below works on it, and the pointer is given back at the same offset.
-    const g = drag?.type === "resize" && drag.role.startsWith("box-") ? drag.grab : { x: 0, y: 0 };
+    const g =
+      (drag?.type === "resize" && drag.role.startsWith("box-")) || drag?.type === "sel-scale"
+        ? drag.grab
+        : { x: 0, y: 0 };
     const w = { x: p.x + g.x, y: p.y + g.y };
     // While dragging a curve handle, Alt breaks its symmetry instead of aligning. The align
     // switch has no second meaning to give way to, so it aligns whatever is being dragged.
@@ -402,6 +425,12 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         });
         return;
       }
+    }
+
+    const selHandle = target.closest?.("[data-selection-handle]");
+    if (selHandle) {
+      startSelectionDrag(e, selHandle.getAttribute("data-handle-role") ?? "", world);
+      return;
     }
 
     const resizeHandle = target.closest?.("[data-handle-role]");
@@ -565,6 +594,44 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       });
     });
     return true;
+  }
+
+  /** Arms a stretch or a turn of every selected shape at once, from their shared box's handles. */
+  function startSelectionDrag(e: PointerEvent, role: string, world: Point): void {
+    const bases = selectedElements().map((el) => deepClone(el));
+    const box = unionBox(bases);
+    if (!box) return;
+    if (role === "rotate") {
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      arm(e, {
+        type: "sel-rotate",
+        bases,
+        cx,
+        cy,
+        startAngle: Math.atan2(world.y - cy, world.x - cx),
+        radius: Math.max(20, Math.hypot(world.x - cx, world.y - cy)),
+        active: false,
+      });
+      return;
+    }
+    const { corner } = boxCorners(box, role);
+    arm(e, {
+      type: "sel-scale",
+      role,
+      bases,
+      grab: { x: corner.x - world.x, y: corner.y - world.y },
+    });
+  }
+
+  /** Puts `next` in place of the shapes with the same ids. */
+  function replaceElements(next: readonly SceneElement[], drawing?: EditorState["drawing"]): void {
+    const byId = new Map(next.map((el) => [el.id, el]));
+    setState((s) => ({
+      ...s,
+      elements: s.elements.map((x) => byId.get(x.id) ?? x),
+      ...(drawing === undefined ? {} : { drawing }),
+    }));
   }
 
   function startRotate(e: PointerEvent, el: SceneElement, world: Point): void {
@@ -744,6 +811,37 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       return;
     }
 
+    if (drag?.type === "sel-scale") {
+      const d = drag;
+      const at = { x: world.x + d.grab.x, y: world.y + d.grab.y };
+      replaceElements(scaleAllByCorner(d.bases, d.role, at, e.shiftKey));
+      return;
+    }
+
+    if (drag?.type === "sel-rotate") {
+      const d = drag;
+      let delta = Math.atan2(world.y - d.cy, world.x - d.cx) - d.startAngle;
+      if (e.shiftKey) {
+        const step = Math.PI / 12;
+        delta = Math.round(delta / step) * step;
+      } else if (e.pointerType !== "mouse") {
+        delta = magnetTurn(delta);
+      }
+      if (!d.active && Math.abs(delta) < 0.01) return;
+      d.active = true;
+      const a = d.startAngle + delta;
+      replaceElements(rotateAll(d.bases, (delta * 180) / Math.PI, d.cx, d.cy), {
+        rotateHandle: {
+          elementId: SELECTION_HANDLE_ID,
+          cx: d.cx,
+          cy: d.cy,
+          x: d.cx + Math.cos(a) * d.radius,
+          y: d.cy + Math.sin(a) * d.radius,
+        },
+      });
+      return;
+    }
+
     if (drag?.type === "rotate") {
       const d = drag;
       let delta = Math.atan2(world.y - d.cy, world.x - d.cx) - d.startAngle;
@@ -864,7 +962,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       return;
     }
 
-    if (drag?.type === "rotate") {
+    if (drag?.type === "rotate" || drag?.type === "sel-rotate") {
       drag = null;
       clearDrawing();
       return;

@@ -24,7 +24,8 @@ import {
   ROTATE_REACH_FINE,
 } from "./pointer.js";
 import { buildDefsMarkup } from "./io.js";
-import { BOX_ROLES, boxCorners, hasBoxHandles } from "./resize.js";
+import { hasBoxHandles } from "./resize.js";
+import { BOX_ROLES, boxCorners, unionBox } from "./selection-transform.js";
 import { clickTarget, groupColor, groupsOf, selectedGroups } from "./groups.js";
 import type {
   BBox,
@@ -565,6 +566,53 @@ function renderBoxHandles(parent: Element, el: SceneElement): void {
   }
 }
 
+/** What the rotate handle of a selection of several shapes names as its element. */
+export const SELECTION_HANDLE_ID = "selection";
+
+/**
+ * Handles for several shapes at once - a group, or any selection of more than one: one off each
+ * corner of their shared box, which stretches them all from the opposite corner, and a rotate
+ * handle above it that turns them all about its centre. What they do is baked into the shapes'
+ * own coordinates (selection-transform.ts).
+ */
+function renderSelectionHandles(
+  parent: Element,
+  sel: readonly SceneElement[],
+  state: EditorState
+): void {
+  const box = unionBox(sel);
+  if (!box) return;
+  const off = cornerHandleInset() / zoom;
+  const data = (role: string) => ({ "data-selection-handle": "1", "data-handle-role": role });
+  if (box.width > 0 || box.height > 0) {
+    for (const role of BOX_ROLES) {
+      const { corner, fixed } = boxCorners(box, role);
+      const x = corner.x + (corner.x < fixed.x ? -off : off);
+      const y = corner.y + (corner.y < fixed.y ? -off : off);
+      add(parent, "line", { class: "handle-tether", x1: corner.x, y1: corner.y, x2: x, y2: y });
+      addHandle(parent, x, y, "anchor box-handle", data(role));
+    }
+  }
+  const rot = state.drawing?.rotateHandle;
+  const turning = rot?.elementId === SELECTION_HANDLE_ID ? rot : null;
+  const top = { x: box.x + box.width / 2, y: box.y };
+  const hx = turning ? turning.x : top.x;
+  const hy = turning ? turning.y : top.y - rotateOffset() / zoom;
+  addHandleLine(parent, turning ? turning.cx : top.x, turning ? turning.cy : top.y, hx, hy);
+  addHandle(parent, hx, hy, "rotate-handle", data("rotate"));
+}
+
+/** Where a selection's own handles reach beyond its shapes, for the bar to keep clear of. */
+export function selectionHandlePoints(sel: readonly SceneElement[], zoomLevel: number): Point[] {
+  const box = sel.length > 1 ? unionBox(sel) : null;
+  if (!box) return [];
+  const off = cornerHandleInset() / zoomLevel;
+  return [
+    { x: box.x - off, y: box.y - rotateOffset() / zoomLevel },
+    { x: box.x + box.width + off, y: box.y + box.height + off },
+  ];
+}
+
 /**
  * Where a gradient runs, as two handles on the shape. Stored in fractions of the bounding box,
  * so the gradient follows the shape; drawn in world units here. Dragging them is what replaced
@@ -787,6 +835,7 @@ function renderOverlay(state: EditorState): void {
       renderPrimitiveHandles(els.overlay, el, state.selection.pathEdit);
     }
   }
+  if (sel.length > 1 && !activePathId) renderSelectionHandles(els.overlay, sel, state);
   if (sel.length === 1 && sel[0]!.id !== activePathId) {
     renderGradientHandles(els.overlay, sel[0]!);
     if (canRotate(sel[0]!)) renderRotateHandle(els.overlay, sel[0]!, state);

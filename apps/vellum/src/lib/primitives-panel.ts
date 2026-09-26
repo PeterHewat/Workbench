@@ -16,7 +16,8 @@ import { openColorPicker, closeColorPicker, isColorPickerOpenFor } from "./color
 import { canMoveGroup, canMoveWithinParent, groupColor, groupsOf, moveGroup } from "./groups.js";
 import { flattenLines, lineOffsets, visibleRange, type ListLine } from "./list-lines.js";
 import { scaleAbout, transformElement } from "./transform.js";
-import { type EditorState, type SceneElement } from "./types.js";
+import { type BBox, type EditorState, type SceneElement } from "./types.js";
+import { rotateAll, setBoxField, unionBox } from "./selection-transform.js";
 import { holdSvgFocus, setSvgFocus } from "./svg-source.js";
 import {
   cachedList,
@@ -235,12 +236,16 @@ function buildPrimitiveList(state: EditorState): void {
   // A rebuild replaces every field, so the one being typed in is found again afterwards: a
   // circle turned into an ellipse by its W field, say, must not lose the keyboard.
   const active = document.activeElement as HTMLElement | null;
-  const field = primitiveListEl.contains(active) ? active?.dataset.field : undefined;
+  const inList = primitiveListEl.contains(active);
+  const field = inList ? active?.dataset.field : undefined;
   const fieldOf = active?.closest<HTMLElement>("[data-element-id]")?.dataset.elementId;
+  const groupField = inList ? active?.dataset.groupField : undefined;
+  const groupFieldOf = active?.closest<HTMLElement>("[data-group-id]")?.dataset.groupId;
   primitiveListEl.innerHTML = "";
   drawnLines.clear();
   rowRefs.clear();
   groupNameInputs.clear();
+  groupBodies.clear();
   lines = [];
   if (!state.elements.length) {
     primitiveListEl.style.height = "";
@@ -256,6 +261,13 @@ function buildPrimitiveList(state: EditorState): void {
   if (field && fieldOf) {
     primitiveListEl
       .querySelector<HTMLElement>(`[data-element-id="${fieldOf}"] [data-field="${field}"]`)
+      ?.focus();
+  }
+  if (groupField && groupFieldOf) {
+    primitiveListEl
+      .querySelector<HTMLElement>(
+        `[data-group-id="${groupFieldOf}"] [data-group-field="${groupField}"]`
+      )
       ?.focus();
   }
 }
@@ -343,7 +355,10 @@ function forgetRefs(node: HTMLElement): void {
   const id = node.querySelector<HTMLElement>("[data-element-id]")?.dataset.elementId;
   if (id) rowRefs.delete(id);
   const gid = node.querySelector<HTMLElement>("[data-group-id]")?.dataset.groupId;
-  if (gid) groupNameInputs.delete(gid);
+  if (gid) {
+    groupNameInputs.delete(gid);
+    groupBodies.delete(gid);
+  }
 }
 
 let renderQueued = false;
@@ -385,6 +400,8 @@ interface RowRefs {
   style: string;
 }
 const rowRefs = new Map<string, RowRefs>();
+/** The open body of each drawn group head that is selected whole, by group id. */
+const groupBodies = new Map<string, HTMLElement>();
 /** The name field of each drawn group head, by group id. */
 const groupNameInputs = new Map<string, HTMLInputElement>();
 
@@ -435,7 +452,35 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") input.blur();
   });
+  // Selected whole, a group opens to the numbers of the box its members share.
+  if (allSelected) {
+    head.classList.add("expanded");
+    const body = document.createElement("div");
+    body.className = "acc-body";
+    body.innerHTML = groupFieldsHtml(unionBox(members));
+    head.appendChild(body);
+    groupBodies.set(gid, body);
+  }
   return head;
+}
+
+/**
+ * A group's position and size - the box its members share - and a turn. Nothing of it is stored
+ * on the group: each value typed is baked into the members' coordinates (selection-transform.ts),
+ * so the angle is a turn by so many degrees, back to 0 once it is done.
+ */
+function groupFieldsHtml(box: BBox | null): string {
+  if (!box) return "";
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const field = (key: string, label: string, aria: string, value: number, step = 1) =>
+    `<label class="field-row"><span>${label}</span><input type="number" data-group-field="${key}" step="${step}" value="${value}" aria-label="${aria}" /></label>`;
+  return (
+    field("x", "X", "Group X", round(box.x)) +
+    field("y", "Y", "Group Y", round(box.y)) +
+    field("width", "W", "Group width", round(box.width)) +
+    field("height", "H", "Group height", round(box.height)) +
+    `<label class="field-row" title="Turns every member about the group's centre by this many degrees"><span>Turn by</span><input type="number" data-group-field="turn" step="5" value="0" aria-label="Turn the group by (degrees)" /></label>`
+  );
 }
 
 function primitiveRow(state: EditorState, index: number): HTMLElement {
@@ -476,6 +521,15 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
 }
 
 function updatePrimitiveListValues(state: EditorState): void {
+  for (const [gid, body] of groupBodies) {
+    const box = unionBox(membersOf(state.elements, gid));
+    if (!box) continue;
+    for (const key of ["x", "y", "width", "height"] as const) {
+      const input = body.querySelector<HTMLInputElement>(`[data-group-field="${key}"]`);
+      const value = String(Math.round(box[key] * 100) / 100);
+      if (input && input !== document.activeElement && input.value !== value) input.value = value;
+    }
+  }
   for (const [gid, input] of groupNameInputs) {
     const value = state.groupNames[gid] ?? "";
     if (input !== document.activeElement && input.value !== value) input.value = value;
@@ -752,6 +806,47 @@ const LIVE_NUMBER = ["fontSize", "strokeWidth", "rx", "ry"];
 const WRAPPING_ANGLES = ["rotation"];
 
 let textUndoPushed = false;
+
+/* Group fields: position, size and a turn for every member at once. */
+primitiveListEl.addEventListener("input", (e) => {
+  const input = e.target as HTMLInputElement;
+  const key = input.dataset?.groupField;
+  const gid = input.closest<HTMLElement>("[data-group-id]")?.dataset.groupId;
+  // A spinner step lands on a whole number, as a shape's fields do.
+  if (!key || !gid || key === "turn" || (e as InputEvent).inputType) return;
+  const box = unionBox(membersOf(getState().elements, gid));
+  const v = parseFloat(input.value);
+  if (!box || Number.isNaN(v)) return;
+  const from = Math.round(box[key as "x"] * 100) / 100;
+  if (v === from) return;
+  input.value = String(v > from ? Math.floor(from + 1e-9) + 1 : Math.ceil(from - 1e-9) - 1);
+});
+
+primitiveListEl.addEventListener("change", (e) => {
+  const input = e.target as HTMLInputElement;
+  const key = input.dataset?.groupField;
+  const gid = input.closest<HTMLElement>("[data-group-id]")?.dataset.groupId;
+  if (!key || !gid) return;
+  const members = membersOf(getState().elements, gid);
+  const v = parseFloat(input.value);
+  let next: SceneElement[] | null = null;
+  if (key === "turn") {
+    const box = unionBox(members);
+    input.value = "0";
+    if (box && Number.isFinite(v) && v % 360) {
+      next = rotateAll(members, v, box.x + box.width / 2, box.y + box.height / 2);
+    }
+  } else {
+    next = setBoxField(members, key as "x" | "y" | "width" | "height", v);
+  }
+  if (!next) {
+    primitiveList.sync(getState());
+    return;
+  }
+  const byId = new Map(next.map((el) => [el.id, el]));
+  pushUndo();
+  setState((s) => ({ ...s, elements: s.elements.map((x) => byId.get(x.id) ?? x) }));
+});
 
 primitiveListEl.addEventListener("focusin", () => {
   textUndoPushed = false;

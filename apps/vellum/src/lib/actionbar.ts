@@ -31,7 +31,7 @@ import { canGroup, canMergeGroups, canMoveSelectionZ, canUngroup } from "./group
 import { worldToScreen } from "./viewport.js";
 import { isCoarsePointer } from "./pointer.js";
 import { isSelectMore } from "./modes.js";
-import { HANDLE_EXTENT, outerHandlePoints } from "./render.js";
+import { HANDLE_EXTENT, outerHandlePoints, selectionHandlePoints } from "./render.js";
 import type { EditorState, Point, SceneElement } from "./types.js";
 
 export interface ActionBarHandlers {
@@ -425,6 +425,14 @@ function anchorRect(state: EditorState): AnchorRect | null {
       top = Math.min(top, p.y - HANDLE_EXTENT);
       bottom = Math.max(bottom, p.y + HANDLE_EXTENT);
     }
+  }
+  // Several shapes have handles of their own, around the box they share.
+  for (const world of drawing ? [] : selectionHandlePoints(shapes, zoom)) {
+    const p = worldToScreen(world.x, world.y);
+    left = Math.min(left, p.x - HANDLE_EXTENT);
+    right = Math.max(right, p.x + HANDLE_EXTENT);
+    top = Math.min(top, p.y - HANDLE_EXTENT);
+    bottom = Math.max(bottom, p.y + HANDLE_EXTENT);
   }
   if (!Number.isFinite(left)) return null;
   return { left, right, top, bottom };
