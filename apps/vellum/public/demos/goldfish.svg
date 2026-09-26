@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad-fed82f2e" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#e3f3ff" stop-opacity="1"/>
+      <stop offset="1" stop-color="#8ec5ee" stop-opacity="1"/>
+    </linearGradient>
+    <linearGradient id="grad-c456ae95" x1="0" y1="0.5" x2="1" y2="0.5">
+      <stop offset="0" stop-color="#ff8a3d" stop-opacity="0.95"/>
+      <stop offset="0.55" stop-color="#ffb56a" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#ffe0b0" stop-opacity="0.3"/>
+    </linearGradient>
+    <linearGradient id="grad-c05432be" x1="0.5" y1="1" x2="0.5" y2="0">
+      <stop offset="0" stop-color="#ff8a3d" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#ffd8a6" stop-opacity="0.35"/>
+    </linearGradient>
+    <linearGradient id="grad-f7f225ce" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#ff8a3d" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#ffd8a6" stop-opacity="0.35"/>
+    </linearGradient>
+    <radialGradient id="grad-fbd99338" cx="0.35" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#ffd36b" stop-opacity="1"/>
+      <stop offset="0.5" stop-color="#ff9a3c" stop-opacity="1"/>
+      <stop offset="1" stop-color="#ef5d2a" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="grad-ea976227" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe7b5" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#ffb56a" stop-opacity="0.7"/>
+    </linearGradient>
+    <radialGradient id="grad-f8672691" cx="0.35" cy="0.35" r="0.65">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.1"/>
+    </radialGradient>
+    <radialGradient id="grad-bc93d24b" cx="0.35" cy="0.35" r="0.65">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.1"/>
+    </radialGradient>
+    <radialGradient id="grad-b56b24a5" cx="0.35" cy="0.35" r="0.65">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.1"/>
+    </radialGradient>
+  </defs>
+  <rect id="fed82f2e_backdrop" x="0" y="0" width="512" height="512" stroke="none" fill="url(#grad-fed82f2e)"/>
+  <g id="group-b29c6a64_fins">
+    <path id="c456ae95_tail" d="M 319 237 C 330 226 357 189 378 170 C 399 151 427 126 445 122 C 463 117 482 130 483 147 C 484 164 452 201 451 222 C 450 243 475 254 477 275 C 479 296 476 333 464 348 C 452 364 424 375 407 367 C 390 360 376 320 361 306 C 346 293 328 291 321 288 Z" stroke="none" fill="url(#grad-c456ae95)"/>
+    <path id="f49ade3c_tail-streaks" d="M 340 252 C 382 210 424 174 466 147 M 344 264 C 393 252 415 249 452 234 M 344 279 C 395 294 435 311 468 340 M 340 290 C 384 296 397 350 430 368" stroke="#ff9a50" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.55" fill="none"/>
+    <path id="c05432be_dorsal-fin" d="M 168 174 C 173 164 182 128 197 113 C 212 98 241 88 258 88 C 275 88 290 98 298 113 C 306 128 298 168 299 179 Z" stroke="none" fill="url(#grad-c05432be)"/>
+    <path id="f7f225ce_belly-fin" d="M 172 336 C 172 346 167 379 172 393 C 177 406 196 424 206 420 C 215 416 223 382 227 369 C 230 357 223 348 222 344 Z" stroke="none" fill="url(#grad-f7f225ce)"/>
+  </g>
+  <g id="group-d6b3d501_goldfish">
+    <path id="fbd99338_body" d="M 84 254 C 84 231 108 202 130 187 C 152 171 186 158 214 157 C 242 156 277 166 298 178 C 319 191 335 213 342 233 C 350 253 347 278 340 296 C 333 314 318 331 296 340 C 274 350 237 357 210 355 C 182 353 151 344 130 327 C 109 311 84 277 84 254 Z" stroke="none" fill="url(#grad-fbd99338)"/>
+    <path id="a0b8b038_scales" d="M 199 214 C 210 227 210 241 199 254 M 233 206 C 245 220 245 237 233 252 M 267 212 C 279 227 279 245 267 260 M 216 264 C 229 279 229 298 216 311 M 252 271 C 264 285 264 304 252 319 M 288 273 C 298 285 298 302 288 317" stroke="#ffe2a0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.7" fill="none"/>
+    <path id="a0eae658_gill" d="M 168 212 C 185 241 185 285 164 313" stroke="#e2622c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.6" fill="none"/>
+    <path id="ea976227_side-fin" d="M 172 264 C 177 261 189 249 199 248 C 210 247 229 252 235 258 C 241 264 242 279 237 285 C 232 292 214 299 203 296 C 193 293 177 270 172 264 Z" stroke="none" fill="url(#grad-ea976227)"/>
+    <path id="be96c797_shine" d="M 117 214 C 147 189 189 174 233 174" stroke="#ffffff" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.55" fill="none"/>
+  </g>
+  <g id="group-1a1b031a_face">
+    <circle id="a75137e8_eye-white" cx="130" cy="237" r="16" stroke="none" fill="#ffffff"/>
+    <circle id="e197de44_pupil" cx="126" cy="239" r="9" stroke="none" fill="#2a1206"/>
+    <circle id="b865cdca_eye-shine" cx="122" cy="234" r="4" stroke="none" fill="#ffffff"/>
+    <ellipse id="a883e37a_lips" cx="88" cy="260" rx="7" ry="8" stroke="none" fill="#f07a6a"/>
+    <ellipse id="b77560fc_blush" cx="155" cy="283" rx="13" ry="6" stroke="none" fill="#ff7f7f" fill-opacity="0.5"/>
+  </g>
+  <g id="group-3e1938d7_bubbles">
+    <circle id="f8672691_bubble-1" cx="56" cy="189" r="15" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.85" fill="url(#grad-f8672691)"/>
+    <circle id="bc93d24b_bubble-2" cx="37" cy="143" r="9" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.85" fill="url(#grad-bc93d24b)"/>
+    <circle id="b56b24a5_bubble-3" cx="58" cy="105" r="6" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.85" fill="url(#grad-b56b24a5)"/>
+  </g>
+</svg>

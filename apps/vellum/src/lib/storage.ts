@@ -91,6 +91,8 @@ export async function listDocuments(): Promise<DocumentMeta[]> {
 
 /** A new document's place: above everything already in the list. */
 const topOrder = (all: readonly DocumentMeta[]) => Math.min(0, ...all.map((m) => m.order)) - 1;
+/** A place below everything already in the list. */
+const bottomOrder = (all: readonly DocumentMeta[]) => Math.max(0, ...all.map((m) => m.order)) + 1;
 
 /** Saves a document. One that is new goes to the top of the list; one that exists keeps its place. */
 export async function saveDocument(doc: {
@@ -99,6 +101,8 @@ export async function saveDocument(doc: {
   /** Given for a document coming in from a file; an autosave leaves the stored ones alone. */
   tags?: string[];
   data: ProjectFile;
+  /** Where a new document goes: the top, as for anything made or imported, or the bottom. */
+  place?: "top" | "bottom";
 }): Promise<void> {
   const db = await openDb();
   const tx = db.transaction([META, DATA], "readwrite");
@@ -110,7 +114,7 @@ export async function saveDocument(doc: {
     id: doc.id,
     name: doc.name,
     updated: Date.now(),
-    order: existing?.order ?? topOrder(all),
+    order: existing?.order ?? (doc.place === "bottom" ? bottomOrder(all) : topOrder(all)),
   };
   if (doc.tags?.length) record.tags = doc.tags;
   meta.put(record);

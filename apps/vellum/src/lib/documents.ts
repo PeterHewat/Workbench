@@ -31,6 +31,7 @@ import { fitToView } from "./zoom.js";
 import { invalidateLists, rowDotHtml } from "./accordion.js";
 import { hydrateImageDimensions } from "./images-panel.js";
 import { WELCOME_NAME, loadWelcome } from "./welcome.js";
+import { demoDocument, demoUrl, demosToAdd } from "./demos.js";
 import {
   cleanTags,
   docStats,
@@ -48,6 +49,8 @@ export let currentDoc: { id: string | null; name: string } = { id: null, name: "
 const LAST_DOC_KEY = "vellum.lastDoc";
 /** Set once the welcome drawing has been added: deleting it must not bring it back. */
 const WELCOMED_KEY = "vellum.welcomed";
+/** The demo files this browser has been given, so a deleted one is not given again. */
+const DEMOS_KEY = "vellum.demos";
 const docDirtyEl = byId("doc-dirty");
 const docListEl = byId("doc-list");
 let docsCache: DocumentMeta[] = [];
@@ -387,6 +390,8 @@ async function openDocument(id: string): Promise<void> {
     window.alert(err instanceof Error ? err.message : String(err));
     return;
   }
+  // A document opens showing all of its artboard, whatever view it was last left in.
+  setState({ viewport: fitToView() });
   currentDoc = { id, name: docsCache.find((d) => d.id === id)?.name ?? "" };
   rememberLast(id);
   afterDocumentReplaced();
@@ -663,6 +668,46 @@ function markWelcomed(): void {
   }
 }
 
+/**
+ * Adds the demos this browser has not had yet, at the bottom of the list, in the order they are
+ * listed. Without storage to remember them by, none are added: better than adding them again at
+ * every start. One that cannot be fetched (offline before a first load) is tried next time.
+ */
+async function addDemos(): Promise<void> {
+  let given: string[];
+  try {
+    given = JSON.parse(localStorage.getItem(DEMOS_KEY) ?? "[]") as string[];
+    if (!Array.isArray(given)) given = [];
+  } catch {
+    return;
+  }
+  const added: string[] = [];
+  for (const demo of demosToAdd(given)) {
+    try {
+      const res = await fetch(demoUrl(demo));
+      if (!res.ok) continue;
+      const data = demoDocument(await res.text());
+      await saveDocument({
+        id: uid("doc"),
+        name: demo.name,
+        tags: demo.tags,
+        data,
+        place: "bottom",
+      });
+      added.push(demo.file);
+    } catch {
+      /* tried again next start */
+    }
+  }
+  if (!added.length) return;
+  try {
+    localStorage.setItem(DEMOS_KEY, JSON.stringify([...given, ...added]));
+  } catch {
+    /* not remembered */
+  }
+  docsCache = await listDocuments();
+}
+
 /** Opens the last document (or a blank one) and starts the service worker. Call once, last. */
 export function startDocuments(): void {
   void openInitialDocument();
@@ -677,7 +722,9 @@ async function openInitialDocument(): Promise<void> {
   } catch {
     last = null;
   }
-  if (!docsCache.length && firstVisit()) await createWelcomeDocument();
+  const welcome = !docsCache.length && firstVisit();
+  await addDemos();
+  if (welcome) await createWelcomeDocument();
   const first = docsCache[0];
   if (last && docsCache.some((d) => d.id === last)) await openDocument(last);
   else if (!currentDoc.id && first) await openDocument(first.id);

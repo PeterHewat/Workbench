@@ -331,8 +331,15 @@ chosen, a checkbox otherwise), name, preview, eye, ▲ ▼, delete.
 - The last open document reopens at start. The first start, with an empty library, creates
   **Vellum Workbench** from `public/art.svg` (512 × 320, Vellum's own export, also the index
   page's card art); a `vellum.welcomed` flag keeps it from coming back once deleted.
-- Zoom, pan and open panels belong to the tab: kept in `sessionStorage` by document id
-  (`session.ts`), never in the document.
+- **Demos** (`demos.ts`): finished drawings in `public/demos/`, each named and tagged in one list,
+  are added at the bottom of the list, in that order. A browser remembers the files it was given
+  (`vellum.demos`), so a deleted demo stays deleted and one added to the list later still arrives;
+  with no storage to remember by, none are added. Each file is written as Vellum exports it, which
+  a test holds it to. Each fills its artboard over a blue gradient `backdrop`, which the document
+  gets locked.
+- Opening a document fits its artboard in view. Zoom, pan and open panels otherwise belong to the
+  tab: kept in `sessionStorage` by document id (`session.ts`), so a refresh returns the view it
+  left, never in the document.
 
 ### 12.2 Stored format
 
