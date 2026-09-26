@@ -232,6 +232,11 @@ const OVERSCAN_PX = 600;
 const RAIL_STEP_PX = 11;
 
 function buildPrimitiveList(state: EditorState): void {
+  // A rebuild replaces every field, so the one being typed in is found again afterwards: a
+  // circle turned into an ellipse by its W field, say, must not lose the keyboard.
+  const active = document.activeElement as HTMLElement | null;
+  const field = primitiveListEl.contains(active) ? active?.dataset.field : undefined;
+  const fieldOf = active?.closest<HTMLElement>("[data-element-id]")?.dataset.elementId;
   primitiveListEl.innerHTML = "";
   drawnLines.clear();
   rowRefs.clear();
@@ -248,6 +253,11 @@ function buildPrimitiveList(state: EditorState): void {
   listColors = groupColors(state);
   lines = flattenLines(state.elements, collapsedGroups);
   renderLines(state);
+  if (field && fieldOf) {
+    primitiveListEl
+      .querySelector<HTMLElement>(`[data-element-id="${fieldOf}"] [data-field="${field}"]`)
+      ?.focus();
+  }
 }
 
 /** The part of the list the panel shows, in the list's own coordinates. */
@@ -667,6 +677,20 @@ function deletePrimitive(id: string): void {
 
 const GEOMETRY_FIELDS = ["geomX", "geomY", "geomW", "geomH"];
 
+/** A shape's bounding box by the names of its fields, as they show it (to two decimals). */
+function geometryBox(id: string): Record<string, number> | null {
+  const el = findElement(id);
+  const box = el ? elementBBox(el) : null;
+  if (!box) return null;
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return {
+    geomX: round(box.x),
+    geomY: round(box.y),
+    geomW: round(box.width),
+    geomH: round(box.height),
+  };
+}
+
 /**
  * Moves or scales a shape to put one edge of its bounding box at a typed value. Scaling runs
  * through the same matrix code that bakes imported transforms, so every shape type behaves.
@@ -703,7 +727,6 @@ function applyGeometryField(id: string, field: string, value: number): void {
         : x
     ),
   }));
-  primitiveList.invalidate();
 }
 
 function applyToElement(id: string, fn: (el: SceneElement) => void): void {
@@ -743,6 +766,18 @@ primitiveListEl.addEventListener("input", (e) => {
   if (!(e as InputEvent).inputType && WRAPPING_ANGLES.includes(field)) {
     const v = parseFloat(input.value);
     if (!Number.isNaN(v)) input.value = String(((v % 360) + 360) % 360);
+    return;
+  }
+
+  // The same, for position and size: a step lands on the next whole number, so 5.2 goes to 6
+  // and 5, not 6.2 and 4.2. The shape itself changes on the `change` that follows.
+  if (!(e as InputEvent).inputType && GEOMETRY_FIELDS.includes(field)) {
+    const id = input.closest<HTMLElement>("[data-element-id]")?.dataset.elementId;
+    const box = id ? geometryBox(id) : null;
+    const v = parseFloat(input.value);
+    const from = box?.[field];
+    if (from == null || Number.isNaN(v) || v === from) return;
+    input.value = String(v > from ? Math.floor(from + 1e-9) + 1 : Math.ceil(from - 1e-9) - 1);
     return;
   }
 
