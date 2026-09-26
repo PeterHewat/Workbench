@@ -116,6 +116,15 @@ describe("export document", () => {
     expect(svg.match(/<\/g>/g)).toHaveLength(1);
   });
 
+  test("a line with no stroke has no markers either", () => {
+    const line = Object.assign(createLine(0, 0, 9, 9), {
+      markerEnd: "arrow" as const,
+      strokeWidth: 0,
+    });
+    const svg = formatExportSvg({ artboard: { width: 10, height: 10 }, elements: [line] }, true);
+    expect(svg).not.toContain("marker");
+  });
+
   test("gradients and markers are emitted into defs", () => {
     const grad = Object.assign(createRect(0, 0, 9, 9), {
       fillEnabled: true,

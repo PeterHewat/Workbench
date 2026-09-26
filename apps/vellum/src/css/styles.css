@@ -18,7 +18,7 @@
   --accent-dim: #3d5a9e;
   --danger: #e85d5d;
   --current-row: #364159;
-  --search-hit: rgba(255, 196, 0, 0.45);
+  --search-hit: #ffd21f;
   --sel-text: #6cb2ff;
   --attr-bg: rgba(255, 214, 102, 0.28);
   --attr-text: #ffd666;
@@ -58,7 +58,7 @@
     --accent-dim: #d3e1fb;
     --danger: #cf3b3b;
     --current-row: #dfe8fb;
-    --search-hit: rgba(255, 200, 0, 0.55);
+    --search-hit: #ffd21f;
     --sel-text: #1f5fcf;
     --attr-bg: rgba(240, 180, 0, 0.22);
     --attr-text: #8a5d00;
@@ -84,7 +84,7 @@
   --accent-dim: #d3e1fb;
   --danger: #cf3b3b;
   --current-row: #dfe8fb;
-  --search-hit: rgba(255, 200, 0, 0.55);
+  --search-hit: #ffd21f;
   --sel-text: #1f5fcf;
   --attr-bg: rgba(240, 180, 0, 0.22);
   --attr-text: #8a5d00;
@@ -2277,11 +2277,13 @@ body {
   display: none;
 }
 
+/* Solid yellow under near-black, in either theme: the one pairing that reads at a glance. The
+   copy's own letters are clear, so only the marked ones are drawn, over the field's. */
 .doc-name-marks mark,
 .doc-tag-hits mark {
   border-radius: 2px;
   background: var(--search-hit);
-  color: inherit;
+  color: #1a1a1a;
 }
 
 /* The tags that matched, under a folded row: otherwise nothing would show why it is there. */

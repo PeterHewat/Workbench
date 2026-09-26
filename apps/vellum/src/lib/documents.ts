@@ -361,6 +361,8 @@ function focusCurrentDocName(): void {
 
 async function newDocument(): Promise<void> {
   await flushSave();
+  // A filtered list would hide the new document the moment it is made.
+  clearDocSearch();
   setSectionOpen("documents", true);
   const st = getState();
   // If the open document is still empty there is no need for another one.
@@ -615,6 +617,8 @@ async function addDocuments(incoming: readonly ImportedDocument[]): Promise<void
     storageError(err);
   }
   if (!firstId) return;
+  // As for a new one: what comes in must be seen, whatever the list was filtered to.
+  clearDocSearch();
   setSectionOpen("documents", true);
   await openDocument(firstId);
   await refreshDocList();

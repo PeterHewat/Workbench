@@ -8,7 +8,7 @@ import {
   createPolyline,
   createPolygon,
   createText,
-  MARKER_TYPES,
+  hasMarkers,
   isGradient,
   gradientStops,
   geometryOf,
@@ -130,7 +130,7 @@ function buildDefsLines(elements: readonly SceneElement[]): Line[] {
         lines.push({ indent: 0, text: "</linearGradient>" });
       }
     }
-    if (MARKER_TYPES.includes(el.type)) {
+    if (hasMarkers(el)) {
       for (const end of ["start", "end"] as const) {
         const shape = MARKER_SHAPE_DEFS[end === "start" ? el.markerStart : el.markerEnd];
         if (!shape) continue;

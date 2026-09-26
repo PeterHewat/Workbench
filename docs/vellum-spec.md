@@ -119,7 +119,8 @@ Every element carries a complete style, edited in its row of the Primitives list
   applied as they are typed -
   only for Custom. Only the numbers are stored, so the style is read back by matching them.
 - The fill rule (`fillRule`, exported as `fill-rule`): non-zero, the default, or even-odd.
-- Line-end markers (arrow, dot, square, diamond) on lines, polylines and paths. An arrow's tip reaches
+- Line-end markers (arrow, dot, square, diamond) on lines, polylines and paths, drawn only while there
+  is a stroke (a marker is sized in stroke widths). An arrow's tip reaches
   past the end point just far enough to cover the line's cap (round, butt or square), so no stroke
   shows beside it.
 - Opacities of 1 are not exported. Markers and gradients go into `<defs>`, with ids derived from
@@ -326,7 +327,7 @@ chosen, a checkbox otherwise), name, preview, eye, ▲ ▼, delete.
   it once there is text. Commas separate alternatives and spaces the words of one: a document
   stays when, for one alternative, every word is found, ignoring case, in its name or one of its
   tags. What matched is marked - in the name, from a copy laid over the field, and in the tags that
-  matched, shown under a folded row. ▲ ▼ are off while the list is filtered. Esc clears the field.
+  matched, shown under a folded row, in solid yellow. ▲ ▼ are off while the list is filtered. Esc clears the field, and so do a new document and an import, which a filter would otherwise hide.
 - The last open document reopens at start. The first start, with an empty library, creates
   **Vellum Workbench** from `public/art.svg` (512 × 320, Vellum's own export, also the index
   page's card art); a `vellum.welcomed` flag keeps it from coming back once deleted.

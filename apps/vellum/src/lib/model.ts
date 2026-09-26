@@ -638,6 +638,14 @@ export function geometryOf(el: SceneElement, fmt: Formatter = (n) => n): Geometr
  * emitted only when not fully opaque, and a zero-width stroke exports as `stroke="none"`,
  * so the markup stays minimal and the canvas matches the file.
  */
+/**
+ * Whether line ends are drawn. A marker is sized in stroke widths, and with no stroke the SVG
+ * falls back to a width of 1 - so without this, a line of width 0 would still show its arrows.
+ */
+export function hasMarkers(el: SceneElement): boolean {
+  return MARKER_TYPES.includes(el.type) && el.strokeWidth > 0;
+}
+
 export function styleAttrs(el: SceneElement): AttrMap {
   const attrs: AttrMap = {};
   // The canvas renders from these same attributes, so this hides it there and in the file alike.
@@ -659,7 +667,7 @@ export function styleAttrs(el: SceneElement): AttrMap {
   if (el.fillEnabled && !isGradient(el) && el.fillOpacity != null && el.fillOpacity !== 1) {
     attrs["fill-opacity"] = el.fillOpacity;
   }
-  if (MARKER_TYPES.includes(el.type)) {
+  if (hasMarkers(el)) {
     if (el.markerStart && el.markerStart !== "none") {
       attrs["marker-start"] = `url(#mk-${el.id}-start)`;
     }
