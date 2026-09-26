@@ -24,6 +24,7 @@ import {
   ROTATE_REACH_FINE,
 } from "./pointer.js";
 import { buildDefsMarkup } from "./io.js";
+import { BOX_ROLES, boxCorners, hasBoxHandles } from "./resize.js";
 import { clickTarget, groupColor, groupsOf, selectedGroups } from "./groups.js";
 import type {
   BBox,
@@ -387,6 +388,14 @@ export function outerHandlePoints(
     if (place) points.push(place.out);
   }
   if (el.type === "rect") points.push(toWorldPoint(el, squareHandleLocal(el, zoomLevel)));
+  const box = hasBoxHandles(el) ? elementBBox(el) : null;
+  if (box) {
+    const off = cornerHandleInset() / zoomLevel;
+    points.push(
+      { x: box.x - off, y: box.y - off },
+      { x: box.x + box.width + off, y: box.y + box.height + off }
+    );
+  }
   return points;
 }
 
@@ -417,7 +426,12 @@ function addResizeHandle(
   selected = false,
   hitR = defaultHitR()
 ): void {
-  const kind = role === "uniform" ? "anchor uniform-handle" : "anchor";
+  const kind =
+    role === "uniform"
+      ? "anchor uniform-handle"
+      : role.startsWith("box-")
+        ? "anchor box-handle"
+        : "anchor";
   addHandle(
     parent,
     x,
@@ -531,6 +545,24 @@ function renderPathHandles(parent: Element, path: PathElement, state: EditorStat
       hitRForPoint(path.points, i)
     );
   });
+}
+
+/**
+ * One handle off each corner of the bounding box, for the shapes whose own handles are only
+ * their points: dragging one scales the shape from the opposite corner. They stand a little way
+ * out on the diagonal, tethered to their corner, so they never sit on top of a point.
+ */
+function renderBoxHandles(parent: Element, el: SceneElement): void {
+  const box = elementBBox(el);
+  if (!box) return;
+  const off = cornerHandleInset() / zoom;
+  for (const role of BOX_ROLES) {
+    const { corner, fixed } = boxCorners(box, role);
+    const x = corner.x + (corner.x < fixed.x ? -off : off);
+    const y = corner.y + (corner.y < fixed.y ? -off : off);
+    add(parent, "line", { class: "handle-tether", x1: corner.x, y1: corner.y, x2: x, y2: y });
+    addResizeHandle(parent, x, y, el.id, role);
+  }
 }
 
 /**
@@ -758,6 +790,7 @@ function renderOverlay(state: EditorState): void {
   if (sel.length === 1 && sel[0]!.id !== activePathId) {
     renderGradientHandles(els.overlay, sel[0]!);
     if (canRotate(sel[0]!)) renderRotateHandle(els.overlay, sel[0]!, state);
+    if (hasBoxHandles(sel[0]!)) renderBoxHandles(els.overlay, sel[0]!);
   }
 
   const prev = state.drawing?.preview;

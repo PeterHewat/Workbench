@@ -1227,6 +1227,13 @@ body {
   stroke: #2f8f46;
 }
 
+/* Scales a path from the opposite corner of its box: hollow, so it reads as the box's, not a point. */
+.handle.box-handle {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
 /* Where the gradient runs: two handles and the line between them. */
 .handle.grad-handle {
   fill: #fff;

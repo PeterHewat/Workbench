@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { createRect, toWorldPoint } from "./model.js";
+import { createPolygon, createRect, elementBBox, toWorldPoint } from "./model.js";
 import { cornerHandleInset } from "./pointer.js";
-import { applyResize } from "./resize.js";
+import { applyResize, scaleByCorner } from "./resize.js";
 import { deepClone } from "./utils.js";
 import type { RectElement } from "./types.js";
 
@@ -35,4 +35,37 @@ describe("square handle", () => {
       }
     });
   }
+});
+
+describe("box handles", () => {
+  const tri = () =>
+    createPolygon([
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 50, y: 50 },
+    ]);
+
+  test("dragging a corner scales from the opposite one", () => {
+    const scaled = scaleByCorner(tri(), "box-br", { x: 200, y: 25 }, false);
+    expect(elementBBox(scaled)).toEqual({ x: 0, y: 0, width: 200, height: 25 });
+  });
+
+  test("the top-left corner holds the bottom-right still", () => {
+    const scaled = scaleByCorner(tri(), "box-tl", { x: 50, y: 25 }, false);
+    expect(elementBBox(scaled)).toEqual({ x: 50, y: 25, width: 50, height: 25 });
+  });
+
+  test("uniform keeps the proportions, taking the larger stretch", () => {
+    const scaled = scaleByCorner(tri(), "box-br", { x: 200, y: 60 }, true);
+    expect(elementBBox(scaled)).toEqual({ x: 0, y: 0, width: 200, height: 100 });
+  });
+
+  test("a flat shape keeps its missing side", () => {
+    const flat = createPolygon([
+      { x: 0, y: 10 },
+      { x: 100, y: 10 },
+    ]);
+    const scaled = scaleByCorner(flat, "box-br", { x: 50, y: 99 }, false);
+    expect(elementBBox(scaled)).toEqual({ x: 0, y: 10, width: 50, height: 0 });
+  });
 });

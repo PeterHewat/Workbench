@@ -35,7 +35,7 @@ import {
 import { setDrawing, clearDrawing, commit, pointIndexForRole } from "./ops.js";
 import { finishPath } from "./pen-commands.js";
 import { endDropTarget, expandGroups, mergeDroppedEnd } from "./selection-commands.js";
-import { applyResize } from "./resize.js";
+import { applyResize, boxCorners } from "./resize.js";
 import { clickTarget, drillTarget } from "./groups.js";
 import {
   type ShapeTool,
@@ -223,6 +223,17 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   }
 
   /**
+   * A box handle stands off its corner, so the drag works from the corner itself: the offset
+   * from the pointer to the bounding box's corner, not to the handle.
+   */
+  function boxGrab(el: SceneElement, role: string, world: Point): Point {
+    const box = elementBBox(el);
+    if (!box) return { x: 0, y: 0 };
+    const { corner } = boxCorners(box, role);
+    return { x: corner.x - world.x, y: corner.y - world.y };
+  }
+
+  /**
    * A linked pair mirrors; Alt holds the partner still and leaves the point a cusp. A cusp's
    * handles move on their own with or without Alt - it is linked again from the bar beside the
    * point, which is the same on every pointer, rather than by a drag that happens to lack a key.
@@ -265,8 +276,12 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   });
 
   function pointerWorld(e: PointerEvent): Point {
-    const w = screenToWorld(e.clientX, e.clientY);
+    const p = screenToWorld(e.clientX, e.clientY);
     const s = getState();
+    // A box handle stands off the corner it drags, so the corner is what snaps and aligns:
+    // everything below works on it, and the pointer is given back at the same offset.
+    const g = drag?.type === "resize" && drag.role.startsWith("box-") ? drag.grab : { x: 0, y: 0 };
+    const w = { x: p.x + g.x, y: p.y + g.y };
     // While dragging a curve handle, Alt breaks its symmetry instead of aligning. The align
     // switch has no second meaning to give way to, so it aligns whatever is being dragged.
     const alignOn =
@@ -293,10 +308,10 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       y = Math.round(y / step) * step;
     }
     setState({
-      cursor: { x: w.x, y: w.y, snapX: x, snapY: y, snapActive: alignOn || snapOn },
+      cursor: { x: p.x, y: p.y, snapX: x, snapY: y, snapActive: alignOn || snapOn },
       align: { x: guideX, y: guideY },
     });
-    return { x, y };
+    return { x: x - g.x, y: y - g.y };
   }
 
   svg.addEventListener("pointerleave", () => {
@@ -423,7 +438,9 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         elementId,
         role,
         base: deepClone(resizeTarget),
-        grab: grabOffset(resizeHandle, world),
+        grab: role.startsWith("box-")
+          ? boxGrab(resizeTarget, role, world)
+          : grabOffset(resizeHandle, world),
       });
       setState({
         selection: selectOnly(
@@ -760,7 +777,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       const d = drag;
       const el = findElement(d.elementId);
       const at = { x: world.x + d.grab.x, y: world.y + d.grab.y };
-      if (el) mutate(() => applyResize(el, d.role, at, d.base, e.altKey));
+      if (el) mutate(() => applyResize(el, d.role, at, d.base, e.altKey, e.shiftKey));
       showDropTarget(d.elementId, pointIndexForRole(d.role));
       return;
     }
