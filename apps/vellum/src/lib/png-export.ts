@@ -1,6 +1,6 @@
 /**
- * Exporting the drawing as a PNG, at a width you choose: an icon is often wanted at several
- * sizes, and a raster at the size it will be shown is sharper than one scaled down later.
+ * Exporting the drawing as a PNG, at the artboard's own size: one pixel to a unit. Anything else -
+ * an icon at several sizes - is a job for the SVG, or for a tool made to resize.
  *
  * The picture is the exported SVG itself, drawn by the browser onto a canvas of that size - so it
  * shows exactly what the SVG does, transparent where the document is.
@@ -8,18 +8,16 @@
 
 import { byId, downloadBlob } from "@workbench/ui";
 
-/** The pixel size for a width: the artboard's proportions, never less than one pixel. */
-export function pngSize(
-  artboard: { width: number; height: number },
-  width: number
-): { width: number; height: number } {
-  const w = Math.max(1, Math.round(width));
-  const h = Math.max(1, Math.round((w * artboard.height) / (artboard.width || 1)));
-  return { width: w, height: h };
+/** The pixel size of the artboard: whole pixels, never less than one. */
+export function pngSize(artboard: { width: number; height: number }): {
+  width: number;
+  height: number;
+} {
+  return {
+    width: Math.max(1, Math.round(artboard.width)),
+    height: Math.max(1, Math.round(artboard.height)),
+  };
 }
-
-/** The largest side the export offers: well past any icon, and within what browsers can draw. */
-export const MAX_PNG_SIDE = 8192;
 
 /** Draws SVG markup onto a canvas of the given size and returns it as a PNG. */
 export async function renderPng(svg: string, width: number, height: number): Promise<Blob> {
@@ -50,7 +48,7 @@ export async function renderPng(svg: string, width: number, height: number): Pro
 }
 
 export interface PngExportDeps {
-  /** The artboard, for the proportions. */
+  /** The artboard, for the size. */
   artboard: () => { width: number; height: number };
   /** The SVG to draw. */
   svg: () => string;
@@ -58,50 +56,18 @@ export interface PngExportDeps {
   baseName: () => string;
 }
 
-/** Wires the Export PNG button and its dialog. */
+/** Wires the Export PNG button: one press, one file. */
 export function initPngExport(deps: PngExportDeps): void {
-  const dialog = byId<HTMLDialogElement>("png-dialog");
-  const widthInput = byId<HTMLInputElement>("png-width");
-  const heightOut = byId("png-height");
-  const go = byId<HTMLButtonElement>("png-go");
-  const error = byId("png-error");
-
-  const show = () => {
-    const w = parseFloat(widthInput.value);
-    const ok = Number.isFinite(w) && w >= 1 && w <= MAX_PNG_SIDE;
-    const { height } = pngSize(deps.artboard(), ok ? w : 1);
-    heightOut.textContent = ok ? `× ${height} px` : "";
-    go.disabled = !ok || height > MAX_PNG_SIDE;
-    dialog.querySelectorAll<HTMLButtonElement>("[data-png-size]").forEach((b) => {
-      b.classList.toggle("active", Number(b.dataset.pngSize) === w);
-    });
-  };
-
-  byId("btn-export-png").addEventListener("click", () => {
-    error.textContent = "";
-    if (!widthInput.value) widthInput.value = String(Math.round(deps.artboard().width));
-    show();
-    dialog.showModal();
-  });
-  widthInput.addEventListener("input", show);
-  dialog.addEventListener("click", (e) => {
-    const preset = (e.target as HTMLElement).closest<HTMLElement>("[data-png-size]");
-    if (!preset) return;
-    widthInput.value = preset.dataset.pngSize ?? "";
-    show();
-  });
-  go.addEventListener("click", async (e) => {
-    e.preventDefault();
-    const { width, height } = pngSize(deps.artboard(), parseFloat(widthInput.value));
-    go.disabled = true;
+  const btn = byId<HTMLButtonElement>("btn-export-png");
+  btn.addEventListener("click", async () => {
+    const { width, height } = pngSize(deps.artboard());
+    btn.disabled = true;
     try {
-      const blob = await renderPng(deps.svg(), width, height);
-      downloadBlob(`${deps.baseName()}-${width}.png`, blob);
-      dialog.close();
+      downloadBlob(`${deps.baseName()}.png`, await renderPng(deps.svg(), width, height));
     } catch (err) {
-      error.textContent = err instanceof Error ? err.message : String(err);
+      window.alert(err instanceof Error ? err.message : String(err));
     } finally {
-      go.disabled = false;
+      btn.disabled = false;
     }
   });
 }

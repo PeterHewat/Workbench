@@ -339,8 +339,6 @@ byId("input-import-svg").addEventListener("change", async (e) => {
 
 window.addEventListener("keydown", (e) => {
   const t = e.target as HTMLElement;
-  // A dialog is on top of everything: its keys are its own.
-  if (t.closest?.("dialog[open]")) return;
   const isToggle = t.matches?.("input[type=checkbox], input[type=radio], input[type=range]");
   // Only real text entry swallows shortcuts; a focused checkbox or button must not.
   if (t.matches?.("textarea, select") || (t.matches?.("input") && !isToggle)) return;

@@ -993,7 +993,7 @@
                     type="button"
                     class="tool-btn"
                     id="btn-export-png"
-                    title="Export PNG, at the size you choose"
+                    title="Export PNG, at the artboard's size"
                     aria-label="Export PNG"
                     aria-haspopup="dialog"
                   >
@@ -1674,8 +1674,8 @@
               Primitives row has focus, the SVG attribute it edits is highlighted in yellow, even if
               the shape is not selected. Only shapes the app knows (path, line, rect, circle,
               ellipse, polyline, polygon, text) are kept. Icons import, export and copy the SVG
-              (coordinates are exported as integers), and export it as a PNG at a width you choose —
-              32 to 1024 at a tap, or any size up to 8192 — with the height in proportion.
+              (coordinates are exported as integers), and export it as a PNG at the artboard's size,
+              one pixel to a unit.
             </li>
             <li>
               <b>Background</b> — the swatch beside the grid paints the whole artboard, alpha
@@ -1932,31 +1932,6 @@
 
     <input type="file" id="input-import-svg" accept=".svg,image/svg+xml" hidden />
     <input type="file" id="input-doc-file" accept=".json,application/json" multiple hidden />
-
-    <dialog id="png-dialog" class="png-dialog" aria-labelledby="png-title">
-      <form method="dialog">
-        <h2 id="png-title">Export PNG</h2>
-        <p class="png-note">The drawing as the SVG shows it, transparent where it is.</p>
-        <div class="png-sizes" role="group" aria-label="Common widths">
-          <button type="button" data-png-size="32">32</button>
-          <button type="button" data-png-size="64">64</button>
-          <button type="button" data-png-size="128">128</button>
-          <button type="button" data-png-size="256">256</button>
-          <button type="button" data-png-size="512">512</button>
-          <button type="button" data-png-size="1024">1024</button>
-        </div>
-        <label class="png-width">
-          <span>Width</span>
-          <input type="number" id="png-width" min="1" max="8192" step="1" inputmode="numeric" />
-          <span id="png-height" class="muted"></span>
-        </label>
-        <p id="png-error" class="svg-error" role="status"></p>
-        <div class="png-actions">
-          <button type="submit" value="cancel">Cancel</button>
-          <button type="button" id="png-go" class="primary">Export</button>
-        </div>
-      </form>
-    </dialog>
 
     <script type="module" src="/src/lib/app.ts"></script>
   </body>

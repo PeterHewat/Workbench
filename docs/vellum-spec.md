@@ -256,9 +256,8 @@ fold, and which are open is remembered for the tab.
 - **Documents:** one row per stored document (§12).
 - **Reference images:** one row per image (§4).
 - **SVG:** artboard size, grid visibility and step, background, and the live SVG source, with
-  import, export and copy buttons, and **Export PNG** (`png-export.ts`): a width from presets
-  (32-1024) or typed (up to 8192), the height in proportion, drawn from the exported SVG so it
-  shows exactly what that does. Named `Name-<width>.png`. The source is editable: about half a second after typing stops,
+  import, export and copy buttons, and **Export PNG** (`png-export.ts`): the artboard's size, one pixel to a unit,
+  drawn from the exported SVG so it shows exactly what that does. Named `Name.png`. The source is editable: about half a second after typing stops,
   or on blur, it is re-imported with its ids kept (`importSvgFile(text, { keepIds: true })`);
   invalid markup shows an error and changes nothing. Shapes whose markup did not change keep their
   exact geometry. Putting the cursor in a shape's line selects it; selected shapes' lines are
