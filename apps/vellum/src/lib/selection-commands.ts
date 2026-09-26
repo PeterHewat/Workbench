@@ -2,6 +2,15 @@ import { getState, setState, mutate, findElement, selectOnly, selectedElements }
 import { canCombine, combine, type BooleanOp } from "./boolean.js";
 import { byShape, movePoints, pickedPoints } from "./points.js";
 import {
+  alignBlocks,
+  alignPoints,
+  blocksOf,
+  distributeBlocks,
+  distributePoints,
+  type AlignMode,
+  type Axis,
+} from "./align.js";
+import {
   translateElement,
   duplicateElement,
   toPathElement,
@@ -105,6 +114,42 @@ export function stepOutSelection(): boolean {
   if (!parent) return false;
   setState({ selection: selectOnly(parent) });
   return true;
+}
+
+/**
+ * Lines the selection up: picked points with each other, several blocks with the box they
+ * share, or one shape - or one group - with the artboard.
+ */
+export function alignSelection(mode: AlignMode): void {
+  const st = getState();
+  const picked = pickedPoints(st.selection);
+  const moved =
+    picked.length > 1
+      ? alignPoints(st.elements, picked, mode)
+      : alignBlocks(blocksOf(st.elements, new Set(st.selection.elementIds)), mode, {
+          x: 0,
+          y: 0,
+          ...st.artboard,
+        });
+  if (moved.length) replaceShapes(moved);
+}
+
+/** Spaces three or more blocks, or picked points, evenly along an axis. */
+export function distributeSelection(axis: Axis): void {
+  const st = getState();
+  const picked = pickedPoints(st.selection);
+  const moved =
+    picked.length > 1
+      ? distributePoints(st.elements, picked, axis)
+      : distributeBlocks(blocksOf(st.elements, new Set(st.selection.elementIds)), axis);
+  if (moved.length) replaceShapes(moved);
+}
+
+/** How many things align and distribute would move: picked points, or the selection's blocks. */
+export function alignableCount(): number {
+  const st = getState();
+  const picked = pickedPoints(st.selection).length;
+  return picked > 1 ? picked : blocksOf(st.elements, new Set(st.selection.elementIds)).length;
 }
 
 /** Whether the selection can be combined: two or more shapes, every one enclosing an area. */

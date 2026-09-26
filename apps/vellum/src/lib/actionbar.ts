@@ -30,6 +30,7 @@ import {
 import { canGroup, canMergeGroups, canMoveSelectionZ, canUngroup } from "./groups.js";
 import { canCombine, type BooleanOp } from "./boolean.js";
 import { pickedPoints } from "./points.js";
+import type { AlignMode, Axis } from "./align.js";
 import { worldToScreen } from "./viewport.js";
 import { HIT_R_COARSE, HIT_R_FINE, isCoarsePointer } from "./pointer.js";
 import { isSelectMore } from "./modes.js";
@@ -51,6 +52,10 @@ export interface ActionBarHandlers {
   removeHandle: () => void;
   removePoint: () => void;
   combine: (op: BooleanOp) => void;
+  align: (mode: AlignMode) => void;
+  distribute: (axis: Axis) => void;
+  /** How many things align would move: picked points, or the selection's blocks. */
+  alignable: () => number;
   join: () => void;
   editText: (id: string) => void;
   finishPath: () => void;
@@ -255,6 +260,74 @@ function pointActions(el: SceneElement, index: number, handle?: "in" | "out"): A
   return out;
 }
 
+/**
+ * Align, as one button opening a page: the six lines to align on, and the two ways to spread
+ * things out once there are three to spread. One thing on its own aligns to the artboard.
+ */
+function alignAction(count: number): Action {
+  const one = count === 1;
+  const onto = one ? "the artboard's" : "their";
+  return {
+    key: "align",
+    label: one ? "Align to the artboard" : "Align and distribute",
+    icon: "icon-align-hcenter",
+    menu: () => [
+      {
+        key: "align-left",
+        label: `Align left edges to ${onto} left`,
+        icon: "icon-align-left",
+        run: () => handlers.align("left"),
+      },
+      {
+        key: "align-hcenter",
+        label: `Centre horizontally on ${onto} middle`,
+        icon: "icon-align-hcenter",
+        run: () => handlers.align("hcenter"),
+      },
+      {
+        key: "align-right",
+        label: `Align right edges to ${onto} right`,
+        icon: "icon-align-right",
+        run: () => handlers.align("right"),
+      },
+      {
+        key: "align-top",
+        label: `Align top edges to ${onto} top`,
+        icon: "icon-align-top",
+        run: () => handlers.align("top"),
+      },
+      {
+        key: "align-vcenter",
+        label: `Centre vertically on ${onto} middle`,
+        icon: "icon-align-vcenter",
+        run: () => handlers.align("vcenter"),
+      },
+      {
+        key: "align-bottom",
+        label: `Align bottom edges to ${onto} bottom`,
+        icon: "icon-align-bottom",
+        run: () => handlers.align("bottom"),
+      },
+      ...(count >= 3
+        ? [
+            {
+              key: "distribute-x",
+              label: "Space evenly across",
+              icon: "icon-distribute-x",
+              run: () => handlers.distribute("x"),
+            },
+            {
+              key: "distribute-y",
+              label: "Space evenly down",
+              icon: "icon-distribute-y",
+              run: () => handlers.distribute("y"),
+            },
+          ]
+        : []),
+    ],
+  };
+}
+
 /** What the bar offers with several points picked: what acts on all of them at once. */
 function pointsActions(state: EditorState): Action[] {
   const picked = pickedPoints(state.selection);
@@ -285,6 +358,7 @@ function pointsActions(state: EditorState): Action[] {
           }
     );
   }
+  out.push(alignAction(picked.length));
   out.push({
     key: "delete-points",
     label: `Delete these ${picked.length} points`,
@@ -335,6 +409,7 @@ function selectionActions(state: EditorState): Action[] {
     out.push({ key: "ungroup", label: "Ungroup", icon: "icon-ungroup", run: handlers.ungroup });
   }
 
+  out.push(alignAction(handlers.alignable()));
   // Union, subtract, intersect and exclude: one button, opening a page of four.
   if (sel.length >= 2 && sel.every(canCombine)) {
     out.push({

@@ -8,7 +8,7 @@ import {
   pointsInMarquee,
   togglePoint,
 } from "./points.js";
-import type { Selection } from "./types.js";
+import type { SceneElement, Selection } from "./types.js";
 
 const tri = () => {
   const p = createPolygon([
@@ -54,7 +54,7 @@ describe("picking several points", () => {
   });
 
   test("moving them moves those points and no others", () => {
-    const bases = new Map([
+    const bases = new Map<string, SceneElement>([
       ["tri", tri()],
       ["line", line()],
     ]);

@@ -27,6 +27,9 @@ import {
   removeSelectedHandle,
   stepOutSelection,
   combineSelection,
+  alignSelection,
+  distributeSelection,
+  alignableCount,
 } from "./selection-commands.js";
 import { pushUndo, canUndo, canRedo } from "./undo.js";
 import { formatExportSvg, importSvgFile } from "./io.js";
@@ -77,6 +80,9 @@ initActionBar(byId("action-bar"), {
   remove: () => deleteSelection(),
   removePoint: () => deleteSelection(false),
   combine: (op) => combineSelection(op),
+  align: (mode) => alignSelection(mode),
+  distribute: (axis) => distributeSelection(axis),
+  alignable: () => alignableCount(),
   forward: () => moveZOrder("forward"),
   back: () => moveZOrder("back"),
   toggleClosed: (id, closed) => {
