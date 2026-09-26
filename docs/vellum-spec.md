@@ -213,7 +213,7 @@ lives in the document, not in the exported SVG; the SVG panel's re-import keeps 
 - **Groups and multi-selections** move, stretch and turn as one: corner handles and a rotate
   handle around their shared box, and under an open group's row in the Primitives list, X, Y, W, H and
   **Rotate**. A group keeps no transform of its own — each change is baked into its members'
-  coordinates (`selection-transform.ts`) — so the angle is a turn by so many degrees, a rotated
+  coordinates (`selection-transform.ts`) — so Rotate reads a running total since the shapes were chosen (`turn-tally.ts`: typing turns by the difference, the rotate handle adds to it, and a new selection or an undo starts it from 0), a rotated
   rect or ellipse stretched off its own axes becomes a path, a circle stretched unevenly an
   ellipse, and stroke widths do not scale.
 

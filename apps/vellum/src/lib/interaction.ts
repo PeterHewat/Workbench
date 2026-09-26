@@ -24,6 +24,7 @@ import {
 import { screenToWorld, zoomAt } from "./viewport.js";
 import { deepClone, dist } from "./utils.js";
 import { pushUndo } from "./undo.js";
+import { addTurn } from "./turn-tally.js";
 import {
   type Anchor,
   type EditorState,
@@ -118,6 +119,8 @@ type DragState =
       startAngle: number;
       radius: number;
       active: boolean;
+      /** How far it has turned so far, in degrees. */
+      degrees: number;
     };
 
 function hitElement(target: EventTarget | null): string | null {
@@ -776,6 +779,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         startAngle: Math.atan2(world.y - cy, world.x - cx),
         radius: Math.max(20, Math.hypot(world.x - cx, world.y - cy)),
         active: false,
+        degrees: 0,
       });
       return;
     }
@@ -1048,7 +1052,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       if (!d.active && Math.abs(delta) < 0.01) return;
       d.active = true;
       const a = d.startAngle + delta;
-      replaceElements(rotateAll(d.bases, (delta * 180) / Math.PI, d.cx, d.cy), {
+      d.degrees = (delta * 180) / Math.PI;
+      replaceElements(rotateAll(d.bases, d.degrees, d.cx, d.cy), {
         rotateHandle: {
           elementId: SELECTION_HANDLE_ID,
           cx: d.cx,
@@ -1218,6 +1223,13 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     }
 
     if (drag?.type === "rotate" || drag?.type === "sel-rotate") {
+      // A group's Rotate field counts what the handle turned, as it does what is typed there.
+      if (drag.type === "sel-rotate" && drag.active) {
+        addTurn(
+          drag.bases.map((b) => b.id),
+          drag.degrees
+        );
+      }
       drag = null;
       clearDrawing();
       return;

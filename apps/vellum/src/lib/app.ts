@@ -35,6 +35,7 @@ import {
 import { pushUndo, canUndo, canRedo } from "./undo.js";
 import { formatExportSvg, importSvgFile } from "./io.js";
 import { initPngExport } from "./png-export.js";
+import { forgetTurns } from "./turn-tally.js";
 import { fileBase } from "./document-files.js";
 import { canJoin } from "./model.js";
 import { THEME_EVENT, bindThemeToggle, byId, copyText, downloadText } from "@workbench/ui";
@@ -138,6 +139,7 @@ document
   .forEach((btn) => bindThemeToggle(btn, "ui-icon"));
 
 let lastSavedViewport: EditorState["viewport"] | null = null;
+let lastSelection = "";
 
 subscribe((state, { pointerOnly }) => {
   if (pointerOnly) {
@@ -150,6 +152,12 @@ subscribe((state, { pointerOnly }) => {
   if (isSelectMore() && !state.selection.elementIds.length) setSelectMore(false);
   // A document opened with grid snap on keeps it: the snap to shapes the tab had lets go.
   if (isAlignSnap() && state.grid.snap) setAlignSnap(false);
+  // A Rotate field counts from 0 again for whatever is chosen next.
+  const selection = state.selection.elementIds.join(",");
+  if (selection !== lastSelection) {
+    lastSelection = selection;
+    forgetTurns();
+  }
   renderAll(state);
   // Where you are looking belongs to the tab, not to the drawing: kept so a refresh returns it.
   if (state.viewport !== lastSavedViewport) {

@@ -1,6 +1,7 @@
 import { getState, setState, mutate, findElement, selectOnly } from "./state.js";
 import { setElementClosed } from "./selection-commands.js";
 import { pushUndo } from "./undo.js";
+import { addTurn, turnedBy } from "./turn-tally.js";
 import {
   MARKER_TYPES,
   MARKER_SHAPES,
@@ -483,7 +484,7 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
     head.classList.add("expanded");
     const body = document.createElement("div");
     body.className = "acc-body";
-    body.innerHTML = groupFieldsHtml(unionBox(members));
+    body.innerHTML = groupFieldsHtml(unionBox(members), turnedBy(members.map((e) => e.id)));
     head.appendChild(body);
     groupBodies.set(gid, body);
   }
@@ -493,9 +494,9 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
 /**
  * A group's position and size - the box its members share - and a turn. Nothing of it is stored
  * on the group: each value typed is baked into the members' coordinates (selection-transform.ts),
- * so the angle is a turn by so many degrees, back to 0 once it is done.
+ * so Rotate reads how far it has turned since it was chosen (turn-tally.ts), not a stored angle.
  */
-function groupFieldsHtml(box: BBox | null): string {
+function groupFieldsHtml(box: BBox | null, turned: number): string {
   if (!box) return "";
   const round = (n: number) => Math.round(n * 100) / 100;
   const field = (key: string, label: string, aria: string, value: number, step = 1) =>
@@ -505,7 +506,7 @@ function groupFieldsHtml(box: BBox | null): string {
     field("y", "Y", "Group Y", round(box.y)) +
     field("width", "W", "Group width", round(box.width)) +
     field("height", "H", "Group height", round(box.height)) +
-    `<label class="field-row" title="Rotates every member about the group's centre by this many degrees"><span>Rotate</span><input type="number" data-group-field="turn" step="5" value="0" aria-label="Rotate the group by (degrees)" /></label>`
+    `<label class="field-row" title="Rotates every member about the group's centre by this many degrees"><span>Rotate</span><input type="number" data-group-field="turn" step="5" value="${turned}" aria-label="Rotate the group by (degrees)" /></label>`
   );
 }
 
@@ -553,8 +554,12 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
 
 function updatePrimitiveListValues(state: EditorState): void {
   for (const [gid, body] of groupBodies) {
-    const box = unionBox(membersOf(state.elements, gid));
+    const members = membersOf(state.elements, gid);
+    const box = unionBox(members);
     if (!box) continue;
+    const turn = body.querySelector<HTMLInputElement>('[data-group-field="turn"]');
+    const turned = String(turnedBy(members.map((e) => e.id)));
+    if (turn && turn !== document.activeElement && turn.value !== turned) turn.value = turned;
     for (const key of ["x", "y", "width", "height"] as const) {
       const input = body.querySelector<HTMLInputElement>(`[data-group-field="${key}"]`);
       const value = String(Math.round(box[key] * 100) / 100);
@@ -883,10 +888,16 @@ primitiveListEl.addEventListener("change", (e) => {
   const v = parseFloat(input.value);
   let next: SceneElement[] | null = null;
   if (key === "turn") {
+    // The field reads the running total, so what is typed is turned by the difference.
     const box = unionBox(members);
-    input.value = "0";
-    if (box && Number.isFinite(v) && v % 360) {
-      next = rotateAll(members, v, box.x + box.width / 2, box.y + box.height / 2);
+    const ids = members.map((e) => e.id);
+    const by = Number.isFinite(v) ? v - turnedBy(ids) : 0;
+    if (box && by) {
+      // A whole turn moves nothing, but still counts.
+      if (by % 360) next = rotateAll(members, by, box.x + box.width / 2, box.y + box.height / 2);
+      addTurn(ids, by);
+    } else {
+      input.value = String(turnedBy(ids));
     }
   } else {
     next = setBoxField(members, key as "x" | "y" | "width" | "height", v);
