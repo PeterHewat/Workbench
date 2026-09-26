@@ -42,6 +42,14 @@ document.addEventListener("pointerdown", (e) => {
   if (!zoomWrap.contains(e.target as Node)) closeZoomMenu();
 });
 
+// Esc closes the open list, and only that: back on its button, not stepping out of a selection.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || zoomMenu.classList.contains("hidden")) return;
+  e.stopPropagation();
+  closeZoomMenu();
+  zoomBtn.focus();
+});
+
 /* ---------- Fitting the view ---------- */
 
 const svg = byId<HTMLElement>("viewport-svg") as unknown as SVGSVGElement;

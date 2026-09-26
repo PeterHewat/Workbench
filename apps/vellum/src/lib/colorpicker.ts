@@ -166,7 +166,11 @@ function build(): HTMLDivElement {
     true
   );
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && current) closeColorPicker();
+    if (e.key !== "Escape" || !current) return;
+    // Esc closes the picker and nothing else: the canvas would take it as stepping out of the
+    // selection too.
+    e.stopPropagation();
+    closeColorPicker();
   });
   return el;
 }
