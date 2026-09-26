@@ -48,7 +48,7 @@ const entry = `
 const files: Record<string, string> = {
   "package.json": `{
   "name": "@workbench/${slug}",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
