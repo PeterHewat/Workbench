@@ -859,6 +859,61 @@ function ellipseToPath(
   );
 }
 
+/**
+ * A rounded rectangle as a path: each corner a quarter ellipse, drawn with the same cubic
+ * approximation as an ellipse, clockwise from the top edge. A corner whose radius takes a whole
+ * side meets the next corner at one point.
+ */
+function roundedRectPath(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  rx: number,
+  ry: number,
+  style: StyleCarrier
+): PathElement {
+  const kx = rx * KAPPA;
+  const ky = ry * KAPPA;
+  const at = (px: number, py: number, hIn: Point | null, hOut: Point | null): Anchor => ({
+    x: px,
+    y: py,
+    smooth: !!hIn && !!hOut,
+    hIn,
+    hOut,
+  });
+  const right = x + w;
+  const bottom = y + h;
+  // Each corner is two anchors: where the straight side ends and where the next one starts.
+  const pts: Anchor[] = [
+    at(x + rx, y, { x: x + rx - kx, y }, null),
+    at(right - rx, y, null, { x: right - rx + kx, y }),
+    at(right, y + ry, { x: right, y: y + ry - ky }, null),
+    at(right, bottom - ry, null, { x: right, y: bottom - ry + ky }),
+    at(right - rx, bottom, { x: right - rx + kx, y: bottom }, null),
+    at(x + rx, bottom, null, { x: x + rx - kx, y: bottom }),
+    at(x, bottom - ry, { x, y: bottom - ry + ky }, null),
+    at(x, y + ry, null, { x, y: y + ry - ky }),
+  ];
+  // Sides the radius used up entirely leave two anchors on one spot: keep one, with both handles.
+  const merged: Anchor[] = [];
+  for (const p of pts) {
+    const prev = merged[merged.length - 1];
+    if (prev && prev.x === p.x && prev.y === p.y) {
+      prev.hOut = p.hOut;
+      prev.smooth = true;
+    } else merged.push(p);
+  }
+  const first = merged[0]!;
+  const last = merged[merged.length - 1]!;
+  if (merged.length > 1 && first.x === last.x && first.y === last.y) {
+    first.hIn = last.hIn;
+    first.smooth = true;
+    merged.pop();
+  }
+  return createPath(merged, true, style);
+}
+
 /** Converts any geometric primitive to an equivalent editable path (same id and style). */
 export function toPathElement(el: SceneElement): SceneElement {
   if (el.type === "path") return el;
@@ -883,8 +938,12 @@ export function toPathElement(el: SceneElement): SceneElement {
       return createPath(el.points.map(corner), false, style);
     case "polygon":
       return createPath(el.points.map(corner), true, style);
-    case "rect":
-      return createPath(geometryPoints(el).map(corner), true, style);
+    case "rect": {
+      const rx = cornerRadius(el);
+      const ry = cornerRadiusY(el);
+      if (!rx || !ry) return createPath(geometryPoints(el).map(corner), true, style);
+      return roundedRectPath(el.x, el.y, el.width, el.height, rx, ry, style);
+    }
     case "circle":
     case "ellipse": {
       const { rx, ry } = radii(el);

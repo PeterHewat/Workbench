@@ -690,3 +690,22 @@ describe("paths of several outlines", () => {
     expect(canSplitAt(ring(), 1)).toBe(false);
   });
 });
+
+describe("a rounded rect as a path", () => {
+  test("keeps its rounded corners and its box", () => {
+    const r = createRect(0, 0, 100, 50);
+    r.rx = 10;
+    const p = toPathElement(r);
+    expect(p.type === "path" && p.points.length).toBe(8);
+    expect(elementBBox(p)).toEqual({ x: 0, y: 0, width: 100, height: 50 });
+    expect(geometryOf(p)!.attrs.d).toContain(" C ");
+  });
+
+  test("a radius taking a whole side leaves one anchor there", () => {
+    const r = createRect(0, 0, 40, 20);
+    r.rx = 10;
+    // The ends are half circles: the vertical sides are used up.
+    const p = toPathElement(r);
+    expect(p.type === "path" && p.points.length).toBe(6);
+  });
+});
