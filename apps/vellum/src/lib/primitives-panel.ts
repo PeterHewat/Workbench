@@ -156,7 +156,7 @@ function primitiveBodyHtml(el: SceneElement): string {
     `<div class="field-row"><span>Width</span><input type="number" data-field="strokeWidth" min="0" step="0.5" value="${el.strokeWidth}" /></div>`,
     `<div class="field-row"><span>Line cap</span>${selectHtml("linecap", el.linecap, ["round", "butt", "square"])}</div>`,
     `<div class="field-row field-row--line-start" title="Solid, or a dash pattern worked out from the stroke width"><span>Dash</span>${selectHtml("dashStyle", dashStyleFor(el), DASH_STYLES)}</div>`,
-    `<div class="field-row" title="Dash and gap lengths along the stroke, taking turns - 6 4 is a dash of 6 then a gap of 4. Choose Custom to type your own."><span>Pattern</span><input type="text" data-field="dash" inputmode="decimal" placeholder="${dashStyleFor(el) === "custom" ? "e.g. 6 4" : "none"}" value="${escapeAttr((el.dash ?? []).join(" "))}" aria-label="Dash pattern"${dashStyleFor(el) === "custom" ? "" : " disabled"} /></div>`,
+    `<div class="field-row" title="Dash and gap lengths along the stroke, taking turns - 6 4 is a dash of 6 then a gap of 4. Choose Custom to type your own."><span>Pattern</span><input type="text" data-field="dash" inputmode="decimal" placeholder="${dashStyleFor(el) === "custom" ? "6 4" : "none"}" value="${escapeAttr((el.dash ?? []).join(" "))}" aria-label="Dash pattern"${dashStyleFor(el) === "custom" ? "" : " disabled"} /></div>`,
     `<div class="field-row"><span>Line join</span>${selectHtml("linejoin", el.linejoin, ["round", "miter", "bevel"])}</div>`
   );
   if (el.type === "rect") {
@@ -630,7 +630,7 @@ function updatePrimitiveListValues(state: EditorState): void {
     const pattern = li.querySelector<HTMLInputElement>('[data-field="dash"]');
     if (pattern) {
       pattern.disabled = dashStyle !== "custom";
-      pattern.placeholder = dashStyle === "custom" ? "e.g. 6 4" : "none";
+      pattern.placeholder = dashStyle === "custom" ? "6 4" : "none";
     }
     if (el.type === "rect") {
       setField(li, "rx", Math.round(el.rx || 0));
@@ -888,6 +888,35 @@ function restyleDash(el: SceneElement, before: SceneElement): void {
   if (!customDash.has(el.id)) keepDashStyle(el, before);
 }
 
+/**
+ * A Custom dash pattern, applied as it is typed. Only digits, points and spaces go in - pasted
+ * text too - and a pattern half typed (a lone "."), or all zeros, waits rather than turning the
+ * line solid under the typing. One undo step for the whole edit, as for a name.
+ */
+function liveDash(input: HTMLInputElement): void {
+  const raw = input.value;
+  const clean = raw.replace(/[^\d. ]/g, "");
+  if (clean !== raw) {
+    const caret = input.selectionStart ?? clean.length;
+    const removed = raw.slice(0, caret).length - raw.slice(0, caret).replace(/[^\d. ]/g, "").length;
+    input.value = clean;
+    input.setSelectionRange(caret - removed, caret - removed);
+  }
+  const el = findElement(input.closest<HTMLElement>("[data-element-id]")?.dataset.elementId ?? "");
+  if (!el) return;
+  const dash = parseDash(clean);
+  if (!dash && clean.trim()) return;
+  if ((dash ?? []).join(" ") === (el.dash ?? []).join(" ")) return;
+  if (!textUndoPushed) {
+    pushUndo();
+    textUndoPushed = true;
+  }
+  mutate(() => {
+    if (dash) el.dash = dash;
+    else delete el.dash;
+  });
+}
+
 /* Group fields: position, size and a turn for every member at once. */
 primitiveListEl.addEventListener("input", (e) => {
   const input = e.target as HTMLInputElement;
@@ -963,6 +992,11 @@ primitiveListEl.addEventListener("input", (e) => {
     return;
   }
 
+  if (field === "dash") {
+    liveDash(input);
+    return;
+  }
+
   if (!LIVE_TEXT.includes(field) && !LIVE_NUMBER.includes(field)) return;
   const li = input.closest<HTMLElement>("[data-element-id]");
   const el = li?.dataset.elementId ? findElement(li.dataset.elementId) : undefined;
@@ -1025,12 +1059,8 @@ primitiveListEl.addEventListener("change", (e) => {
       else delete el.dash;
     });
   } else if (field === "dash") {
-    const dash = parseDash(input.value);
-    input.value = (dash ?? []).join(" ");
-    applyToElement(id, (el) => {
-      if (dash) el.dash = dash;
-      else delete el.dash;
-    });
+    // Typing already applied it; leaving the field only tidies what it shows.
+    input.value = (current?.dash ?? []).join(" ");
   } else if (field === "fillRule") {
     applyToElement(id, (el) => {
       if (input.value === "evenodd") el.fillRule = "evenodd";

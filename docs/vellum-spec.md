@@ -115,7 +115,8 @@ Every element carries a complete style, edited in its row of the Primitives list
 - A dash pattern (`dash`, exported as `stroke-dasharray`): dash and gap lengths in artboard units.
   Empty, `none`, negative or all-zero is a solid line. The panel offers it as a style (`dash.ts`):
   solid, dashed, dotted and dash-dot are worked out from the stroke width and cap, and worked out
-  again when either changes; the numbers show in a Pattern field beside it, which takes typing
+  again when either changes; the numbers show in a Pattern field beside it, which takes typing - digits, points and spaces,
+  applied as they are typed -
   only for Custom. Only the numbers are stored, so the style is read back by matching them.
 - The fill rule (`fillRule`, exported as `fill-rule`): non-zero, the default, or even-odd.
 - Line-end markers (arrow, dot, square, diamond) on lines, polylines and paths. An arrow's tip reaches

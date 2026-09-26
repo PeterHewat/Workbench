@@ -138,7 +138,7 @@ async function refreshDocList(): Promise<void> {
         </button>
       </div>
       <div class="acc-body doc-body">
-        <label class="field-row field-row--wide"><span>Tags</span><input type="text" class="doc-tags-input" value="${escapeAttr((d.tags ?? []).join(", "))}" placeholder="e.g. icons, arrows" aria-label="Tags, separated by commas" /></label>
+        <label class="field-row field-row--wide"><span>Tags</span><input type="text" class="doc-tags-input" value="${escapeAttr((d.tags ?? []).join(", "))}" placeholder="icons, arrows" aria-label="Tags, separated by commas" /></label>
         <p class="doc-stats"></p>
       </div>`;
     docListEl.appendChild(li);
