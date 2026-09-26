@@ -77,17 +77,17 @@
             d="M12 10v7M9 14l3 3 3-3"
           />
         </symbol>
-        <!-- Two shapes lined up on a guide: snap to other shapes' points. -->
-        <symbol id="icon-align" viewBox="0 0 24 24">
+        <!-- A shape's corner caught in the ring Vellum draws on a snapped point: snap to shapes. -->
+        <symbol id="icon-snap-shapes" viewBox="0 0 24 24">
           <path
             fill="none"
             stroke="currentColor"
-            stroke-width="1.6"
-            stroke-dasharray="2.5 2"
-            d="M2 12h20"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M11.6 9H4a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1v-7.6"
           />
-          <rect x="3" y="5" width="7" height="7" rx="1" fill="currentColor" />
-          <circle cx="17" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+          <circle cx="15" cy="9" r="3.4" fill="none" stroke="currentColor" stroke-width="2" />
+          <circle cx="15" cy="9" r="1" fill="currentColor" />
         </symbol>
         <symbol id="icon-pen" viewBox="0 0 24 24">
           <path
@@ -402,15 +402,18 @@
             d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM4 4l16 16"
           />
         </symbol>
-        <symbol id="icon-magnet" viewBox="0 0 24 24">
+        <!-- The same ring on a grid crossing: snap to the grid. -->
+        <symbol id="icon-snap-grid" viewBox="0 0 24 24">
           <path
             fill="none"
             stroke="currentColor"
-            stroke-width="2"
+            stroke-width="1.5"
             stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M6 3v9a6 6 0 0012 0V3h-4v9a2 2 0 01-4 0V3H6zM6 8h4M14 8h4"
+            opacity="0.55"
+            d="M3 8h18M3 16h9.6M8 3v18M16 3v9.6M20 16h1M16 20v1"
           />
+          <circle cx="16" cy="16" r="3.4" fill="none" stroke="currentColor" stroke-width="2" />
+          <circle cx="16" cy="16" r="1" fill="currentColor" />
         </symbol>
         <symbol id="icon-trash" viewBox="0 0 24 24">
           <path
@@ -770,7 +773,7 @@
             aria-label="Snap to grid"
             aria-pressed="false"
           >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-magnet" /></svg>
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-snap-grid" /></svg>
           </button>
           <!-- Alt, as a switch: a finger has no key to hold. -->
           <button
@@ -781,7 +784,7 @@
             aria-label="Snap to other shapes"
             aria-pressed="false"
           >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-align" /></svg>
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-snap-shapes" /></svg>
           </button>
         </div>
 
@@ -982,8 +985,9 @@
             <li>
               <b>Align</b> —
               <span data-help="mouse">hold <kbd>Alt</kbd> while drawing or dragging, or </span>turn
-              on the switch beside the magnet, to snap to points that line up horizontally or
-              vertically with other shapes. It replaces grid snapping while it is on.
+              on the snap-to-shapes switch beside the grid-snap one, to snap to points that line up
+              horizontally or vertically with other shapes. It replaces grid snapping while it is
+              on.
             </li>
             <li>
               <b>Z-order</b> — the ▲ ▼ buttons on the bar beside the selection, or on a row in
@@ -1236,9 +1240,11 @@
           <h3>Toolbar: grid and view</h3>
           <ul>
             <li>
-              The magnet<span data-help="mouse"> (or <kbd>G</kbd>)</span> toggles snap to grid; a
-              marker shows where the point will land. Snapping applies to drawing, dragged handles
-              and moved shapes<span data-help="mouse"
+              The grid-snap switch (a ring on a grid crossing)<span data-help="mouse">
+                (or <kbd>G</kbd>)</span
+              >
+              toggles snap to grid; a marker shows where the point will land. Snapping applies to
+              drawing, dragged handles and moved shapes<span data-help="mouse"
                 >; hold <kbd>Alt</kbd> to switch to alignment snapping instead</span
               >. It sits with the drawing tools, because that is what it is for. Whether the grid is
               shown, and how far apart its lines are, belong to the document, so they live in the
@@ -1252,8 +1258,9 @@
             </li>
             <li data-help="touch">
               Nothing in the bar is behind a menu: Document, undo, redo, fit, zoom, Final SVG and
-              Help all fit across the top, and the tools and the magnet sit at the bottom where your
-              thumb is. On a phone the light / dark switch is here, at the top of this panel.
+              Help all fit across the top, and the tools and the snap switches sit at the bottom
+              where your thumb is. On a phone the light / dark switch is here, at the top of this
+              panel.
             </li>
             <li>
               <b>Light / dark</b> — the sun or moon beside Help switches the theme. Until you use

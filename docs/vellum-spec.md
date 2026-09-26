@@ -99,7 +99,7 @@ of which file was being traced.
 
 ### 6.2 Alignment snap (Alt, default off)
 
-Grid snapping is a separate toggle (§4.1, magnet button or `G`); Alt overrides it while held. Holding **Alt** while placing or dragging any of the following checks the cursor's world position against every existing point in the document (anchors, handles, line endpoints, rect corners, circle/ellipse centers, polyline/polygon vertices) and snaps independently per axis to the nearest one that lines up horizontally or vertically within a small on-screen tolerance:
+Grid snapping is a separate toggle (§4.1, grid-snap button or `G`); Alt overrides it while held. Holding **Alt** while placing or dragging any of the following checks the cursor's world position against every existing point in the document (anchors, handles, line endpoints, rect corners, circle/ellipse centers, polyline/polygon vertices) and snaps independently per axis to the nearest one that lines up horizontally or vertically within a small on-screen tolerance:
 
 - New path anchor points and handle control points.
 - Existing anchors and handles when moved.
@@ -455,7 +455,7 @@ name-in-id export, Help panel (`?` button).
   the rulers, transparent between the buttons so the canvas still pans there. Fit-artboard reads
   the strips they cover so it fits what is actually free. There is no overflow menu: Document,
   undo, redo, fit, zoom, Final SVG and Help fit across the top at 360px, and the drawing tools and
-  the snap magnet sit in the bottom bar. Buttons are the same size in both bars. The light / dark
+  the snap switches sit in the bottom bar. Buttons are the same size in both bars. The light / dark
   switch, which sits beside Help on a wider screen, moves into the Help panel's header.
 - **Zoom is one control**, not three: a button reading the current level that opens a list of
   presets, and that follows the viewport however it changed (wheel, pinch, fit).
@@ -583,7 +583,7 @@ keyboard shortcuts is unusable without a keyboard. The rules that follow from th
   empty canvas no longer clears; it turns itself off when the selection empties) and **select
   everything**. On a touch screen with nothing selected the bar stays up,
   docked above the tool bar, with **select everything** and **paste** (the system clipboard, such as SVG markup from
-  another app, which may ask for permission). Beside the magnet, an **align** switch
+  another app, which may ask for permission). Beside the grid-snap switch, an **align** (snap-to-shapes) switch
   does what holding Alt does. These switches are session state (`modes.ts`), outside the editor
   state, so undo never flips them. Two-finger twists, and rotate-handle drags by touch or pen,
   catch on each 15° within 3° of it (`magnetTurn`). While the pen has a path open it offers
