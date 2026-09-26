@@ -32,6 +32,7 @@ import {
   setHandlesLinked,
   toPathElement,
   translateElement,
+  translatePoint,
   toLocalPoint,
   toWorldPoint,
   localBBox,
@@ -579,4 +580,37 @@ describe("point editing", () => {
       false
     ) as PathElement;
   }
+});
+
+describe("translatePoint", () => {
+  test("moves an anchor with both of its handles", () => {
+    const p = createPath([anchor(0, 0, { x: -1, y: 0 }, { x: 1, y: 0 }), anchor(10, 0)], false);
+    translatePoint(p, 0, 2, 3);
+    expect(p.points[0]).toMatchObject({ x: 2, y: 3, hIn: { x: 1, y: 3 }, hOut: { x: 3, y: 3 } });
+    expect(p.points[1]).toMatchObject({ x: 10, y: 0 });
+  });
+
+  test("moves one handle, mirroring its partner only while the pair is linked", () => {
+    const linked = createPath([anchor(0, 0, { x: -1, y: 0 }, { x: 1, y: 0 })], false);
+    linked.points[0]!.smooth = true;
+    translatePoint(linked, 0, 0, 1, "out");
+    expect(linked.points[0]).toMatchObject({
+      x: 0,
+      y: 0,
+      hOut: { x: 1, y: 1 },
+      hIn: { x: -1, y: -1 },
+    });
+    const cusp = createPath([anchor(0, 0, { x: -1, y: 0 }, { x: 1, y: 0 })], false);
+    cusp.points[0]!.smooth = false;
+    translatePoint(cusp, 0, 0, 1, "out");
+    expect(cusp.points[0]!.hIn).toEqual({ x: -1, y: 0 });
+  });
+
+  test("moves one end of a line, and nothing for a point it does not have", () => {
+    const line = createLine(0, 0, 10, 10);
+    translatePoint(line, 1, 1, 1);
+    expect(line).toMatchObject({ x1: 0, y1: 0, x2: 11, y2: 11 });
+    translatePoint(line, 2, 5, 5);
+    expect(line).toMatchObject({ x1: 0, y1: 0, x2: 11, y2: 11 });
+  });
 });

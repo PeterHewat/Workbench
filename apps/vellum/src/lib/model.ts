@@ -640,6 +640,63 @@ export function translateElement(el: SceneElement, dx: number, dy: number): void
   }
 }
 
+/**
+ * Moves one point of a shape rather than the shape: point `index` of a path, polyline or polygon,
+ * or end `index` of a line. On a path, `handle` moves that curve handle instead of its anchor,
+ * and a linked pair keeps mirroring, as it does under a drag; an anchor takes its handles along.
+ * Does nothing when the shape has no such point (see `hasPoint`).
+ */
+export function translatePoint(
+  el: SceneElement,
+  index: number,
+  dx: number,
+  dy: number,
+  handle?: "in" | "out"
+): void {
+  if (!hasPoint(el, index)) return;
+  if (el.type === "line") {
+    if (index === 0) {
+      el.x1 += dx;
+      el.y1 += dy;
+    } else {
+      el.x2 += dx;
+      el.y2 += dy;
+    }
+    return;
+  }
+  if (el.type === "polyline" || el.type === "polygon") {
+    el.points[index]!.x += dx;
+    el.points[index]!.y += dy;
+    return;
+  }
+  if (el.type !== "path") return;
+  const p = el.points[index]!;
+  const h = handle === "in" ? p.hIn : handle === "out" ? p.hOut : null;
+  if (h) {
+    h.x += dx;
+    h.y += dy;
+    const other = handle === "in" ? "hOut" : "hIn";
+    if (p.smooth && p[other]) p[other] = mirrorHandle(p, h);
+    return;
+  }
+  p.x += dx;
+  p.y += dy;
+  for (const c of [p.hIn, p.hOut]) {
+    if (!c) continue;
+    c.x += dx;
+    c.y += dy;
+  }
+}
+
+/** Whether `index` names a point of `el` that `translatePoint` can move. */
+export function hasPoint(el: SceneElement, index: number): boolean {
+  if (el.type === "line") return index === 0 || index === 1;
+  if (el.type === "path" || el.type === "polyline" || el.type === "polygon") {
+    return index >= 0 && index < el.points.length;
+  }
+  return false;
+}
+
 export interface AlignOptions {
   excludeElementIds?: Set<string>;
   excludePoint?: { elementId: string; index: number };

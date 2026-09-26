@@ -16,6 +16,8 @@ import {
   removeHandle,
   setHandlesLinked,
   togglePointSmooth,
+  translatePoint,
+  hasPoint,
 } from "./model.js";
 import {
   canMergeGroups,
@@ -312,8 +314,19 @@ export function duplicateSelection(): void {
   });
 }
 
+/**
+ * The arrow keys. With a point picked they move that point, or the curve handle grabbed last,
+ * as a drag would; otherwise they move the whole selection.
+ */
 export function nudgeSelection(dx: number, dy: number): void {
-  if (!getState().selection.elementIds.length) return;
+  const { selection } = getState();
+  const pe = selection.pathEdit;
+  const pointOwner = pe ? findElement(pe.pathId) : undefined;
+  if (pe && pointOwner && hasPoint(pointOwner, pe.index)) {
+    commit(() => mutate(() => translatePoint(pointOwner, pe.index, dx, dy, pe.handle)));
+    return;
+  }
+  if (!selection.elementIds.length) return;
   commit(() =>
     mutate((s) => {
       for (const id of s.selection.elementIds) {
