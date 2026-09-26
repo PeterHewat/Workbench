@@ -34,6 +34,8 @@ import {
 } from "./selection-commands.js";
 import { pushUndo, canUndo, canRedo } from "./undo.js";
 import { formatExportSvg, importSvgFile } from "./io.js";
+import { initPngExport } from "./png-export.js";
+import { fileBase } from "./document-files.js";
 import { canJoin } from "./model.js";
 import { THEME_EVENT, bindThemeToggle, byId, copyText, downloadText } from "@workbench/ui";
 import { bindTouch, setTouchFinishPathHandler } from "./touch.js";
@@ -292,6 +294,11 @@ byId("btn-final").addEventListener("click", () => {
 byId("btn-save-svg").addEventListener("click", () => {
   downloadText(svgFileName(), formatExportSvg(getState(), true), "image/svg+xml");
 });
+initPngExport({
+  artboard: () => getState().artboard,
+  svg: () => formatExportSvg(getState(), true),
+  baseName: () => fileBase(currentDoc.name),
+});
 byId("btn-copy-svg").addEventListener("click", async (e) => {
   e.stopPropagation();
   const text = formatExportSvg(getState(), true);
@@ -331,6 +338,8 @@ byId("input-import-svg").addEventListener("change", async (e) => {
 
 window.addEventListener("keydown", (e) => {
   const t = e.target as HTMLElement;
+  // A dialog is on top of everything: its keys are its own.
+  if (t.closest?.("dialog[open]")) return;
   const isToggle = t.matches?.("input[type=checkbox], input[type=radio], input[type=range]");
   // Only real text entry swallows shortcuts; a focused checkbox or button must not.
   if (t.matches?.("textarea, select") || (t.matches?.("input") && !isToggle)) return;
