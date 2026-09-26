@@ -1,5 +1,6 @@
 import { getState, setState, mutate, findElement, selectOnly, selectedElements } from "./state.js";
 import { canCombine, combine, type BooleanOp } from "./boolean.js";
+import { byShape, movePoints, pickedPoints } from "./points.js";
 import {
   translateElement,
   duplicateElement,
@@ -37,7 +38,7 @@ import {
   ungroupElements,
   type ZDirection,
 } from "./groups.js";
-import { uid } from "./utils.js";
+import { deepClone, uid } from "./utils.js";
 import { pushUndo } from "./undo.js";
 import { type Point, type SceneElement } from "./types.js";
 import { commit } from "./ops.js";
@@ -159,6 +160,30 @@ export function deleteSelection(handleFirst = true): void {
     removeSelectedHandle();
     return;
   }
+  const picked = pickedPoints(st.selection);
+  if (picked.length > 1) {
+    const changed = new Map<string, SceneElement | null>();
+    for (const [id, indices] of byShape(picked)) {
+      const el = findElement(id);
+      if (el) changed.set(id, deletePoints(el, indices));
+    }
+    commit(() => {
+      setState((s) => {
+        const elements = s.elements.flatMap((x) => {
+          if (!changed.has(x.id)) return [x];
+          const next = changed.get(x.id);
+          return next ? [next] : [];
+        });
+        const left = new Set(elements.map((e) => e.id));
+        return {
+          ...s,
+          elements,
+          selection: selectOnly(s.selection.elementIds.filter((id) => left.has(id))),
+        };
+      });
+    });
+    return;
+  }
   if (pe && pe.kind === "anchor") {
     const el = findElement(pe.pathId);
     if (!el) return;
@@ -198,7 +223,46 @@ export function setSelectedHandlesLinked(linked: boolean): void {
  * Turns the selected point into a curve, or a curved one back into a corner: what double-clicking
  * the point does. A line, polyline or polygon becomes a path first, as it has no curves to give.
  */
+/** Puts `next` in place of the shapes with the same ids, as one undo step. */
+function replaceShapes(next: readonly SceneElement[]): void {
+  const byId = new Map(next.map((el) => [el.id, el] as const));
+  commit(() => {
+    setState((s) => ({ ...s, elements: s.elements.map((x) => byId.get(x.id) ?? x) }));
+  });
+}
+
+/** Whether a point is a curve: it has a handle standing off it. */
+function isCurvePoint(el: SceneElement, index: number): boolean {
+  const p = el.type === "path" ? el.points[index] : undefined;
+  return !!p && (hasHandle(p, "in") || hasHandle(p, "out"));
+}
+
+/**
+ * With several points picked: makes them all curves, or, when every one already is, all corners.
+ * Lines, polylines and polygons become paths first, keeping their points in order.
+ */
+function setPickedPointsCurve(): void {
+  const picked = pickedPoints(getState().selection);
+  const makeCurves = picked.some((r) => {
+    const el = findElement(r.pathId);
+    return !!el && !isCurvePoint(el, r.index);
+  });
+  const next: SceneElement[] = [];
+  for (const [id, indices] of byShape(picked)) {
+    const el = findElement(id);
+    if (!el || !canToggleClosed(el)) continue;
+    const path = toPathElement(deepClone(el));
+    for (const i of indices) if (isCurvePoint(path, i) !== makeCurves) togglePointSmooth(path, i);
+    next.push(path);
+  }
+  replaceShapes(next);
+}
+
 export function toggleSelectedPointCurve(): void {
+  if (pickedPoints(getState().selection).length > 1) {
+    setPickedPointsCurve();
+    return;
+  }
   const pe = getState().selection.pathEdit;
   const el = pe ? findElement(pe.pathId) : undefined;
   if (!pe || !el || !canToggleClosed(el)) return;
@@ -360,6 +424,12 @@ export function duplicateSelection(): void {
  */
 export function nudgeSelection(dx: number, dy: number): void {
   const { selection } = getState();
+  const picked = pickedPoints(selection);
+  if (picked.length > 1) {
+    const bases = new Map(selectedElements().map((el) => [el.id, el] as const));
+    replaceShapes(movePoints(bases, picked, dx, dy));
+    return;
+  }
   const pe = selection.pathEdit;
   const pointOwner = pe ? findElement(pe.pathId) : undefined;
   if (pe && pointOwner && hasPoint(pointOwner, pe.index)) {

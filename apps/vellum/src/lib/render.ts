@@ -25,12 +25,12 @@ import {
 } from "./pointer.js";
 import { buildDefsMarkup } from "./io.js";
 import { hasBoxHandles } from "./resize.js";
+import { pickedPoints } from "./points.js";
 import { BOX_ROLES, boxCorners, unionBox } from "./selection-transform.js";
 import { clickTarget, groupColor, groupsOf, selectedGroups } from "./groups.js";
 import type {
   BBox,
   EditorState,
-  PathEdit,
   PathElement,
   Point,
   RectElement,
@@ -443,11 +443,13 @@ function addResizeHandle(
   );
 }
 
-function renderPrimitiveHandles(
-  parent: Element,
-  el: SceneElement,
-  pathEdit: PathEdit | null
-): void {
+/** The picked points, as "<shape id>:<index>", for marking their handles. */
+function pickedKeys(state: EditorState): Set<string> {
+  return new Set(pickedPoints(state.selection).map((p) => `${p.pathId}:${p.index}`));
+}
+
+function renderPrimitiveHandles(parent: Element, el: SceneElement, state: EditorState): void {
+  const picked = pickedKeys(state);
   // Handles are placed in the shape's own unrotated frame and then turned with it, so a rotated
   // rect still has rect handles rather than losing them to a conversion.
   const put = (x: number, y: number, role: string, selected = false, hitR?: number) => {
@@ -495,19 +497,13 @@ function renderPrimitiveHandles(
       break;
     }
     case "line":
-      put(el.x1, el.y1, "p1");
-      put(el.x2, el.y2, "p2");
+      put(el.x1, el.y1, "p1", picked.has(`${el.id}:0`));
+      put(el.x2, el.y2, "p2", picked.has(`${el.id}:1`));
       break;
     case "polyline":
     case "polygon":
       el.points.forEach((p, i) =>
-        put(
-          p.x,
-          p.y,
-          `pt-${i}`,
-          pathEdit?.pathId === el.id && pathEdit.index === i,
-          hitRForPoint(el.points, i)
-        )
+        put(p.x, p.y, `pt-${i}`, picked.has(`${el.id}:${i}`), hitRForPoint(el.points, i))
       );
       break;
   }
@@ -515,6 +511,7 @@ function renderPrimitiveHandles(
 
 function renderPathHandles(parent: Element, path: PathElement, state: EditorState): void {
   const pe = state.selection.pathEdit;
+  const picked = pickedKeys(state);
   // Curve handles first, anchors after: the anchor sits on top wherever the two overlap.
   path.points.forEach((p, i) => {
     // A cusp's arms are dashed: the pair is broken, and each handle moves on its own.
@@ -536,7 +533,7 @@ function renderPathHandles(parent: Element, path: PathElement, state: EditorStat
     }
   });
   path.points.forEach((p, i) => {
-    const selected = pe?.pathId === path.id && pe.kind === "anchor" && pe.index === i;
+    const selected = picked.has(`${path.id}:${i}`);
     addHandle(
       parent,
       p.x,
@@ -832,10 +829,13 @@ function renderOverlay(state: EditorState): void {
     // Every shape in a selection shows its handles, as paths show their points: grabbing one
     // narrows the selection to that shape, so a group can be edited without taking it apart.
     if (anchors || state.selection.pathEdit?.pathId === el.id) {
-      renderPrimitiveHandles(els.overlay, el, state.selection.pathEdit);
+      renderPrimitiveHandles(els.overlay, el, state);
     }
   }
-  if (sel.length > 1 && !activePathId) renderSelectionHandles(els.overlay, sel, state);
+  // While points are picked the shapes' own handles are what is being edited.
+  if (sel.length > 1 && !activePathId && !state.selection.pathEdit) {
+    renderSelectionHandles(els.overlay, sel, state);
+  }
   if (sel.length === 1 && sel[0]!.id !== activePathId) {
     renderGradientHandles(els.overlay, sel[0]!);
     if (canRotate(sel[0]!)) renderRotateHandle(els.overlay, sel[0]!, state);

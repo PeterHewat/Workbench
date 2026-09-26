@@ -209,9 +209,18 @@ export interface PathEdit {
   handle?: "in" | "out";
 }
 
+/** One point of a shape: point `index` of a path, polyline or polygon, or end `index` of a line. */
+export interface PointRef {
+  pathId: string;
+  index: number;
+}
+
 export interface Selection {
   elementIds: string[];
+  /** The point picked last: the bar sits beside it, and its handles are the ones to edit. */
   pathEdit: PathEdit | null;
+  /** Other points picked with it, for moving or deleting several at once. Absent for none. */
+  points?: PointRef[];
 }
 
 export interface Viewport {

@@ -29,6 +29,7 @@ import {
 } from "./model.js";
 import { canGroup, canMergeGroups, canMoveSelectionZ, canUngroup } from "./groups.js";
 import { canCombine, type BooleanOp } from "./boolean.js";
+import { pickedPoints } from "./points.js";
 import { worldToScreen } from "./viewport.js";
 import { HIT_R_COARSE, HIT_R_FINE, isCoarsePointer } from "./pointer.js";
 import { isSelectMore } from "./modes.js";
@@ -254,11 +255,52 @@ function pointActions(el: SceneElement, index: number, handle?: "in" | "out"): A
   return out;
 }
 
+/** What the bar offers with several points picked: what acts on all of them at once. */
+function pointsActions(state: EditorState): Action[] {
+  const picked = pickedPoints(state.selection);
+  const curvable = picked.filter((r) => {
+    const el = findElement(r.pathId);
+    return !!el && canToggleClosed(el);
+  });
+  const allCurves = curvable.every((r) => {
+    const el = findElement(r.pathId);
+    const p = el?.type === "path" ? el.points[r.index] : undefined;
+    return !!p && (hasHandle(p, "in") || hasHandle(p, "out"));
+  });
+  const out: Action[] = [];
+  if (curvable.length) {
+    out.push(
+      allCurves
+        ? {
+            key: "corners",
+            label: "Make them corners: remove their handles",
+            icon: "icon-corner",
+            run: handlers.togglePointCurve,
+          }
+        : {
+            key: "curves",
+            label: "Make them curves: give them handles",
+            icon: "icon-curve",
+            run: handlers.togglePointCurve,
+          }
+    );
+  }
+  out.push({
+    key: "delete-points",
+    label: `Delete these ${picked.length} points`,
+    icon: "icon-trash",
+    danger: true,
+    run: handlers.removePoint,
+  });
+  return out;
+}
+
 function selectionActions(state: EditorState): Action[] {
   const sel = selectedElements();
   const out: Action[] = [];
   const single = sel.length === 1 ? sel[0]! : null;
 
+  if (pickedPoints(state.selection).length > 1) return pointsActions(state);
   const pe = state.selection.pathEdit;
   const edited = pe ? findElement(pe.pathId) : null;
   if (pe && edited) return pointActions(edited, pe.index, pe.handle);
@@ -453,33 +495,45 @@ interface AnchorRect {
  * what it acts on.
  */
 function pointRect(state: EditorState): AnchorRect | null {
+  // Every picked point, and the curve handles of the one picked last.
+  const spots: { at: Point; reach: number }[] = [];
+  const coarse = isCoarsePointer();
+  const handleReach = coarse ? HIT_R_COARSE : HIT_R_FINE;
+  // A point keeps room round it to see the segments leaving it and to grab it again; its
+  // handles keep their target clear.
+  const pointReach = coarse ? 48 : 32;
   const pe = state.selection.pathEdit;
-  const el = pe ? findElement(pe.pathId) : undefined;
-  const p = pe && el && "points" in el ? el.points[pe.index] : undefined;
-  if (!el || !p) return null;
-  const points: Point[] = [p];
-  if (el.type === "path") {
-    const { hIn, hOut } = el.points[pe!.index]!;
-    if (hIn) points.push(hIn);
-    if (hOut) points.push(hOut);
+  for (const ref of pickedPoints(state.selection)) {
+    const el = findElement(ref.pathId);
+    if (!el) continue;
+    const local = pointAt(el, ref.index);
+    if (!local) continue;
+    spots.push({ at: toWorldPoint(el, local), reach: pointReach });
+    if (el.type === "path" && pe?.pathId === ref.pathId && pe.index === ref.index) {
+      const { hIn, hOut } = el.points[ref.index]!;
+      for (const h of [hIn, hOut])
+        if (h) spots.push({ at: toWorldPoint(el, h), reach: handleReach });
+    }
   }
+  if (!spots.length) return null;
   let left = Infinity;
   let right = -Infinity;
   let top = Infinity;
   let bottom = -Infinity;
-  const coarse = isCoarsePointer();
-  points.forEach((local, i) => {
-    // The point itself keeps room round it to see the segments leaving it and to grab it again;
-    // its handles keep their target clear.
-    const reach = i === 0 ? (coarse ? 48 : 32) : coarse ? HIT_R_COARSE : HIT_R_FINE;
-    const world = toWorldPoint(el, local);
-    const s = worldToScreen(world.x, world.y);
+  for (const { at, reach } of spots) {
+    const s = worldToScreen(at.x, at.y);
     left = Math.min(left, s.x - reach);
     right = Math.max(right, s.x + reach);
     top = Math.min(top, s.y - reach);
     bottom = Math.max(bottom, s.y + reach);
-  });
+  }
   return { left, right, top, bottom };
+}
+
+/** Where point `index` of a shape is: a path's, polyline's or polygon's point, or a line's end. */
+function pointAt(el: SceneElement, index: number): Point | null {
+  if (el.type === "line") return index === 0 ? { x: el.x1, y: el.y1 } : { x: el.x2, y: el.y2 };
+  return "points" in el ? (el.points[index] ?? null) : null;
 }
 
 /** The screen rectangle the bar sits beside: a selected point, the selection, or the path being drawn. */
@@ -591,7 +645,7 @@ export function syncActionBar(state: EditorState): void {
   }
   latest = state;
   // A page opened for one selection means nothing for the next.
-  const owner = `${drawing}|${state.selection.elementIds.join(",")}|${state.selection.pathEdit?.pathId ?? ""}`;
+  const owner = `${drawing}|${state.selection.elementIds.join(",")}|${state.selection.pathEdit?.pathId ?? ""}|${pickedPoints(state.selection).length}`;
   if (owner !== pageFor) {
     pageFor = owner;
     pagePath = [];

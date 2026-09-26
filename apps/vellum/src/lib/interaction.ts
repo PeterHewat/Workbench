@@ -30,6 +30,7 @@ import {
   type Marquee,
   type PathElement,
   type Point,
+  type PointRef,
   type SceneElement,
 } from "./types.js";
 import { setDrawing, clearDrawing, commit, pointIndexForRole } from "./ops.js";
@@ -38,6 +39,16 @@ import { endDropTarget, expandGroups, mergeDroppedEnd } from "./selection-comman
 import { applyResize } from "./resize.js";
 import { boxCorners, rotateAll, scaleAllByCorner, unionBox } from "./selection-transform.js";
 import { SELECTION_HANDLE_ID } from "./render.js";
+import {
+  byShape,
+  isPicked,
+  movePoints,
+  onePoint,
+  pickedPoints,
+  pickPoints,
+  pointsInMarquee,
+  togglePoint,
+} from "./points.js";
 import { clickTarget, drillTarget } from "./groups.js";
 import {
   type ShapeTool,
@@ -82,6 +93,13 @@ type DragState =
       active: boolean;
     }
   | { type: "shape-drag"; tool: ShapeTool; start: Point; current: Point }
+  | {
+      /** Several picked points, moved together. */
+      type: "points";
+      start: Point;
+      refs: PointRef[];
+      bases: Map<string, SceneElement>;
+    }
   | {
       /** A corner of the box several selected shapes share. */
       type: "sel-scale";
@@ -187,6 +205,10 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
   let lastDown = { t: 0, x: 0, y: 0 };
   /** The selected shape pressed, while that press may still turn out to be a click. */
   let drillId: string | null = null;
+  /** A picked point pressed among several, while that press may still turn out to be a click. */
+  let pointClick: PointRef | null = null;
+  /** Empty canvas pressed with a point picked: a marquee picks points, a click lets go of them. */
+  let pointMarquee = false;
 
   function cancelHold(): void {
     if (holdTimer) window.clearTimeout(holdTimer);
@@ -220,6 +242,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     if (drag.type === "resize") return { excludeElementIds: new Set([drag.elementId]) };
     if (drag.type === "sel-scale")
       return { excludeElementIds: new Set(drag.bases.map((b) => b.id)) };
+    if (drag.type === "points") return { excludeElementIds: new Set(drag.bases.keys()) };
     if (drag.type === "handle" || drag.type === "pen-handle") {
       return { excludePoint: { elementId: drag.pathId, index: drag.index } };
     }
@@ -361,6 +384,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     }
     if (e.button !== 0) return;
     drillId = null;
+    pointClick = null;
+    pointMarquee = false;
     svg.setPointerCapture(e.pointerId);
     const st = getState();
     const world = pointerWorld(e);
@@ -398,9 +423,19 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         if (isDouble && (h.kind === "in" || h.kind === "out") && anchor) {
           commit(() => mutate(() => removeHandle(anchor, h.kind as "in" | "out")));
           setState({
-            selection: selectOnly([h.pathId], { pathId: h.pathId, kind: "anchor", index: h.index }),
+            selection: onePoint(getState().selection, {
+              pathId: h.pathId,
+              kind: "anchor",
+              index: h.index,
+            }),
           });
           drag = null;
+          return;
+        }
+        if (
+          h.kind === "anchor" &&
+          pointGesture(e, st, { pathId: h.pathId, index: h.index }, world)
+        ) {
           return;
         }
         const p = path.points[h.index];
@@ -416,7 +451,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         // then offers to link or break the pair, which is how touch gets at a cusp, or to
         // remove the handle grabbed.
         setState({
-          selection: selectOnly([h.pathId], {
+          selection: onePoint(getState().selection, {
             pathId: h.pathId,
             kind: "anchor",
             index: h.index,
@@ -445,6 +480,13 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         return;
       }
       const ptIndex = pointIndexForRole(role);
+      if (
+        !isDouble &&
+        ptIndex != null &&
+        pointGesture(e, st, { pathId: elementId, index: ptIndex }, world)
+      ) {
+        return;
+      }
       if (isDouble && ptIndex != null) {
         commit(() => {
           setState((s) => {
@@ -472,12 +514,10 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           : grabOffset(resizeHandle, world),
       });
       setState({
-        selection: selectOnly(
-          [elementId],
-          role.startsWith("pt-") && ptIndex != null
-            ? { pathId: elementId, kind: "anchor", index: ptIndex }
-            : null
-        ),
+        selection:
+          ptIndex != null
+            ? onePoint(getState().selection, { pathId: elementId, kind: "anchor", index: ptIndex })
+            : selectOnly([elementId]),
       });
       return;
     }
@@ -540,7 +580,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       } else {
         arm(e, marquee, { undo: false, grab: false });
       }
-      if (!e.shiftKey && !isSelectMore()) setState({ selection: selectOnly() });
+      pointMarquee = !!st.selection.pathEdit;
+      if (!e.shiftKey && !isSelectMore() && !pointMarquee) setState({ selection: selectOnly() });
       return;
     }
 
@@ -632,6 +673,30 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       elements: s.elements.map((x) => byId.get(x.id) ?? x),
       ...(drawing === undefined ? {} : { drawing }),
     }));
+  }
+
+  /**
+   * A press on a point that picks several: with Shift (or the add switch), and a point already
+   * picked, it adds this one or takes it out; on one of several picked, it arms a drag of them
+   * all, and a click narrows the pick to it. False leaves the press to pick the point alone.
+   */
+  function pointGesture(e: PointerEvent, st: EditorState, ref: PointRef, world: Point): boolean {
+    const sel = st.selection;
+    const additive = e.shiftKey || isSelectMore();
+    if (additive && sel.pathEdit && sel.elementIds.includes(ref.pathId)) {
+      setState({ selection: togglePoint(sel, ref) });
+      return true;
+    }
+    const picked = pickedPoints(sel);
+    if (picked.length < 2 || !isPicked(sel, ref)) return false;
+    const bases = new Map<string, SceneElement>();
+    for (const id of byShape(picked).keys()) {
+      const el = findElement(id);
+      if (el) bases.set(id, deepClone(el));
+    }
+    arm(e, { type: "points", start: world, refs: picked, bases });
+    pointClick = ref;
+    return true;
   }
 
   function startRotate(e: PointerEvent, el: SceneElement, world: Point): void {
@@ -800,7 +865,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         mutate(() => applyHandleDrag(p, world, e.altKey));
       }
       setState({
-        selection: selectOnly([d.pathId], {
+        selection: onePoint(getState().selection, {
           pathId: d.pathId,
           kind: "anchor",
           index: d.index,
@@ -808,6 +873,12 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
         }),
       });
       showDropTarget(d.pathId, d.kind === "anchor" ? d.index : null);
+      return;
+    }
+
+    if (drag?.type === "points") {
+      const d = drag;
+      replaceElements(movePoints(d.bases, d.refs, world.x - d.start.x, world.y - d.start.y));
       return;
     }
 
@@ -921,8 +992,22 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     // but nothing moved and no undo step was spent.
     const heldMarquee = pending?.drag.type === "marquee";
     const clickedSelected = pending?.drag.type === "move-elements" ? drillId : null;
+    const clickedPoint = pending?.drag.type === "points" ? pointClick : null;
+    const clickedEmpty =
+      pointMarquee && !!pending && (pending.drag.type === "marquee" || pending.drag.type === "pan");
     pending = null;
     drillId = null;
+    pointClick = null;
+    if (clickedPoint) {
+      setState({
+        selection: onePoint(getState().selection, {
+          pathId: clickedPoint.pathId,
+          kind: "anchor",
+          index: clickedPoint.index,
+        }),
+      });
+    }
+    if (clickedEmpty && !e.shiftKey && !isSelectMore()) setState({ selection: selectOnly() });
     if (clickedSelected) {
       const s = getState();
       const inner = drillTarget(s.elements, new Set(s.selection.elementIds), clickedSelected);
@@ -939,6 +1024,20 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     setState({ align: { x: null, y: null }, dropTarget: null });
 
     if (drag?.type === "marquee") {
+      // With a point picked, a marquee picks the points inside it, on the shapes selected; when
+      // it holds none, it selects shapes as usual.
+      const s0 = getState();
+      const refs = pointMarquee
+        ? pointsInMarquee(s0.elements, new Set(s0.selection.elementIds), drag)
+        : [];
+      if (refs.length) {
+        const additive = e.shiftKey || isSelectMore();
+        const next = additive ? [...pickedPoints(s0.selection), ...refs] : refs;
+        setState({ selection: pickPoints(s0.selection, next) });
+        clearDrawing();
+        drag = null;
+        return;
+      }
       const ids = expandGroups(elementsInMarquee(drag));
       setState((s) => ({
         ...s,
