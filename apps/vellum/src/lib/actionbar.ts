@@ -485,14 +485,14 @@ function selectionActions(state: EditorState): Action[] {
       run: handlers.forward,
     }
   );
-  if (state.elements.some((e) => !e.hidden && !e.locked && !ids.has(e.id))) {
-    out.push({
-      key: "select-all",
-      label: "Select everything",
-      icon: "icon-select-all",
-      run: handlers.selectAll,
-    });
-  }
+  // Always there, so the bar keeps its shape; greyed out once there is nothing more to select.
+  out.push({
+    key: "select-all",
+    label: "Select everything",
+    icon: "icon-select-all",
+    disabled: !state.elements.some((e) => !e.hidden && !e.locked && !ids.has(e.id)),
+    run: handlers.selectAll,
+  });
   out.push({
     key: "delete",
     label: "Delete",
