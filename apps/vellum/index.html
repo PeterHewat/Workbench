@@ -371,16 +371,6 @@
             d="M4 4h16v16H4zM4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16"
           />
         </symbol>
-        <symbol id="icon-fit" viewBox="0 0 24 24">
-          <path
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"
-          />
-        </symbol>
         <symbol id="icon-eye" viewBox="0 0 24 24">
           <path
             fill="none"
@@ -1212,15 +1202,6 @@
         </div>
 
         <div class="tool-group" id="group-view" role="group" aria-label="View">
-          <button
-            type="button"
-            class="tool-btn"
-            id="btn-fit-view"
-            title="Fit artboard in view (Shift+1)"
-            aria-label="Fit view"
-          >
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-fit" /></svg>
-          </button>
           <!-- One control, not three: it reads the zoom out loud and sets it from a list. -->
           <div class="zoom-wrap" id="zoom-wrap">
             <button
@@ -1749,14 +1730,12 @@
               artboard or the selection in view<span data-help="mouse">
                 (<kbd>Shift</kbd>+<kbd>1</kbd> and <kbd>Shift</kbd>+<kbd>2</kbd>;
                 <kbd>Shift</kbd>+<kbd>0</kbd> is 100%)</span
-              >. Beside it, fit the artboard in view, and the eye (<b>Final SVG</b>: hides the grid,
-              guides and reference images).
+              >. Beside it, the eye (<b>Final SVG</b>: hides the grid, guides and reference images).
             </li>
             <li data-help="touch">
-              Nothing in the bar is behind a menu: Document, undo, redo, fit, zoom, Final SVG and
-              Help all fit across the top, and the tools and the snap switches sit at the bottom
-              where your thumb is. On a phone the light / dark switch is here, at the top of this
-              panel.
+              Nothing in the bar is behind a menu: Document, undo, redo, zoom, Final SVG and Help
+              all fit across the top, and the tools and the snap switches sit at the bottom where
+              your thumb is. On a phone the light / dark switch is here, at the top of this panel.
             </li>
             <li>
               <b>Light / dark</b> — the sun or moon beside Help switches the theme. Until you use

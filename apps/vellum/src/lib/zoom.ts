@@ -113,7 +113,3 @@ function zoomTo(level: number): void {
   const factor = level / getState().viewport.zoom;
   setState({ viewport: zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor) });
 }
-
-byId("btn-fit-view").addEventListener("click", () => {
-  setState({ viewport: fitToView() });
-});
