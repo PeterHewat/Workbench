@@ -54,12 +54,25 @@ const BACKGROUND_ID = "background";
 const n3 = (n: number) => String(+Number(n).toFixed(3));
 
 interface MarkerDef {
-  refX: number;
+  /** Where on the marker the line's end point falls, in its 10-unit box. */
+  refX: number | ((cap: SceneElement["linecap"]) => number);
   markup: (fill: string) => string;
 }
 
+/**
+ * The arrow's tip goes past the end point far enough to cover the line's cap: the head is four
+ * stroke widths long and wide (2.5 box units to a width), so the stroke under it is hidden only
+ * where the head is wider than the line. A round cap is a half disc of half a width, covered from
+ * 1.12 widths back from the tip (1.2 taken); a butt end needs 1 width; a square cap, reaching half
+ * a width further, 1.5.
+ */
+const ARROW_REF_X: Record<SceneElement["linecap"], number> = { round: 7, butt: 7.5, square: 6.25 };
+
 const MARKER_SHAPE_DEFS: Record<string, MarkerDef> = {
-  arrow: { refX: 9, markup: (f) => `<path d="M0,0 L10,5 L0,10 z" ${f}/>` },
+  arrow: {
+    refX: (cap) => ARROW_REF_X[cap] ?? 7,
+    markup: (f) => `<path d="M0,0 L10,5 L0,10 z" ${f}/>`,
+  },
   dot: { refX: 5, markup: (f) => `<circle cx="5" cy="5" r="5" ${f}/>` },
   square: { refX: 5, markup: (f) => `<rect width="10" height="10" ${f}/>` },
   diamond: { refX: 5, markup: (f) => `<path d="M5,0 L10,5 L5,10 L0,5 z" ${f}/>` },
@@ -127,7 +140,7 @@ function buildDefsLines(elements: readonly SceneElement[]): Line[] {
             : "";
         lines.push({
           indent: 0,
-          text: `<marker id="mk-${escapeAttr(el.id)}-${end}" viewBox="0 0 10 10" refX="${shape.refX}" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">`,
+          text: `<marker id="mk-${escapeAttr(el.id)}-${end}" viewBox="0 0 10 10" refX="${typeof shape.refX === "number" ? shape.refX : shape.refX(el.linecap)}" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">`,
         });
         lines.push({ indent: 1, text: shape.markup(`fill="${escapeAttr(el.stroke)}"${opacity}`) });
         lines.push({ indent: 0, text: "</marker>" });

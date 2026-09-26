@@ -118,7 +118,9 @@ Every element carries a complete style, edited in its row of the Primitives list
   again when either changes; the numbers show in a Pattern field beside it, which takes typing
   only for Custom. Only the numbers are stored, so the style is read back by matching them.
 - The fill rule (`fillRule`, exported as `fill-rule`): non-zero, the default, or even-odd.
-- Line-end markers (arrow, dot, square, diamond) on lines, polylines and paths.
+- Line-end markers (arrow, dot, square, diamond) on lines, polylines and paths. An arrow's tip reaches
+  past the end point just far enough to cover the line's cap (round, butt or square), so no stroke
+  shows beside it.
 - Opacities of 1 are not exported. Markers and gradients go into `<defs>`, with ids derived from
   the element id.
 - A shape with no stroke and no fill paints nothing, as in any viewer; Vellum keeps it clickable
