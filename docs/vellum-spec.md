@@ -172,7 +172,7 @@ an ancestor imports as hidden.
   path or polyline has it baked into its points.
 - **Typed geometry:** a row's X, Y, W and H are the bounding box; up and down step to whole numbers.
 - **Groups and multi-selections** move, stretch and turn as one: corner handles and a rotate
-  handle around their shared box, and on a group's row, while it is selected whole, X, Y, W, H and
+  handle around their shared box, and under an open group's row in the Primitives list, X, Y, W, H and
   **Turn by**. A group keeps no transform of its own — each change is baked into its members'
   coordinates (`selection-transform.ts`) — so the angle is a turn by so many degrees, a rotated
   rect or ellipse stretched off its own axes becomes a path, a circle stretched unevenly an
@@ -212,7 +212,7 @@ fold, and which are open is remembered for the tab.
   highlighted, and a focused field in the Primitives list highlights the attribute it edits. One
   undo step per editing session. The box has a clamped height and scrolls on its own.
 - **Primitives:** the document as a tree, front to back like a layers panel (▲ brings forward). A
-  group is one coloured rail down the rows it holds, headed by a row of its own: fold, select all,
+  group is one coloured rail down the rows it holds, headed by a row of its own: fold (which also hides the group's fields, §8), select all,
   name, member count, eye, ▲ ▼ and delete. A shape's row has a checkbox, name, a colour preview
   (its stroke round its fill), eye, ▲ ▼ and delete, and opens to its fields. ▲ ▼ stop at the edge
   of the group holding the row; Shift jumps to the end. Only the rows in view are built.

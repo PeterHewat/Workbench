@@ -452,8 +452,9 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") input.blur();
   });
-  // Selected whole, a group opens to the numbers of the box its members share.
-  if (allSelected) {
+  // An open group shows the numbers of the box its members share, as an open shape row shows its
+  // own; folded, it shows neither those nor its members.
+  if (!collapsedGroups.has(gid)) {
     head.classList.add("expanded");
     const body = document.createElement("div");
     body.className = "acc-body";
