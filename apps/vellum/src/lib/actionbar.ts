@@ -77,9 +77,8 @@ export interface Action {
 
 const GAP = 12;
 /**
- * The most buttons in one row: seven fit across a 360px phone. A longer set shows its first ones,
- * a "more" button and delete, which stays in reach; the rest are one tap away on a page of their
- * own, as are the pages a menu button opens. Every page leads with a way back.
+ * The most buttons in one row: seven fit across a 360px phone. A longer set is laid out in even
+ * rows - eight as two of four, not seven and a straggler - so every button stays in view.
  */
 export const MAX_BUTTONS = 7;
 
@@ -339,8 +338,7 @@ function selectionActions(state: EditorState): Action[] {
     pressed: more,
     run: () => handlers.selectMore(!more),
   });
-  // In the order they matter: what does not fit the row moves behind "more" from the end,
-  // and delete always stays.
+  // Duplicate and z-order, then select everything, then delete: last, where it is always found.
   out.push(
     { key: "duplicate", label: "Duplicate", icon: "icon-copy", run: handlers.duplicate },
     {
@@ -386,41 +384,29 @@ const backAction = (): Action => ({
   },
 });
 
-/**
- * Splits a set of buttons into what fits in one row. The row keeps as many as it can, then a
- * "more" button, then delete when there is one, so the one destructive button never moves off
- * the row; what is left over is the page "more" opens.
- */
-export function paginate(
-  actions: readonly Action[],
-  max = MAX_BUTTONS
-): { row: Action[]; rest: Action[] } {
-  if (actions.length <= max) return { row: [...actions], rest: [] };
-  const last = actions[actions.length - 1]!;
-  const pinned = last.danger ? [last] : [];
-  const others = last.danger ? actions.slice(0, -1) : [...actions];
-  const room = max - 1 - pinned.length;
-  const rest = others.slice(room);
-  const more: Action = { key: "page-more", label: "More", icon: "icon-more", menu: () => rest };
-  return { row: [...others.slice(0, room), more, ...pinned], rest };
+/** How many buttons go in a row: all of them up to the limit, then as many rows as even as can be. */
+export function columnsFor(count: number, max = MAX_BUTTONS): number {
+  const rows = Math.ceil(count / max);
+  return Math.max(1, Math.ceil(count / rows));
 }
 
-/** The row to show: the actions themselves, or the page the bar has been taken to. */
-function currentRow(actions: readonly Action[]): Action[] {
-  let row = paginate(actions).row;
+/** The buttons to show: the actions themselves, or the page a menu button has opened. */
+function currentButtons(actions: readonly Action[]): Action[] {
+  let shown = [...actions];
   for (const key of pagePath) {
-    const opener = row.find((a) => a.key === key);
+    const opener = shown.find((a) => a.key === key);
     if (!opener?.menu) {
       pagePath = [];
-      return paginate(actions).row;
+      return [...actions];
     }
-    row = paginate([backAction(), ...opener.menu()]).row;
+    shown = [backAction(), ...opener.menu()];
   }
-  return row;
+  return shown;
 }
 
 function build(actions: readonly Action[]): void {
   bar.replaceChildren();
+  bar.style.setProperty("--bar-cols", String(columnsFor(actions.length)));
   for (const action of actions) {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -610,7 +596,7 @@ export function syncActionBar(state: EditorState): void {
     pageFor = owner;
     pagePath = [];
   }
-  const actions = currentRow(
+  const actions = currentButtons(
     drawing ? drawingActions(state) : idle(state) ? idleActions(state) : selectionActions(state)
   );
   // Rebuilt only when the set of buttons, or whether they are enabled, actually changes.

@@ -1979,10 +1979,11 @@ body {
 .action-bar {
   position: fixed;
   z-index: 70;
-  display: flex;
-  /* Wraps rather than scrolls: on a phone a bar that scrolled sideways hid its last button,
-     which is delete, behind an edge nothing pointed at. */
-  flex-wrap: wrap;
+  /* Rows rather than a scroller: on a phone a bar that scrolled sideways hid its last button,
+     which is delete, behind an edge nothing pointed at. The script sets how many go in a row,
+     so a long set splits into even rows. */
+  display: grid;
+  grid-template-columns: repeat(var(--bar-cols, 7), auto);
   justify-content: center;
   gap: 4px;
   max-width: calc(100vw - 16px);
