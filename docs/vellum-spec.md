@@ -65,7 +65,8 @@ chrome.
 - **Guides** (`guides.ts`): dragged out of the top ruler (horizontal) or the left one
   (vertical); moved by dragging, and taken away by dropping one back on its ruler or
   double-clicking it. With either snap switch on, a point lands on a guide in reach before the grid
-  or another shape, and a moved shape lines up its nearest edge or centre with one. Saved with the
+  or another shape, and a moved shape lines up its nearest edge or centre with one. A guide being
+  placed snaps too: to the grid, or in line with a shape's point when snapping to shapes. Saved with the
   document (`guides`), never exported. The rulers are hidden on a phone, so guides are made on a
   wider screen.
 - A marker shows where a snapped point will land.

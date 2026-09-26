@@ -210,6 +210,41 @@ function overRuler(axis: GuideAxis, e: PointerEvent): boolean {
 }
 
 /**
+ * Where a guide dragged to `raw` settles. Snapping to shapes (the switch, or Alt) puts it in line
+ * with the nearest point of a shape - corners, centres, midpoints, crossings - within reach; grid
+ * snap puts it on the grid. `points` is asked only when shapes are snapped to, as working out
+ * crossings is not free.
+ */
+function guideAt(
+  axis: GuideAxis,
+  raw: number,
+  e: PointerEvent,
+  points: (s: EditorState) => readonly Point[]
+): number {
+  const s = getState();
+  if (isAlignSnap() || e.altKey) {
+    let at = raw;
+    let best = ALIGN_TOL_PX / s.viewport.zoom;
+    for (const p of points(s)) {
+      const d = Math.abs(p[axis] - raw);
+      if (d < best) {
+        best = d;
+        at = p[axis];
+      }
+    }
+    return at;
+  }
+  if (!s.grid.snap) return raw;
+  const step = Math.max(1, s.grid.step);
+  return Math.round(raw / step) * step;
+}
+
+/** Every point of the document a guide can line up with. */
+function guideTargets(s: EditorState): Point[] {
+  return [...collectAlignPoints(s.elements, {}), ...snapFeatures(s.elements, new Set())];
+}
+
+/**
  * Dragging a new guide out of a ruler: the top ruler gives a horizontal one, the left a vertical
  * one. It follows the pointer as a dashed line and is placed where it is let go - unless that is
  * back on the ruler, which is how a guide pulled out by mistake goes away again.
@@ -220,11 +255,11 @@ export function bindRulerGuides(top: HTMLCanvasElement, left: HTMLCanvasElement)
     if (e.button !== 0 || st.drawing?.activePathId) return;
     e.preventDefault();
     canvas.setPointerCapture(e.pointerId);
+    // The shapes stay put while a guide is dragged, so their points are worked out once.
+    let targets: Point[] | null = null;
     const place = (ev: PointerEvent) => {
-      const s = getState();
       const raw = screenToWorld(ev.clientX, ev.clientY)[axis];
-      const step = Math.max(1, s.grid.step);
-      const at = s.grid.snap ? Math.round(raw / step) * step : raw;
+      const at = guideAt(axis, raw, ev, (s) => (targets ??= guideTargets(s)));
       setState({ drawing: { guide: { axis, at } } });
     };
     const up = (ev: PointerEvent) => {
@@ -980,9 +1015,10 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     if (drag?.type === "guide") {
       const d = drag;
       const raw = screenToWorld(e.clientX, e.clientY)[d.axis];
-      const at = st.grid.snap
-        ? Math.round(raw / Math.max(1, st.grid.step)) * Math.max(1, st.grid.step)
-        : raw;
+      const at = guideAt(d.axis, raw, e, (s) => [
+        ...collectAlignPoints(s.elements, {}),
+        ...features(s),
+      ]);
       setState((s) => ({ ...s, guides: movedGuide(s.guides, d.axis, d.index, at) }));
       return;
     }
