@@ -157,7 +157,7 @@ Each primitive is a **first-class object** in the scene graph with stable `id` (
 
 - **Click** on artboard: add **corner** anchor (handles retracted or colocated).
 - **Click + drag**: add **smooth** anchor; drag sets outgoing handle; incoming handle mirrored (symmetric smooth).
-- **Click on first anchor** of open path (with tolerance): **close path** (subpath `Z`).
+- **Click on first anchor** of open path (with tolerance): **close path** (subpath `Z`). While the pointer is within that tolerance the first anchor is ringed, as a dragged end is over the end it would merge with.
 - **Esc**: cancel current segment in progress (keep existing anchors) or cancel placement mode per context.
 - **Enter / double-click**: **finish** open path (end current subpath, tool stays in pen for new path).
 - While drawing, preview segment follows pointer (snaps to aligned points while Alt is held).
@@ -185,7 +185,8 @@ Paths support **multiple subpaths** in one `<path>` only when user explicitly jo
 ### 8.1 Selection model (recommended)
 
 - **Select tool (V):**
-  - Click object: select whole primitive (shows bounding box + path anchors/handles when path).
+  - Click object: select whole primitive (shows bounding box + path anchors/handles when path). A grouped primitive selects its outermost group.
+  - Click a member of a selected group: step one level in — to the nested group holding it, or to the primitive itself. Once inside, clicking another member of the same group picks it at that level. Hover outlines what the click would pick. Group, ungroup, merge and duplicate then act inside that group: a duplicated member stays in it.
   - Click anchor/handle: select that control point (paths).
   - **Shift+click**: add/remove from selection.
   - Drag on empty artboard: marquee selection.
@@ -196,6 +197,8 @@ Paths support **multiple subpaths** in one `<path>` only when user explicitly jo
 
 - Drag selected object(s): translate (Alt-aligns per §6).
 - Path: move anchors/handles individually when selected.
+- **Box handles:** a path, polyline or polygon has a handle just outside each corner of its bounding box, tethered to that corner; dragging one scales the shape from the opposite corner (Shift keeps the proportions, grid snap and Alt-align act on the corner).
+- **Arrow keys** move the selection by 1 unit (×10 with Shift); with a point picked they move only that point, or the curve handle grabbed last (a linked pair keeps mirroring).
 - Rect/circle/ellipse: drag bounds handles (corners for rect; radius handles for circle/ellipse).
 - **Uniform handle:** a rect has one just outside its bottom-right corner that keeps width and
   height equal, and an ellipse has one on its diagonal that keeps both radii equal. Square and
@@ -276,7 +279,7 @@ Live **formatted SVG** text in side panel always reflects exportable document (p
 
 ### 12.4 Actions
 
-- Save SVG, Save project, Load project, Import SVG (see §13–§14).
+- Export SVG, copy SVG, import SVG; export a document, export every document, import documents (see §13–§14).
 - Export/download naming: the document's name, as `Name.svg` / `Name.vellum.json` (`document` when it has none).
 
 ---
@@ -303,7 +306,7 @@ Live **formatted SVG** text in side panel always reflects exportable document (p
 
 ### 14.2 Saved documents (browser storage)
 
-> Documents behave like macOS document lists. Everything autosaves (about 1 s after the last change, never mid-drag) to the browser's **IndexedDB** (not localStorage, whose ~5 MB cap is too small once reference images are embedded); there is no Save button. Two stores: `meta` (id, name, updated) for the list and `data` (serialized project incl. images). There is no name field in the panel header: each row in the Documents list has an inline name input, editable on the open document (click its name), while clicking another row opens it; hover actions are duplicate and delete (with confirmation), and ▲ ▼ move a row up or down. The list is in an order the user sets: each document's meta carries an `order`, a new, duplicated or imported document goes to the top, and saving never moves anything. Every document is named from the start: a new document is created and stored immediately as "Untitled", "Untitled 2", … (`+` does nothing new while the open document is still empty). Deleting the open document opens the first remaining one in the list, or creates a blank one. The very first start, with an empty library, creates **Vellum Workbench**: `public/art.svg` (512 × 320, in Vellum's own export format), fetched and imported by `welcome.ts` — an isometric workbench whose parts are named groups, with a translucent backdrop. The same file is Vellum's card art on the index page. It is an ordinary document once created, deletable like any other; a `vellum.welcomed` flag in localStorage, set once it is in, keeps it from coming back. If the drawing cannot be fetched, the first document is an empty one. The last open document reopens at startup; Ctrl+S forces an immediate save. Documents exist only in this browser; export the SVG for a portable file. Ctrl+A + Delete empties a document (the old "Clear all" button was removed as redundant with New).
+> Documents behave like macOS document lists. Everything autosaves (about 1 s after the last change, never mid-drag) to the browser's **IndexedDB** (not localStorage, whose ~5 MB cap is too small once reference images are embedded); there is no Save button. Two stores: `meta` (id, name, updated) for the list and `data` (serialized project incl. images). There is no name field in the panel header: each row in the Documents list has an inline name input, editable on the open document (click its name), while clicking another row opens it; row actions are duplicate, export, ▲ ▼ to move it up or down, and delete (with confirmation when the document has content). The list is in an order the user sets: each document's meta carries an `order`, a new, duplicated or imported document goes to the top, and saving never moves anything. Every document is named from the start: a new document is created and stored immediately as "Untitled", "Untitled 2", … (`+` does nothing new while the open document is still empty). Deleting the open document opens the first remaining one in the list, or creates a blank one. The very first start, with an empty library, creates **Vellum Workbench**: `public/art.svg` (512 × 320, in Vellum's own export format), fetched and imported by `welcome.ts` — an isometric workbench whose parts are named groups, with a translucent backdrop. The same file is Vellum's card art on the index page. It is an ordinary document once created, deletable like any other; a `vellum.welcomed` flag in localStorage, set once it is in, keeps it from coming back. If the drawing cannot be fetched, the first document is an empty one. The last open document reopens at startup; Ctrl+S forces an immediate save. Documents exist only in this browser. To move them, a row exports its document as `Name.vellum.json` (`{ tag: "vellum/document", version: 1, exported, name, data }`), and the header exports every document, in list order, as one library file (`{ tag: "vellum/library", version: 1, exported, documents: [{ name, data }] }`). Import takes any number of files of either kind: every document in them is brought up to date by `readProject` and added at the top of the list with a fresh id and a free name, in the order the file lists them — an import never replaces or merges with an existing document (`document-files.ts`). Ctrl+A + Delete empties a document.
 
 Stored shape (versioned by `version`, `PROJECT_VERSION` in `types.ts`). Every released version stays readable: `readProject` (`io.ts`) brings an older document up to the current one step by step, and refuses one written by a newer Vellum with a message to reload. The database has a version of its own (`DB_VERSION` in `storage.ts`) for its stores; a library from before the first release is dropped once, on upgrade, and the welcome drawing is offered again.
 
@@ -392,7 +395,7 @@ Additional tool shortcuts for polyline/polygon as needed.
 
 - **Offline** after the first load. The build's service worker precaches the page, and the document stays in the browser.
 - **Performance:** smooth interaction with hundreds of anchors; debounce SVG preview formatting.
-- **Accessibility:** focusable panel controls, ARIA labels on tools; canvas/SVG keyboard nudging (arrow keys move selection by 1 user unit, ×10 with Shift).
+- **Accessibility:** focusable panel controls, ARIA labels on tools; canvas/SVG keyboard nudging (arrow keys move the selection, or the picked point, by 1 user unit, ×10 with Shift).
 - **Browsers:** recent Chrome, Firefox, Edge, Safari.
 
 ---
@@ -508,11 +511,10 @@ name-in-id export, Help panel (`?` button).
   clamped height, because a text editor that grows without bound pushes everything past the edge.
 - **Document rows** carry no date: the list is in the order the user gives it, and a second line
   per row cost more than it told.
-- **Documents move one at a time:** a row's export writes that document (reference images
-  included) as `Name.vellum.json` with the tag `vellum/document`; the header's import reads one
-  back, always with a fresh id and a free name, so it is added beside what is there and never
-  overwrites it. There is no whole-library file: it could only ever be restored wholesale, which
-  is the wrong unit for moving one drawing between two browsers.
+- **Documents as files:** a row's export writes that document (reference images included) as
+  `Name.vellum.json`; the header's export writes every document as one library file. Import
+  reads any number of either, and adds every document in them with a fresh id and a free name,
+  so nothing already there is overwritten (§14.2).
 - **Deleting documents:** empty documents (no shapes, no reference images) are deleted without a confirmation; others ask first.
 - **Document panel layout:** the SVG section is a fixed one third of the window height when open (no splitter; it takes no space when collapsed) and Primitives fills the rest. Creating a document (`+`) expands the Documents section and focuses the new name; adding a reference image expands Reference images. Docked left, full height, translucent frosted overlay on the canvas (canvas does not move). A splitter between the SVG text and the Primitives list resizes them (remembered). Undo/Redo buttons in the toolbar. Rulers are always on and start to the right of the SVG panel when it is open. Primitive names export as `id="<generated-id>_<name>"` (generated ids are 8 hex chars starting with a letter, e.g. `d8e4764a_my_shape`; spaces in names become `_`; other invalid characters are dropped; only the first `_` separates the parts) and are read back from that, or from a `<title>`, on import.
 - **Markers/gradients** are emitted into a `<defs>` block with ids derived from the element id.
