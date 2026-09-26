@@ -28,6 +28,7 @@ import {
   toWorldPoint,
 } from "./model.js";
 import { canGroup, canMergeGroups, canMoveSelectionZ, canUngroup } from "./groups.js";
+import { canCombine, type BooleanOp } from "./boolean.js";
 import { worldToScreen } from "./viewport.js";
 import { HIT_R_COARSE, HIT_R_FINE, isCoarsePointer } from "./pointer.js";
 import { isSelectMore } from "./modes.js";
@@ -48,6 +49,7 @@ export interface ActionBarHandlers {
   togglePointCurve: () => void;
   removeHandle: () => void;
   removePoint: () => void;
+  combine: (op: BooleanOp) => void;
   join: () => void;
   editText: (id: string) => void;
   finishPath: () => void;
@@ -290,6 +292,41 @@ function selectionActions(state: EditorState): Action[] {
   }
   if (canUngroup(state.elements, selected)) {
     out.push({ key: "ungroup", label: "Ungroup", icon: "icon-ungroup", run: handlers.ungroup });
+  }
+
+  // Union, subtract, intersect and exclude: one button, opening a page of four.
+  if (sel.length >= 2 && sel.every(canCombine)) {
+    out.push({
+      key: "combine",
+      label: "Combine the shapes into one",
+      icon: "icon-combine",
+      menu: () => [
+        {
+          key: "union",
+          label: "Union: everything the shapes cover",
+          icon: "icon-union",
+          run: () => handlers.combine("union"),
+        },
+        {
+          key: "subtract",
+          label: "Subtract: the backmost shape, less the others",
+          icon: "icon-subtract",
+          run: () => handlers.combine("subtract"),
+        },
+        {
+          key: "intersect",
+          label: "Intersect: only where they all overlap",
+          icon: "icon-intersect",
+          run: () => handlers.combine("intersect"),
+        },
+        {
+          key: "exclude",
+          label: "Exclude: everything but where they overlap",
+          icon: "icon-exclude",
+          run: () => handlers.combine("exclude"),
+        },
+      ],
+    });
   }
 
   const ids = new Set(state.selection.elementIds);

@@ -26,6 +26,7 @@ import {
   toggleSelectedPointCurve,
   removeSelectedHandle,
   stepOutSelection,
+  combineSelection,
 } from "./selection-commands.js";
 import { pushUndo, canUndo, canRedo } from "./undo.js";
 import { formatExportSvg, importSvgFile } from "./io.js";
@@ -75,6 +76,7 @@ initActionBar(byId("action-bar"), {
   duplicate: () => duplicateSelection(),
   remove: () => deleteSelection(),
   removePoint: () => deleteSelection(false),
+  combine: (op) => combineSelection(op),
   forward: () => moveZOrder("forward"),
   back: () => moveZOrder("back"),
   toggleClosed: (id, closed) => {

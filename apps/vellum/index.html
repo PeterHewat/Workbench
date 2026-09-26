@@ -464,6 +464,103 @@
             d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"
           />
         </symbol>
+        <!-- Two overlapping squares: combine shapes into one. -->
+        <symbol id="icon-combine" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M4 4h10v10H4z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M10 10h10v10H10z"
+          />
+        </symbol>
+        <!-- Their union: one outline round both. -->
+        <symbol id="icon-union" viewBox="0 0 24 24">
+          <path fill="currentColor" fill-opacity="0.45" d="M4 4h10v6h6v10H10v-6H4z" />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M4 4h10v6h6v10H10v-6H4z"
+          />
+        </symbol>
+        <!-- The back square, less the front one. -->
+        <symbol id="icon-subtract" viewBox="0 0 24 24">
+          <path fill="currentColor" fill-opacity="0.45" d="M4 4h10v6h-4v4H4z" />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M4 4h10v6h-4v4H4z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            stroke-dasharray="2 2"
+            d="M10 10h10v10H10z"
+          />
+        </symbol>
+        <!-- Only where they overlap. -->
+        <symbol id="icon-intersect" viewBox="0 0 24 24">
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            stroke-dasharray="2 2"
+            d="M4 4h10v10H4z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            stroke-dasharray="2 2"
+            d="M10 10h10v10H10z"
+          />
+          <path fill="currentColor" fill-opacity="0.45" d="M10 10h4v4h-4z" />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M10 10h4v4h-4z"
+          />
+        </symbol>
+        <!-- Everything but where they overlap. -->
+        <symbol id="icon-exclude" viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            fill-opacity="0.45"
+            fill-rule="evenodd"
+            d="M4 4h10v10H4zM10 10h10v10H10z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M4 4h10v10H4z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M10 10h10v10H10z"
+          />
+        </symbol>
         <!-- The bar's pages: back to the row before, and the rest of a row too long for one. -->
         <symbol id="icon-back" viewBox="0 0 24 24">
           <path
@@ -1134,6 +1231,15 @@
               written into its shapes, so the angle is a turn by so many degrees, a rotated
               rectangle or ellipse stretched off its own axes becomes a path, and stroke widths stay
               as they are.
+            </li>
+            <li>
+              <b>Combine</b> — with two or more shapes selected (paths, polygons, rectangles,
+              ellipses), the combine button on the bar opens four ways to make one shape of them:
+              <b>union</b> keeps everything they cover, <b>subtract</b> takes the others from the
+              backmost, <b>intersect</b> keeps only where they all overlap, and <b>exclude</b> keeps
+              everything but the overlap. Curves stay curves. The result takes the backmost shape's
+              place, name and style. A hole is a second outline in the same path: a path can hold
+              several, and its <b>Fill rule</b> says how overlapping ones fill.
             </li>
             <li>
               <b>Merge</b> puts the selection into one group without adding a level<span

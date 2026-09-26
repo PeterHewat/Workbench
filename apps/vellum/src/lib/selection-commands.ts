@@ -1,4 +1,5 @@
-import { getState, setState, mutate, findElement, selectOnly } from "./state.js";
+import { getState, setState, mutate, findElement, selectOnly, selectedElements } from "./state.js";
+import { canCombine, combine, type BooleanOp } from "./boolean.js";
 import {
   translateElement,
   duplicateElement,
@@ -16,6 +17,8 @@ import {
   setHandlesLinked,
   togglePointSmooth,
   translatePoint,
+  styleOf,
+  simplifyPathIfStraight,
   deletePoints,
   hasPoint,
 } from "./model.js";
@@ -101,6 +104,39 @@ export function stepOutSelection(): boolean {
   if (!parent) return false;
   setState({ selection: selectOnly(parent) });
   return true;
+}
+
+/** Whether the selection can be combined: two or more shapes, every one enclosing an area. */
+export function canCombineSelection(): boolean {
+  const sel = selectedElements();
+  return sel.length >= 2 && sel.every(canCombine);
+}
+
+/**
+ * Combines the selected shapes into one path. They are taken back to front: subtract takes every
+ * other shape from the backmost one. The result stands where the backmost shape stood, in its
+ * groups, with its name and style.
+ */
+export function combineSelection(op: BooleanOp): void {
+  if (!canCombineSelection()) return;
+  const st = getState();
+  const ids = new Set(st.selection.elementIds);
+  const operands = st.elements.filter((e) => ids.has(e.id));
+  const back = operands[0]!;
+  const combined = combine(operands, op, { ...styleOf(back) });
+  // All straight, and one outline, it is a polygon, as the pen makes one.
+  const result = combined && simplifyPathIfStraight(combined);
+  if (!result) {
+    window.alert("Nothing would be left of these shapes, so they are unchanged.");
+    return;
+  }
+  commit(() => {
+    setState((s) => ({
+      ...s,
+      elements: s.elements.flatMap((e) => (e.id === back.id ? [result] : ids.has(e.id) ? [] : [e])),
+      selection: selectOnly([result.id]),
+    }));
+  });
 }
 
 /** Peels off the outermost group of the selection, leaving any nested groups inside it intact. */
