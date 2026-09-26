@@ -2161,15 +2161,7 @@ body {
   pointer-events: none;
 }
 
-/* A locked shape: a small padlock on its row, and a dashed box when it is selected. */
-.row-lock {
-  flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
-  margin-right: 4px;
-  color: var(--muted);
-}
-
+/* A locked shape: a dashed box when it is selected. */
 .selection-box.locked-box {
   stroke-dasharray: 4 3;
 }

@@ -162,9 +162,6 @@ function primitiveBodyHtml(el: SceneElement): string {
       `<div class="field-row"><span>Corner Y</span><input type="number" data-field="ry" min="0" step="1" value="${Math.round(el.ry ?? el.rx ?? 0)}" /></div>`
     );
   }
-  rows.push(
-    `<div class="field-row" title="Locked: out of reach on the canvas - not clicked, box-selected or selected with the rest - but still selectable here"><label class="fill-toggle"><span>Locked</span><input type="checkbox" data-field="locked"${el.locked ? " checked" : ""} /></label></div>`
-  );
   if (MARKER_TYPES.includes(el.type)) {
     rows.push(
       `<div class="field-row"><span>Start</span>${selectHtml("markerStart", el.markerStart || "none", MARKER_SHAPES)}</div>`,
@@ -440,12 +437,17 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
   const selected = new Set(state.selection.elementIds);
   const allSelected = members.every((e) => selected.has(e.id));
   const allHidden = members.every((e) => e.hidden);
+  const allLocked = members.every((e) => e.locked);
   const head = document.createElement("div");
   head.className = `acc-item group-head${collapsedGroups.has(gid) ? "" : " open"}`;
   head.dataset.groupId = gid;
   head.innerHTML = accHeaderHtml({
     dot: { on: allSelected, title: allSelected ? "Deselect the group" : "Select the group" },
     eye: { visible: !allHidden, title: allHidden ? "Show the group" : "Hide the group" },
+    lock: {
+      locked: allLocked,
+      title: allLocked ? "Unlock the group" : "Lock the group: out of reach on the canvas",
+    },
     titleHtml: `<input type="text" class="acc-title-input group-name-input" data-group-name value="${escapeAttr(state.groupNames[gid] ?? "")}" placeholder="group" aria-label="Group name" title="Group name - exported in the group's id" />`,
     extra: `<span class="acc-swatch group-count" title="${members.length} shapes in this group">${members.length}</span>`,
     canUp: canMoveGroup(state.elements, gid, towardFront(-1)),
@@ -460,6 +462,11 @@ function groupHead(state: EditorState, gid: string): HTMLElement {
       setHidden(
         members.map((e) => e.id),
         !allHidden
+      ),
+    onLock: () =>
+      setLocked(
+        members.map((e) => e.id),
+        !allLocked
       ),
     onDelete: () => deleteGroup(gid),
     onMove: (dir, toEnd) => moveGroupBy(gid, towardFront(dir), toEnd),
@@ -498,7 +505,7 @@ function groupFieldsHtml(box: BBox | null): string {
     field("y", "Y", "Group Y", round(box.y)) +
     field("width", "W", "Group width", round(box.width)) +
     field("height", "H", "Group height", round(box.height)) +
-    `<label class="field-row" title="Turns every member about the group's centre by this many degrees"><span>Turn by</span><input type="number" data-group-field="turn" step="5" value="0" aria-label="Turn the group by (degrees)" /></label>`
+    `<label class="field-row" title="Rotates every member about the group's centre by this many degrees"><span>Rotate</span><input type="number" data-group-field="turn" step="5" value="0" aria-label="Rotate the group by (degrees)" /></label>`
   );
 }
 
@@ -512,9 +519,13 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
     ${accHeaderHtml({
       dot: { on: isSelected, title: isSelected ? "Deselect" : "Select" },
       eye: { visible: !el.hidden, title: el.hidden ? "Show" : "Hide" },
+      lock: {
+        locked: !!el.locked,
+        title: el.locked ? "Unlock" : "Lock: out of reach on the canvas",
+      },
       name: el.name || "",
       placeholder: el.type,
-      extra: `${el.locked ? '<svg class="ui-icon row-lock" aria-label="Locked" role="img"><use href="#icon-lock" /></svg>' : ""}<span class="acc-swatch" style="${escapeAttr(headerSwatchStyle(el))}"></span>`,
+      extra: `<span class="acc-swatch" style="${escapeAttr(headerSwatchStyle(el))}"></span>`,
       canUp: canMoveWithinParent(state.elements, el.id, towardFront(-1)),
       canDown: canMoveWithinParent(state.elements, el.id, towardFront(1)),
       index,
@@ -533,6 +544,7 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
     onExpand: () => toggleElementExpanded(el.id),
     onDot: () => toggleElementSelected(el.id),
     onEye: () => setHidden([el.id], !el.hidden),
+    onLock: () => setLocked([el.id], !el.locked),
     onDelete: () => deletePrimitive(el.id),
     onMove: (dir, toEnd) => reorder("elements", el.id, towardFront(dir), toEnd),
   });
@@ -679,6 +691,25 @@ function setHidden(ids: readonly string[], hidden: boolean): void {
     selection: hidden
       ? selectOnly(s.selection.elementIds.filter((id) => !wanted.has(id)))
       : s.selection,
+  }));
+}
+
+/**
+ * Locked shapes stay selected: they were chosen here, where a locked shape is still reached, and
+ * the bar is where they are unlocked again.
+ */
+function setLocked(ids: readonly string[], locked: boolean): void {
+  const wanted = new Set(ids);
+  pushUndo();
+  setState((s) => ({
+    ...s,
+    elements: s.elements.map((e) => {
+      if (!wanted.has(e.id) || !!e.locked === locked) return e;
+      const next = { ...e };
+      if (locked) next.locked = true;
+      else delete next.locked;
+      return next;
+    }),
   }));
 }
 
@@ -939,11 +970,6 @@ primitiveListEl.addEventListener("change", (e) => {
   } else if (field === "closed") {
     setElementClosed(id, input.checked);
     primitiveList.invalidate();
-  } else if (field === "locked") {
-    applyToElement(id, (el) => {
-      if (input.checked) el.locked = true;
-      else delete el.locked;
-    });
   } else if (field === "dash") {
     const dash = parseDash(input.value);
     input.value = (dash ?? []).join(" ");

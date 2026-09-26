@@ -143,7 +143,8 @@ single-outline paths.
 
 A locked shape (`locked`) is out of reach on the canvas: it is not clicked, box-selected, selected
 with Ctrl+A or dragged along with the rest, and shows no handles. It is still snapped to, still
-selectable from its row (which shows a padlock), and the bar then offers to unlock it. The lock
+selectable from its row, and unlocked with the row's padlock - beside the eye, and on a group's
+row for every member - or from the bar. The lock
 lives in the document, not in the exported SVG; the SVG panel's re-import keeps it by id.
 
 ## 6. The pen and point editing
@@ -211,7 +212,7 @@ lives in the document, not in the exported SVG; the SVG panel's re-import keeps 
 - **Typed geometry:** a row's X, Y, W and H are the bounding box; up and down step to whole numbers.
 - **Groups and multi-selections** move, stretch and turn as one: corner handles and a rotate
   handle around their shared box, and under an open group's row in the Primitives list, X, Y, W, H and
-  **Turn by**. A group keeps no transform of its own — each change is baked into its members'
+  **Rotate**. A group keeps no transform of its own — each change is baked into its members'
   coordinates (`selection-transform.ts`) — so the angle is a turn by so many degrees, a rotated
   rect or ellipse stretched off its own axes becomes a path, a circle stretched unevenly an
   ellipse, and stroke widths do not scale.
