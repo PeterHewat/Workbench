@@ -47,6 +47,7 @@ const STYLE_KEYS: readonly string[] = [
   "hidden",
   "fillRule",
   "dash",
+  "locked",
   ...Object.keys(DEFAULT_STROKE),
 ];
 

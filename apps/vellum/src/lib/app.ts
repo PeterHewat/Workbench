@@ -27,6 +27,7 @@ import {
   removeSelectedHandle,
   stepOutSelection,
   combineSelection,
+  setSelectionLocked,
   alignSelection,
   distributeSelection,
   alignableCount,
@@ -86,6 +87,7 @@ initActionBar(byId("action-bar"), {
   remove: () => deleteSelection(),
   removePoint: () => deleteSelection(false),
   combine: (op) => combineSelection(op),
+  lock: (locked) => setSelectionLocked(locked),
   align: (mode) => alignSelection(mode),
   distribute: (axis) => distributeSelection(axis),
   alignable: () => alignableCount(),
@@ -275,11 +277,11 @@ function setGridSnap(on: boolean): void {
 byId("btn-snap").addEventListener("click", () => setGridSnap(!getState().grid.snap));
 byId("btn-align").addEventListener("click", () => setAlignSnap(!isAlignSnap()));
 
-/** Every shape that is showing: hidden ones stay out of it, as they do out of a click. */
+/** Every shape that is showing and not locked: the ones a click could reach. */
 function selectAll(): void {
   setState((s) => ({
     ...s,
-    selection: selectOnly(s.elements.filter((el) => !el.hidden).map((el) => el.id)),
+    selection: selectOnly(s.elements.filter((el) => !el.hidden && !el.locked).map((el) => el.id)),
     tool: "select",
   }));
 }

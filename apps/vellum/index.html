@@ -806,6 +806,45 @@
             d="M14 6l4 4M16.5 3.5a2.1 2.1 0 013 3L18 8l-2-2 .5-2.5zM15 7l-9 9-1.5 4.5L9 19l9-9"
           />
         </symbol>
+        <!-- A padlock, shut and open: lock a shape out of reach on the canvas, and unlock it. -->
+        <symbol id="icon-lock" viewBox="0 0 24 24">
+          <rect
+            x="5"
+            y="11"
+            width="14"
+            height="10"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M8 11V8a4 4 0 018 0v3"
+          />
+        </symbol>
+        <symbol id="icon-unlock" viewBox="0 0 24 24">
+          <rect
+            x="5"
+            y="11"
+            width="14"
+            height="10"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            d="M8 11V8a4 4 0 017.7-1.5"
+          />
+        </symbol>
         <!-- Back from a page of the bar, such as Combine's. -->
         <symbol id="icon-back" viewBox="0 0 24 24">
           <path
@@ -1578,6 +1617,13 @@
               choice it is — a round radio where only one thing can be chosen (which document is
               open), a square checkbox where any number can (which shapes are selected). The eye on
               a row shows or hides that shape or reference image.
+            </li>
+            <li>
+              <b>Lock</b> — the padlock on the bar, or the Locked box in a shape's row, puts a shape
+              out of reach on the canvas: it is not clicked, box-selected or selected with
+              everything else, so what you trace over it can be drawn without nudging it. Its row
+              shows a padlock and still selects it, and the bar then offers to unlock it. A locked
+              shape is still snapped to, and is exported like any other.
             </li>
             <li>
               <b>Reference images</b> — add reference images to trace; each row is the file it came

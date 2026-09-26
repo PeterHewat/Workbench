@@ -38,7 +38,7 @@ function primitiveListKeyOf(state: EditorState): string {
   const els = state.elements
     .map(
       (e) =>
-        `${e.id}:${e.type}:${groupsOf(e).join("/")}:${"closed" in e && e.closed ? 1 : 0}:${e.hidden ? 1 : 0}`
+        `${e.id}:${e.type}:${groupsOf(e).join("/")}:${"closed" in e && e.closed ? 1 : 0}:${e.hidden ? 1 : 0}:${e.locked ? 1 : 0}`
     )
     .join(",");
   return `${els}|${state.selection.elementIds.join(",")}|${state.ui.expandedElementId}`;
@@ -162,6 +162,9 @@ function primitiveBodyHtml(el: SceneElement): string {
       `<div class="field-row"><span>Corner Y</span><input type="number" data-field="ry" min="0" step="1" value="${Math.round(el.ry ?? el.rx ?? 0)}" /></div>`
     );
   }
+  rows.push(
+    `<div class="field-row" title="Locked: out of reach on the canvas - not clicked, box-selected or selected with the rest - but still selectable here"><label class="fill-toggle"><span>Locked</span><input type="checkbox" data-field="locked"${el.locked ? " checked" : ""} /></label></div>`
+  );
   if (MARKER_TYPES.includes(el.type)) {
     rows.push(
       `<div class="field-row"><span>Start</span>${selectHtml("markerStart", el.markerStart || "none", MARKER_SHAPES)}</div>`,
@@ -511,7 +514,7 @@ function primitiveRow(state: EditorState, index: number): HTMLElement {
       eye: { visible: !el.hidden, title: el.hidden ? "Show" : "Hide" },
       name: el.name || "",
       placeholder: el.type,
-      extra: `<span class="acc-swatch" style="${escapeAttr(headerSwatchStyle(el))}"></span>`,
+      extra: `${el.locked ? '<svg class="ui-icon row-lock" aria-label="Locked" role="img"><use href="#icon-lock" /></svg>' : ""}<span class="acc-swatch" style="${escapeAttr(headerSwatchStyle(el))}"></span>`,
       canUp: canMoveWithinParent(state.elements, el.id, towardFront(-1)),
       canDown: canMoveWithinParent(state.elements, el.id, towardFront(1)),
       index,
@@ -936,6 +939,11 @@ primitiveListEl.addEventListener("change", (e) => {
   } else if (field === "closed") {
     setElementClosed(id, input.checked);
     primitiveList.invalidate();
+  } else if (field === "locked") {
+    applyToElement(id, (el) => {
+      if (input.checked) el.locked = true;
+      else delete el.locked;
+    });
   } else if (field === "dash") {
     const dash = parseDash(input.value);
     input.value = (dash ?? []).join(" ");

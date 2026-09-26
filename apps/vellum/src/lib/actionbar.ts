@@ -52,6 +52,7 @@ export interface ActionBarHandlers {
   removeHandle: () => void;
   removePoint: () => void;
   combine: (op: BooleanOp) => void;
+  lock: (locked: boolean) => void;
   align: (mode: AlignMode) => void;
   distribute: (axis: Axis) => void;
   /** How many things align would move: picked points, or the selection's blocks. */
@@ -473,7 +474,15 @@ function selectionActions(state: EditorState): Action[] {
       run: handlers.forward,
     }
   );
-  if (state.elements.some((e) => !e.hidden && !ids.has(e.id))) {
+  // Locked shapes are reached from their rows; unlocking them is here once they are selected.
+  const anyLocked = sel.some((e) => e.locked);
+  out.push({
+    key: anyLocked ? "unlock" : "lock",
+    label: anyLocked ? "Unlock: clickable on the canvas again" : "Lock: out of reach on the canvas",
+    icon: anyLocked ? "icon-unlock" : "icon-lock",
+    run: () => handlers.lock(!anyLocked),
+  });
+  if (state.elements.some((e) => !e.hidden && !e.locked && !ids.has(e.id))) {
     out.push({
       key: "select-all",
       label: "Select everything",

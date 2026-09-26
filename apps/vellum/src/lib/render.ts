@@ -183,7 +183,8 @@ function renderElement(el: SceneElement): SVGElement | null {
   // A shape with neither stroke nor fill paints nothing; keep it clickable so it can be found.
   const invisible =
     (el.strokeWidth === 0 || el.stroke === "none") && !el.fillEnabled && el.type !== "text";
-  node.setAttribute("pointer-events", invisible ? "all" : "visiblePainted");
+  // A locked shape lets presses through to whatever is under it.
+  node.setAttribute("pointer-events", el.locked ? "none" : invisible ? "all" : "visiblePainted");
   return node;
 }
 
@@ -215,7 +216,7 @@ let drawnDefs: { markup: string; node: SVGDefsElement } | null = null;
 function drawElement(el: SceneElement, minHit: number): SVGElement[] {
   const node = renderElement(el);
   if (!node) return [];
-  if (el.type === "text") return [node];
+  if (el.type === "text" || el.locked) return [node];
   // Transparent, wider copy of the outline so thin strokes are easy to click.
   const hit = outlineNode(el, {
     stroke: "transparent",
@@ -232,7 +233,7 @@ function elementKey(el: SceneElement, minHit: number): string {
   const g = geometryOf(el);
   if (!g) return "";
   const hitWidth = el.type === "text" ? 0 : Math.max(el.strokeWidth || 0, minHit);
-  return `${g.tag}|${JSON.stringify({ ...styleAttrs(el), ...g.attrs })}|${g.text ?? ""}|${hitWidth}`;
+  return `${g.tag}|${JSON.stringify({ ...styleAttrs(el), ...g.attrs })}|${g.text ?? ""}|${hitWidth}|${el.locked ? 1 : 0}`;
 }
 
 function renderDocument(state: EditorState): void {
@@ -817,6 +818,11 @@ function renderOverlay(state: EditorState): void {
   const anchors = showsAnchors(sel);
   for (const el of sel) {
     if (el.id === activePathId) continue;
+    // Locked, it shows it is selected, and offers nothing to grab.
+    if (el.locked) {
+      renderSelectionBox(els.overlay, el, `${boxClass(el)} locked-box`);
+      continue;
+    }
     if (el.type === "path") {
       // A path with a point picked keeps its points in view, whatever else is selected.
       if (anchors || state.selection.pathEdit?.pathId === el.id) {
@@ -833,10 +839,11 @@ function renderOverlay(state: EditorState): void {
     }
   }
   // While points are picked the shapes' own handles are what is being edited.
-  if (sel.length > 1 && !activePathId && !state.selection.pathEdit) {
+  const free = !sel.some((e) => e.locked);
+  if (sel.length > 1 && free && !activePathId && !state.selection.pathEdit) {
     renderSelectionHandles(els.overlay, sel, state);
   }
-  if (sel.length === 1 && sel[0]!.id !== activePathId) {
+  if (sel.length === 1 && free && sel[0]!.id !== activePathId) {
     renderGradientHandles(els.overlay, sel[0]!);
     if (canRotate(sel[0]!)) renderRotateHandle(els.overlay, sel[0]!, state);
     if (hasBoxHandles(sel[0]!)) renderBoxHandles(els.overlay, sel[0]!);

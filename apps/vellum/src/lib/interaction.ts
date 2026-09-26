@@ -141,7 +141,7 @@ function elementsInMarquee(m: Marquee): string[] {
   const y2 = Math.max(m.y1, m.y2);
   const ids: string[] = [];
   for (const el of getState().elements) {
-    if (el.hidden) continue;
+    if (el.hidden || el.locked) continue;
     const box = elementBBox(el);
     if (!box) continue;
     const cx = box.x + box.width / 2;
@@ -547,7 +547,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
           }
           return { ...s, selection: selectOnly(ids) };
         });
-        const ids = getState().selection.elementIds;
+        // A locked shape selected from its row stays put while the others are dragged.
+        const ids = getState().selection.elementIds.filter((id) => !findElement(id)?.locked);
         const bases: Record<string, SceneElement> = {};
         for (const id of ids) {
           const found = findElement(id);

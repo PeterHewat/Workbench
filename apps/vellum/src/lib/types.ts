@@ -104,6 +104,12 @@ interface ElementBase extends StyleProps {
   fillRule?: "evenodd";
   /** Dash and gap lengths along the stroke, in artboard units (`stroke-dasharray`). Absent is solid. */
   dash?: number[];
+  /**
+   * Out of reach on the canvas - not clicked, box-selected or selected with the rest - so what
+   * is traced over it can be drawn without moving it. Still selectable from its row, still
+   * snapped to. Editor-only: not in the exported SVG.
+   */
+  locked?: boolean;
 }
 
 export interface PathElement extends ElementBase {
@@ -320,6 +326,7 @@ export type StyleCarrier = Partial<StyleProps> & {
   hidden?: boolean;
   fillRule?: "evenodd";
   dash?: number[];
+  locked?: boolean;
   /** Import only: the gradient arrived in artboard units and still has to be converted. */
   gradUserSpace?: boolean;
 };

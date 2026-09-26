@@ -274,7 +274,9 @@ function applySvgText(): void {
   const old = new Map(st.elements.map((e) => [e.id, e]));
   const next = parsed.elements.map((n) => {
     const o = old.get(n.id);
-    return o && sameElement(o, n) ? o : n;
+    if (o && sameElement(o, n)) return o;
+    // The markup does not carry a lock: an edited shape keeps the one it had.
+    return o?.locked ? { ...n, locked: true } : n;
   });
   const artboard = parsed.artboard ? { ...st.artboard, ...parsed.artboard } : st.artboard;
   // No background rect in the markup means a transparent document; the colour is kept so that

@@ -152,6 +152,24 @@ export function alignableCount(): number {
   return picked > 1 ? picked : blocksOf(st.elements, new Set(st.selection.elementIds)).length;
 }
 
+/** Locks the selected shapes, or unlocks them. They stay selected, so the choice can be undone. */
+export function setSelectionLocked(locked: boolean): void {
+  const ids = new Set(getState().selection.elementIds);
+  if (!ids.size) return;
+  commit(() => {
+    setState((s) => ({
+      ...s,
+      elements: s.elements.map((e) => {
+        if (!ids.has(e.id) || !!e.locked === locked) return e;
+        const next = { ...e };
+        if (locked) next.locked = true;
+        else delete next.locked;
+        return next;
+      }),
+    }));
+  });
+}
+
 /** Whether the selection can be combined: two or more shapes, every one enclosing an area. */
 export function canCombineSelection(): boolean {
   const sel = selectedElements();
