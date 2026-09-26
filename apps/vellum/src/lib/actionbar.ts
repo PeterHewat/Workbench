@@ -79,6 +79,8 @@ export interface Action {
   pressed?: boolean;
   /** Opens a page of its own - align, combine - instead of running anything. */
   menu?: () => Action[];
+  /** Kept in the same row as the button after it, as backward is with forward. */
+  pairedWithNext?: boolean;
   run?: () => void;
 }
 
@@ -456,6 +458,14 @@ function selectionActions(state: EditorState): Action[] {
     pressed: more,
     run: () => handlers.selectMore(!more),
   });
+  // Locked shapes are reached from their rows; unlocking them is here once they are selected.
+  const anyLocked = sel.some((e) => e.locked);
+  out.push({
+    key: anyLocked ? "unlock" : "lock",
+    label: anyLocked ? "Unlock: clickable on the canvas again" : "Lock: out of reach on the canvas",
+    icon: anyLocked ? "icon-unlock" : "icon-lock",
+    run: () => handlers.lock(!anyLocked),
+  });
   // Duplicate and z-order, then select everything, then delete: last, where it is always found.
   out.push(
     { key: "duplicate", label: "Duplicate", icon: "icon-copy", run: handlers.duplicate },
@@ -463,6 +473,7 @@ function selectionActions(state: EditorState): Action[] {
       key: "back",
       label: "Send backward (Shift: to the back)",
       glyph: "▼",
+      pairedWithNext: true,
       disabled: !canMoveSelectionZ(state.elements, ids, -1),
       run: handlers.back,
     },
@@ -474,14 +485,6 @@ function selectionActions(state: EditorState): Action[] {
       run: handlers.forward,
     }
   );
-  // Locked shapes are reached from their rows; unlocking them is here once they are selected.
-  const anyLocked = sel.some((e) => e.locked);
-  out.push({
-    key: anyLocked ? "unlock" : "lock",
-    label: anyLocked ? "Unlock: clickable on the canvas again" : "Lock: out of reach on the canvas",
-    icon: anyLocked ? "icon-unlock" : "icon-lock",
-    run: () => handlers.lock(!anyLocked),
-  });
   if (state.elements.some((e) => !e.hidden && !e.locked && !ids.has(e.id))) {
     out.push({
       key: "select-all",
@@ -510,8 +513,22 @@ const backAction = (): Action => ({
   },
 });
 
-/** How many buttons go in a row: all of them up to the limit, then as many rows as even as can be. */
-export function columnsFor(count: number, max = MAX_BUTTONS): number {
+/**
+ * How many buttons go in a row: all of them up to the limit, then as few rows as can be, as even
+ * as can be - without a row ending between a pair (`pairs` holds the index of each pair's first).
+ */
+export function columnsFor(
+  count: number,
+  max = MAX_BUTTONS,
+  pairs: readonly number[] = []
+): number {
+  const splits = (cols: number) => pairs.some((i) => (i + 1) % cols === 0);
+  for (let rows = Math.ceil(count / max); rows <= count; rows++) {
+    for (let cols = Math.ceil(count / rows); cols <= max; cols++) {
+      if (Math.ceil(count / cols) !== rows) break;
+      if (!splits(cols)) return cols;
+    }
+  }
   const rows = Math.ceil(count / max);
   return Math.max(1, Math.ceil(count / rows));
 }
@@ -532,7 +549,8 @@ function currentButtons(actions: readonly Action[]): Action[] {
 
 function build(actions: readonly Action[]): void {
   bar.replaceChildren();
-  bar.style.setProperty("--bar-cols", String(columnsFor(actions.length)));
+  const pairs = actions.flatMap((a, i) => (a.pairedWithNext ? [i] : []));
+  bar.style.setProperty("--bar-cols", String(columnsFor(actions.length, MAX_BUTTONS, pairs)));
   for (const action of actions) {
     const btn = document.createElement("button");
     btn.type = "button";

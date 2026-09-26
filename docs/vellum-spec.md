@@ -290,7 +290,7 @@ chosen, a checkbox otherwise), name, preview, eye, ▲ ▼, delete.
   ungroup, split, join, lock, an **add to the selection** switch and **select everything**, and
   **Align** and **Combine**, each a button opening a page of its own with a way back; with nothing
   selected on a touch screen it offers select everything and paste. Up to seven buttons sit in one
-  row, as many as fit across a 360px phone; more split into even rows, eight as two of four. These switches are
+  row, as many as fit across a 360px phone; more split into even rows, eight as two of four, never parting backward from forward. These switches are
   session state (`modes.ts`), so undo never flips them.
 - **Help** (`?`) explains everything for the pointer it detects, switchable between mouse and
   touch, and carries an About section.
