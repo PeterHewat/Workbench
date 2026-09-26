@@ -620,3 +620,19 @@ describe("translatePoint", () => {
     expect(line).toMatchObject({ x1: 0, y1: 0, x2: 11, y2: 11 });
   });
 });
+
+describe("curving a two-point path", () => {
+  test("the handles stand square to the line, so it bulges", () => {
+    const lens = createPath([anchor(0, 0), anchor(30, 0)], true);
+    togglePointSmooth(lens, 0);
+    const p = lens.points[0]!;
+    expect(p.hOut!.x).toBeCloseTo(0);
+    expect(Math.abs(p.hOut!.y)).toBeCloseTo(10);
+    expect(p.hIn!.y).toBeCloseTo(-p.hOut!.y);
+  });
+
+  test("closed on two straight points it stays a closed path, not a line", () => {
+    const lens = createPath([anchor(0, 0), anchor(30, 0)], true);
+    expect(simplifyPathIfStraight(lens).type).toBe("path");
+  });
+});

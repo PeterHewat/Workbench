@@ -760,6 +760,8 @@ export function alignToPoints(p: Point, points: readonly Point[], tol: number): 
  */
 export function simplifyPathIfStraight(path: SceneElement): SceneElement {
   if (path.type !== "path" || path.points.length < 2 || !pathIsStraight(path)) return path;
+  // Closed on two points it is a lens waiting for its curves: a line would forget it was closed.
+  if (path.closed && path.points.length < 3) return path;
   const pts = path.points.map((p) => ({ x: p.x, y: p.y }));
   const style = { ...styleOf(path), id: path.id };
   if (path.closed && pts.length >= 3) return createPolygon(pts, style);
@@ -1028,7 +1030,14 @@ export function togglePointSmooth(path: SceneElement, i: number): void {
   let tx: number;
   let ty: number;
   let len: number;
-  if (prev && next) {
+  const other = n === 2 ? path.points[1 - i] : undefined;
+  if (other) {
+    // Two points have only the line between them to follow, and handles along it leave it
+    // straight: they stand square to it instead, so the curve bulges - a lens when closed.
+    tx = -(other.y - p.y);
+    ty = other.x - p.x;
+    len = Math.hypot(tx, ty) / 3;
+  } else if (prev && next) {
     tx = next.x - prev.x;
     ty = next.y - prev.y;
     len =

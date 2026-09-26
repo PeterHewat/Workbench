@@ -199,6 +199,22 @@ describe("round trip", () => {
     expect(second).toBe(first);
   });
 
+  test("a closed two-point path comes back closed, and stable", () => {
+    const lens = createPath(
+      [
+        { x: 0, y: 0, smooth: false, hIn: null, hOut: null },
+        { x: 30, y: 0, smooth: false, hIn: null, hOut: null },
+      ],
+      true
+    );
+    const first = formatExportSvg(doc([lens]), true);
+    const back = importSvgFile(first, { keepIds: true });
+    const el = back.elements[0]!;
+    expect(el.type === "path" && el.closed).toBe(true);
+    const second = formatExportSvg({ artboard: back.artboard!, elements: back.elements }, true);
+    expect(second).toBe(first);
+  });
+
   test("keepIds preserves every element id", () => {
     const elements = sampleElements();
     const back = importSvgFile(formatExportSvg(doc(elements), true), { keepIds: true });
