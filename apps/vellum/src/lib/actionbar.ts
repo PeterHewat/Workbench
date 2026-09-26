@@ -29,7 +29,7 @@ import {
 } from "./model.js";
 import { canGroup, canMergeGroups, canMoveSelectionZ, canUngroup } from "./groups.js";
 import { worldToScreen } from "./viewport.js";
-import { isCoarsePointer } from "./pointer.js";
+import { HIT_R_COARSE, HIT_R_FINE, isCoarsePointer } from "./pointer.js";
 import { isSelectMore } from "./modes.js";
 import { HANDLE_EXTENT, outerHandlePoints, selectionHandlePoints } from "./render.js";
 import type { EditorState, Point, SceneElement } from "./types.js";
@@ -372,14 +372,18 @@ function pointRect(state: EditorState): AnchorRect | null {
   let right = -Infinity;
   let top = Infinity;
   let bottom = -Infinity;
-  for (const local of points) {
+  const coarse = isCoarsePointer();
+  points.forEach((local, i) => {
+    // The point itself keeps room round it to see the segments leaving it and to grab it again;
+    // its handles keep their target clear.
+    const reach = i === 0 ? (coarse ? 48 : 32) : coarse ? HIT_R_COARSE : HIT_R_FINE;
     const world = toWorldPoint(el, local);
     const s = worldToScreen(world.x, world.y);
-    left = Math.min(left, s.x - HANDLE_EXTENT);
-    right = Math.max(right, s.x + HANDLE_EXTENT);
-    top = Math.min(top, s.y - HANDLE_EXTENT);
-    bottom = Math.max(bottom, s.y + HANDLE_EXTENT);
-  }
+    left = Math.min(left, s.x - reach);
+    right = Math.max(right, s.x + reach);
+    top = Math.min(top, s.y - reach);
+    bottom = Math.max(bottom, s.y + reach);
+  });
   return { left, right, top, bottom };
 }
 
