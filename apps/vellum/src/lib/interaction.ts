@@ -39,6 +39,7 @@ import { endDropTarget, expandGroups, mergeDroppedEnd } from "./selection-comman
 import { applyResize } from "./resize.js";
 import { boxCorners, rotateAll, scaleAllByCorner, unionBox } from "./selection-transform.js";
 import { SELECTION_HANDLE_ID } from "./render.js";
+import { snapFeatures } from "./boolean.js";
 import { boxToGuides, movedGuide, nearestGuide, withGuide, type GuideAxis } from "./guides.js";
 import {
   byShape,
@@ -363,6 +364,23 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     }
   });
 
+  /**
+   * Segment midpoints and crossings to snap to, worked out once per gesture: a drag changes only
+   * what it moves, and that is left out of them.
+   */
+  let featureCache: { elements: readonly SceneElement[]; key: string; points: Point[] } | null =
+    null;
+  function features(s: EditorState): Point[] {
+    const ex = alignExcludes();
+    const ids = new Set(ex.excludeElementIds ?? []);
+    if (ex.excludePoint) ids.add(ex.excludePoint.elementId);
+    const key = [...ids].sort().join(",");
+    if (featureCache?.elements !== s.elements || featureCache.key !== key) {
+      featureCache = { elements: s.elements, key, points: snapFeatures(s.elements, ids) };
+    }
+    return featureCache.points;
+  }
+
   function pointerWorld(e: PointerEvent): Point {
     const p = screenToWorld(e.clientX, e.clientY);
     const s = getState();
@@ -386,7 +404,8 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
     let guideY: number | null = null;
     if (alignOn) {
       const tol = ALIGN_TOL_PX / s.viewport.zoom;
-      const aligned = alignToPoints(w, collectAlignPoints(s.elements, alignExcludes()), tol);
+      const candidates = [...collectAlignPoints(s.elements, alignExcludes()), ...features(s)];
+      const aligned = alignToPoints(w, candidates, tol);
       ({ x, y, guideX, guideY } = aligned);
     }
     const snapOn =
@@ -436,6 +455,7 @@ export function bindInteraction(svg: SVGSVGElement, wrap: HTMLElement): void {
       return;
     }
     if (e.button !== 0) return;
+    featureCache = null;
     drillId = null;
     pointClick = null;
     pointMarquee = false;

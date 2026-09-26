@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { combine } from "./boolean.js";
+import { combine, snapFeatures } from "./boolean.js";
 import { contours, createCircle, createPath, createRect } from "./model.js";
 import type { Anchor, PathElement, SceneElement } from "./types.js";
 
@@ -155,5 +155,26 @@ describe("shapes lying on each other", () => {
     // The left half: the rect's area left of x = 20, two rounded corners included.
     expect(area(out)).toBeCloseTo(full / 2, 1);
     expect(out!.points.some((p) => p.hIn || p.hOut)).toBe(true);
+  });
+});
+
+describe("points to snap to", () => {
+  const has = (pts: { x: number; y: number }[], x: number, y: number) =>
+    pts.some((p) => Math.abs(p.x - x) < 1e-6 && Math.abs(p.y - y) < 1e-6);
+
+  test("the middle of every segment, and where two shapes cross", () => {
+    const a = createRect(0, 0, 10, 10);
+    const b = createRect(5, 5, 10, 10);
+    const pts = snapFeatures([a, b], new Set());
+    expect(has(pts, 5, 0)).toBe(true);
+    expect(has(pts, 10, 5)).toBe(true);
+    expect(has(pts, 5, 10)).toBe(true);
+  });
+
+  test("a shape left out gives nothing, and crossings wait for two shapes", () => {
+    const a = createRect(0, 0, 10, 10);
+    const b = createRect(5, 5, 10, 10);
+    const pts = snapFeatures([a, b], new Set([b.id]));
+    expect(pts).toHaveLength(4);
   });
 });
