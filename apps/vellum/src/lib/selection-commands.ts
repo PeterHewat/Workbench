@@ -499,13 +499,12 @@ export function nudgeSelection(dx: number, dy: number): void {
     commit(() => mutate(() => translatePoint(pointOwner, pe.index, dx, dy, pe.handle)));
     return;
   }
-  if (!selection.elementIds.length) return;
+  // A locked shape selected from its row stays put, as it does when the others are dragged.
+  const movable = () => selectedElements().filter((el) => !el.locked);
+  if (!movable().length) return;
   commit(() =>
-    mutate((s) => {
-      for (const id of s.selection.elementIds) {
-        const el = findElement(id);
-        if (el) translateElement(el, dx, dy);
-      }
+    mutate(() => {
+      for (const el of movable()) translateElement(el, dx, dy);
     })
   );
 }

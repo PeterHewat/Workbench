@@ -53,6 +53,16 @@ describe("picking several points", () => {
     ]);
   });
 
+  test("a locked shape's points are not picked", () => {
+    const found = pointsInMarquee([{ ...tri(), locked: true }], new Set(["tri"]), {
+      x1: -1,
+      y1: -1,
+      x2: 21,
+      y2: 21,
+    });
+    expect(found).toEqual([]);
+  });
+
   test("moving them moves those points and no others", () => {
     const bases = new Map<string, SceneElement>([
       ["tri", tri()],

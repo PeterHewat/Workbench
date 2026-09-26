@@ -75,7 +75,8 @@ export function pointsInMarquee(
   const y2 = Math.max(m.y1, m.y2);
   const out: PointRef[] = [];
   for (const el of elements) {
-    if (!ids.has(el.id) || el.hidden) continue;
+    // A locked shape shows no points, so none of its are picked.
+    if (!ids.has(el.id) || el.hidden || el.locked) continue;
     for (const p of pointsOf(el)) {
       if (p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2)
         out.push({ pathId: el.id, index: p.index });

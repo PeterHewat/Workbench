@@ -90,9 +90,10 @@ export function statsText(s: DocStats): string {
  */
 export function sizeText(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
-  const one = (n: number) => String(Math.round(n * 10) / 10);
-  const kb = bytes / 1024;
-  return kb < 1024 ? `${one(kb)}KB` : `${one(kb / 1024)}MB`;
+  const one = (n: number) => Math.round(n * 10) / 10;
+  // Compared once rounded, so a size just under a megabyte reads 1MB rather than 1024KB.
+  const kb = one(bytes / 1024);
+  return kb < 1024 ? `${kb}KB` : `${one(bytes / 1024 / 1024)}MB`;
 }
 
 /**

@@ -58,6 +58,7 @@ describe("file size", () => {
     expect(sizeText(6861)).toBe("6.7KB");
     expect(sizeText(2048)).toBe("2KB");
     expect(sizeText(3 * 1024 * 1024)).toBe("3MB");
+    expect(sizeText(1024 * 1024 - 10)).toBe("1MB");
   });
 });
 
