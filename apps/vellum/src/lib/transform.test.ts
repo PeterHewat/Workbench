@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { createEllipse, createRect, createText } from "./model.js";
-import { applyMatrix, isAxisAligned, parseTransform, transformElement } from "./transform.js";
+import { createEllipse, createRect, createText, elementBBox } from "./model.js";
+import {
+  applyMatrix,
+  isAxisAligned,
+  parseTransform,
+  scaleAbout,
+  transformElement,
+} from "./transform.js";
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 
@@ -71,5 +77,18 @@ describe("transformElement", () => {
     if (out.type !== "text") return;
     expect(round(out.rotation ?? 0)).toBe(90);
     expect(out.fontSize).toBe(createText(0, 0, "hi").fontSize * 2);
+  });
+});
+
+describe("stretching a turned shape", () => {
+  test("a rotated rect stretched along the artboard's axes becomes a path of that outline", () => {
+    const r = createRect(0, 0, 10, 10);
+    r.rotation = 45;
+    const out = transformElement(r, scaleAbout(2, 1, 5, 5));
+    expect(out.type).toBe("path");
+    const box = elementBBox(out)!;
+    // The diamond is 14.14 across; twice as wide, the same height.
+    expect(box.width).toBeCloseTo(20 * Math.SQRT1_2 * 2, 5);
+    expect(box.height).toBeCloseTo(10 * Math.SQRT2, 5);
   });
 });
