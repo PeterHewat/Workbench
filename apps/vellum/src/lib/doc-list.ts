@@ -85,6 +85,17 @@ export function statsText(s: DocStats): string {
 }
 
 /**
+ * A file's size as the row shows it: bytes under a kilobyte, then kilobytes and megabytes to one
+ * decimal (of 1024), written close up - "850B", "6.7KB".
+ */
+export function sizeText(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  const one = (n: number) => String(Math.round(n * 10) / 10);
+  const kb = bytes / 1024;
+  return kb < 1024 ? `${one(kb)}KB` : `${one(kb / 1024)}MB`;
+}
+
+/**
  * A search as typed: commas separate alternatives, spaces the words of one - "arrow icons, logo"
  * is (arrow and icons) or logo. Lower case, empties dropped; nothing typed is no alternative.
  */

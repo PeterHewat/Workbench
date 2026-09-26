@@ -12,7 +12,7 @@ import {
   libraryReset,
   type DocumentMeta,
 } from "./storage.js";
-import { serializeProject, loadProject } from "./io.js";
+import { serializeProject, loadProject, formatExportSvg, type ExportDoc } from "./io.js";
 import {
   documentFile,
   documentFileName,
@@ -35,6 +35,7 @@ import { demoDocument, demoUrl, demosToAdd } from "./demos.js";
 import {
   cleanTags,
   docStats,
+  sizeText,
   markHtml,
   matchesSearch,
   searchWords,
@@ -154,7 +155,7 @@ async function refreshDocList(): Promise<void> {
       <p class="doc-tag-hits" hidden></p>
       <div class="acc-body doc-body">
         <label class="field-row field-row--wide"><span>Tags</span><input type="text" class="doc-tags-input" value="${escapeAttr((d.tags ?? []).join(", "))}" placeholder="icons, arrows" aria-label="Tags, separated by commas" /></label>
-        <p class="doc-stats"></p>
+        <p class="doc-stats"><span class="doc-stats-content"></span><span class="doc-stats-file"></span></p>
       </div>`;
     docListEl.appendChild(li);
     if (open) void fillStats(li, d);
@@ -168,20 +169,35 @@ async function refreshDocList(): Promise<void> {
  */
 const expandedDocs = new Set<string>();
 
-/** Stats of stored documents, kept while the document is unchanged: reading one loads it whole. */
-const statsCache = new Map<string, { updated: number; text: string }>();
+interface Details {
+  /** What is in it: shapes, groups, points, size. */
+  content: string;
+  /** How large its exported SVG is, in bytes. */
+  bytes: number;
+}
 
+/** Details of stored documents, kept while the document is unchanged: reading one loads it whole. */
+const statsCache = new Map<string, { updated: number; details: Details }>();
+
+/** What the details line reads for a document: its SVG is sized as Export SVG writes it. */
+function detailsOf(doc: (ExportDoc & Pick<ProjectFile, "images">) | null): Details {
+  const svg = doc ? formatExportSvg(doc, true) : "";
+  return { content: statsText(docStats(doc)), bytes: new TextEncoder().encode(svg).length };
+}
+
+/** Two lines: what is in the document, then how large its SVG is and when it was saved. */
 async function fillStats(li: HTMLElement, d: DocumentMeta): Promise<void> {
-  const out = li.querySelector<HTMLElement>(".doc-stats");
-  if (!out) return;
+  const content = li.querySelector<HTMLElement>(".doc-stats-content");
+  const file = li.querySelector<HTMLElement>(".doc-stats-file");
+  if (!content || !file) return;
   const when = new Date(d.updated).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
-  let text: string;
+  let details: Details;
   if (d.id === currentDoc.id) {
-    text = statsText(docStats(getState()));
+    details = detailsOf(getState());
   } else {
     const cached = statsCache.get(d.id);
     if (cached?.updated === d.updated) {
-      text = cached.text;
+      details = cached.details;
     } else {
       let data: ProjectFile | null;
       try {
@@ -189,11 +205,12 @@ async function fillStats(li: HTMLElement, d: DocumentMeta): Promise<void> {
       } catch {
         data = null;
       }
-      text = statsText(docStats(data));
-      statsCache.set(d.id, { updated: d.updated, text });
+      details = detailsOf(data);
+      statsCache.set(d.id, { updated: d.updated, details });
     }
   }
-  out.textContent = `${text} · saved ${when}`;
+  content.textContent = details.content;
+  file.textContent = `${sizeText(details.bytes)} saved ${when}`;
 }
 
 /* ---------- Search: names and tags ---------- */

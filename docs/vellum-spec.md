@@ -319,8 +319,8 @@ chosen, a checkbox otherwise), name, preview, eye, ▲ ▼, delete.
   document is empty). Deleting the open document opens the first remaining one, or a new one.
 - **Tags and details** (`doc-list.ts`): a row's ▶ opens its tags - typed with commas, trimmed,
   without repeats (`Icons` and `icons` are one), at most 20 of 32 characters - and its stats:
-  shapes, groups, points (path anchors, polyline vertices, line ends), reference images, size and
-  when it was saved. Tags live in `meta`, so the list and the search never load a document;
+  shapes, groups, points (path anchors, polyline vertices, line ends), reference images and artboard size on one line;
+  on the next, how large its exported SVG is (`sizeText`: "6.7KB") and when it was saved. Tags live in `meta`, so the list and the search never load a document;
   stats of a closed document load it once and are kept until it changes. Which rows are open
   belongs to the session.
 - **Search**: a field above the list, with a magnifying glass at its end that becomes a ✕ to clear
