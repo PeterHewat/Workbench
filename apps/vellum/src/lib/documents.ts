@@ -11,7 +11,16 @@ import {
   libraryReset,
   type DocumentMeta,
 } from "./storage.js";
-import { serializeProject, loadProject, readProject } from "./io.js";
+import { serializeProject, loadProject } from "./io.js";
+import {
+  documentFile,
+  documentFileName,
+  fileBase,
+  libraryFile,
+  libraryFileName,
+  readDocumentFile,
+  type ImportedDocument,
+} from "./document-files.js";
 import { deepClone, escapeAttr, uid } from "./utils.js";
 import { byId, downloadText, registerServiceWorker } from "@workbench/ui";
 import { type ProjectFile } from "./types.js";
@@ -358,100 +367,98 @@ docListEl.addEventListener("click", async (e) => {
   else if (id !== currentDoc.id) await openDocument(id);
 });
 
-/* ---------- Backup: the whole library in and out as one file ---------- */
-
-/**
- * A document travels as a file of its own, not as a copy of the whole library. Exporting one
- * means picking it; importing one adds it beside what you already have. A library file could
- * only ever be restored wholesale, which is the wrong unit for moving a single drawing between
- * two browsers - the thing people actually do.
- */
-const DOC_TAG = "vellum/document";
-
-interface DocumentFile {
-  tag: typeof DOC_TAG;
-  version: 1;
-  exported: string;
-  name: string;
-  data: ProjectFile;
-}
-
-/** A document name made safe for a file name on every operating system. */
-function fileBase(name: string): string {
-  return name.replace(/[^\w. -]+/g, "").trim() || "document";
-}
-
-function docFileName(name: string): string {
-  return `${fileBase(name)}.vellum.json`;
-}
+/* ---------- Files: one document, or all of them, in and out ---------- */
 
 /** What an SVG export of the open document is saved as. */
 export function svgFileName(): string {
   return `${fileBase(currentDoc.name)}.svg`;
 }
 
-async function exportDoc(id: string): Promise<void> {
-  if (id === currentDoc.id) await flushSave();
-  let data: ProjectFile | null;
+/** A stored document's data, or null (with the error shown) when storage fails. */
+async function storedData(id: string): Promise<ProjectFile | null> {
   try {
-    data = await loadDocument(id);
+    return await loadDocument(id);
   } catch (err) {
     storageError(err);
-    return;
+    return null;
   }
+}
+
+async function exportDoc(id: string): Promise<void> {
+  if (id === currentDoc.id) await flushSave();
+  const data = await storedData(id);
   if (!data) return;
   const name = docsCache.find((d) => d.id === id)?.name ?? "Untitled";
-  const file: DocumentFile = {
-    tag: DOC_TAG,
-    version: 1,
-    exported: new Date().toISOString(),
-    name,
-    data,
-  };
-  downloadText(docFileName(name), JSON.stringify(file), "application/json");
+  downloadText(
+    documentFileName(name),
+    JSON.stringify(documentFile(name, data)),
+    "application/json"
+  );
 }
+
+/** Every document in one file, in list order: a backup, or a whole library to move. */
+async function exportAll(): Promise<void> {
+  await flushSave();
+  const documents: ImportedDocument[] = [];
+  for (const d of docsCache) {
+    const data = await storedData(d.id);
+    if (!data) return;
+    documents.push({ name: d.name, data });
+  }
+  if (!documents.length) return;
+  downloadText(libraryFileName(), JSON.stringify(libraryFile(documents)), "application/json");
+}
+
+byId("btn-doc-export-all").addEventListener("click", () => void exportAll());
 
 byId("btn-doc-import").addEventListener("click", () => {
   byId<HTMLInputElement>("input-doc-file").click();
 });
 
+/**
+ * Adds every document in the chosen files - single documents and whole libraries alike - beside
+ * the ones already here, each with a fresh id and a free name, then opens the first of them.
+ */
 byId("input-doc-file").addEventListener("change", async (e) => {
   const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
+  const files = [...(input.files ?? [])];
   input.value = "";
-  if (!file) return;
-  let parsed: DocumentFile;
-  try {
-    parsed = JSON.parse(await file.text()) as DocumentFile;
-  } catch {
-    window.alert("That file is not valid JSON.");
-    return;
+  if (!files.length) return;
+  const incoming: ImportedDocument[] = [];
+  const problems: string[] = [];
+  for (const file of files) {
+    try {
+      incoming.push(...readDocumentFile(await file.text()));
+    } catch (err) {
+      problems.push(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
-  if (parsed?.tag !== DOC_TAG || !parsed.data) {
-    window.alert("That is not a Vellum document file.");
-    return;
-  }
-  try {
-    parsed.data = readProject(parsed.data);
-  } catch (err) {
-    window.alert(err instanceof Error ? err.message : String(err));
-    return;
-  }
+  if (incoming.length) await addDocuments(incoming);
+  if (problems.length) window.alert(`Could not import:\n${problems.join("\n")}`);
+});
+
+async function addDocuments(incoming: readonly ImportedDocument[]): Promise<void> {
   await flushSave();
-  const id = uid("doc");
+  let firstId: string | null = null;
   try {
     docsCache = await listDocuments();
-    // An imported document always gets a fresh id and a free name: it is added, never merged.
-    await saveDocument({ id, name: uniqueName(parsed.name || "Untitled"), data: parsed.data });
-    docsCache = await listDocuments();
+    // A new document goes on top of the list, so the last one stored ends up first: stored
+    // backwards, a library comes back in its own order.
+    for (const doc of [...incoming].reverse()) {
+      const id = uid("doc");
+      // Named against everything stored so far, this import's other documents included.
+      await saveDocument({ id, name: uniqueName(doc.name), data: doc.data });
+      docsCache = await listDocuments();
+      firstId = id;
+    }
   } catch (err) {
     storageError(err);
-    return;
   }
+  if (!firstId) return;
   setSectionOpen("documents", true);
-  await openDocument(id);
+  await openDocument(firstId);
   await refreshDocList();
-});
+}
 
 // Anything that changes the document schedules an autosave; saves wait until the pointer is up.
 setHistoryListener(noteChange);
