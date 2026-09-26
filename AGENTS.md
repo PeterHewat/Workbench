@@ -5,6 +5,7 @@
 - Execute with tools; stay concise unless the user wants detail
 - Prefer editing existing files; no secrets in code or logs
 - No `git add` / `commit` / `push` unless the user asks
+- Branch or PR work follows [Git](#git)
 - Run the [format gate](#format-gate) after editing, and the [verify gate](#verify-gate) before finishing
 - **Saved formats:** Vellum is released. A change to its IndexedDB documents (`ProjectFile`) or exported SVG keeps existing files opening: bump `PROJECT_VERSION` (`types.ts`) and add the step up from the previous version in `readProject` (`io.ts`); the database's own `DB_VERSION` (`storage.ts`) is for its stores. Exported SVG carries no marker, so an SVG change must still import files written before it. An app that is not released yet has no migration — when its stored format changes, fail closed and tell the person to clear that app's storage.
 
@@ -21,6 +22,21 @@
 - **App wiring:** an app's `vite.config.ts` is `defineConfig(workbenchApp("<slug>"))` from `@workbench/ui/vite`. It sets the base path and output folder, and injects `<title>`, description, icon and manifest from the catalog — so an app's `index.html` must not set those itself (the build fails if it does). Each app keeps its own `public/icon.svg`.
 - **Light / dark:** every page follows the browser until someone presses a theme switch; from then on the choice (`workbench.theme` in localStorage, shared by the whole site) is light or dark, never "system" again. The Vite plugin inlines a script that applies it before first paint. Colours are CSS custom properties with a dark base and a light override keyed on `prefers-color-scheme` and `<html data-theme>` (see `packages/ui/base.css`); an app adds a button and calls `bindThemeToggle(button)` from `@workbench/ui`, and repaints anything drawn outside CSS (a canvas) on `THEME_EVENT`.
 - **Offline:** apps call `registerServiceWorker()` from `@workbench/ui`. The same plugin emits `packages/ui/sw.js` into the build with a version hash and the list of files to precache, so every deploy replaces the previous cache. The worker is not registered under the dev server.
+
+## Git
+
+GitHub protects the default branch (`main`) with an active ruleset: pull requests only (squash merge), linear history, required CI (“Lint, typecheck, test, build”), and related checks. Do not commit or push on `main`; land changes with a PR from a feature branch.
+
+Before changing code — on any branch, not only `main` — and whenever the user asks to create a branch, open or update a pull request, or push for review:
+
+1. **Inspect first** — `git fetch origin`, then the current branch, clean or dirty tree, upstream tracking, and ahead/behind vs upstream and vs `origin/main`. Say what you found if it affects the plan.
+2. **Check the branch is still open** — on a feature branch, ask GitHub whether its PR was already merged (`gh pr list --head <branch> --state all`). A squash-merged branch is finished: its commits reach `main` as one new commit with a different hash, so git no longer recognises them. Never add work to it or merge `origin/main` into it — both replay the merged changes as conflicts. Start a new branch from refreshed `main` instead, and carry over only commits made after the merge (`git rebase --onto origin/main <last-merged-commit>`, or `git cherry-pick`).
+3. **Use a feature branch** — if the checkout is `main`, propose a concrete branch name (kebab-case, short and descriptive — e.g. `agents-git-sync`, `vellum-export-fix`) and create/check it out before edits or commits unless the user already named a branch.
+4. **Refresh `main`** — do not assume local `main` matches GitHub. Fast-forward it from `origin/main` (`git pull --ff-only origin main` while on `main`) before branching off it. Refreshing `main` never adds commits to it.
+5. **Base the feature branch on current `main`** — before the first push, put work on top of `origin/main` (rebase while the branch is local-only; once it is on the remote, merge `origin/main`, or rebase only if the user accepts the force-push). Do not open a PR against a stale base and patch it up later with a merge commit.
+6. **PR diffs use remote `main`** — compare against `origin/main` (`git log origin/main..HEAD`, `git diff origin/main...HEAD`), never a local `main` that may be stale. Before pushing, check that list holds only this branch's commits.
+
+Default integration branch is `main`; use another base only when the user names one.
 
 ## Format gate
 
