@@ -102,8 +102,8 @@ async function refreshDocList(): Promise<void> {
     });
     li.title = isCurrent ? `Open since ${when}` : `Open (last saved ${when})`;
     li.innerHTML = `<div class="acc-header-row">
-        ${rowDotHtml("radio", isCurrent, isCurrent ? "This is the open document" : "Open", " data-doc-open")}
-        <input type="text" class="acc-title-input doc-title-input" data-doc-open value="${escapeAttr(d.name)}" maxlength="80" aria-label="Document name"${isCurrent ? "" : ' readonly tabindex="-1"'} />
+        ${rowDotHtml("radio", isCurrent, isCurrent ? "This is the open document" : "Open")}
+        <input type="text" class="acc-title-input doc-title-input" value="${escapeAttr(d.name)}" maxlength="80" aria-label="Document name"${isCurrent ? "" : ' readonly tabindex="-1"'} />
         <button type="button" class="acc-icon-btn doc-act" data-doc-dup title="Duplicate" aria-label="Duplicate document">
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-copy" /></svg>
         </button>
@@ -354,7 +354,8 @@ docListEl.addEventListener("click", async (e) => {
   else if (target.closest("[data-doc-dup]")) await duplicateDoc(id);
   else if (target.closest("[data-doc-save]")) await exportDoc(id);
   else if (target.closest("[data-doc-delete]")) await deleteDoc(id);
-  else if (target.closest("[data-doc-open]") && id !== currentDoc.id) await openDocument(id);
+  // Anywhere else on another document's row opens it: the dot is not the only way in.
+  else if (id !== currentDoc.id) await openDocument(id);
 });
 
 /* ---------- Backup: the whole library in and out as one file ---------- */

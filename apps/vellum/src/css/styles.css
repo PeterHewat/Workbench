@@ -1514,35 +1514,22 @@ body {
   background: transparent;
 }
 
+/* Anywhere on another document's row opens it, bar its buttons. */
+.doc-list li:not(.current) .acc-header-row {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .doc-list li:not(.current):hover .acc-header-row {
+    background: var(--hover);
+  }
+}
+
 /* The icons take the trash width, so they read as a column with it; the ▲ ▼ keep the narrow
    width they have in the other lists. */
 .doc-list li .doc-act,
 .doc-list li .doc-del {
   width: 30px;
-}
-
-.doc-open {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 6px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.doc-open:hover {
-  color: var(--accent);
-}
-
-.doc-open small {
-  display: block;
-  color: var(--muted);
-  font-size: 10.5px;
 }
 
 /* Row actions are always there. A mouse dims them until the row is hovered, so the list stays
@@ -1571,16 +1558,6 @@ body {
 
 .doc-list li .doc-act:hover {
   color: var(--accent);
-}
-
-.doc-list li.draft .doc-open {
-  color: var(--muted);
-  font-style: italic;
-  cursor: default;
-}
-
-.doc-list li.draft .doc-open {
-  font-style: normal;
 }
 
 .doc-title-input {
